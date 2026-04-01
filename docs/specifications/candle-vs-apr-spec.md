@@ -198,8 +198,10 @@ The only fair comparison — both runtimes process one request at a time.
 | Isolation | forjar deploy, kill competing GPU processes |
 | Clock | Locked (nvidia-smi -lgc) |
 
-**Candle:** `quantized-qwen2-instruct --model <gguf> --prompt <text> --sample-len 256`
-**realizr:** `curl /v1/chat/completions` with `stream: false`, extract `usage.completion_tokens`
+**Candle:** `quantized-qwen2-instruct --model <gguf> --prompt <text> --sample-len 256 --temperature 0`
+**realizr:** `curl /v1/chat/completions` with `stream: false`, `temperature: 0`, extract `usage.completion_tokens`
+
+Temperature 0 (greedy) is mandatory for determinism. With temperature >0, non-deterministic output lengths produce 13% CV (F-HW-01 would fail).
 
 ### Phase 2: Concurrent Scaling (realizr-only)
 
@@ -225,8 +227,9 @@ APR v2 model prepared via `apr import --preserve-q4k` (preferred). Raw realizr G
 
 ### Methodology (inherited from PMAT-177)
 
-- **60-second runs** with 5-second warmup — steady-state, not burst
-- **Locked GPU clocks** — eliminates thermal throttle variance
+- **Phase 1:** 10 iterations, greedy (temp=0), drop first for cold-start, 9-run mean
+- **Phase 2:** 60-second runs with 5-second warmup — steady-state, not burst
+- **Locked GPU clocks** — eliminates thermal throttle variance (<1% CV measured)
 - **Isolated serial** — one runtime at a time, clean GPU state
 - **forjar deploy/teardown** — reproducible environment setup
 - **bench-scaling.sh** — concurrent load testing (Phase 2). Note: `probador` on this system is a WASM test tool, not an LLM load tester.
@@ -260,8 +263,10 @@ APR v2 model prepared via `apr import --preserve-q4k` (preferred). Raw realizr G
 All results saved as JSON in `results/`:
 - `candle-<timestamp>.jsonl` — per-iteration Candle results
 - `candle-summary-<timestamp>.json` — aggregated Candle metrics
-- `realizr-c<N>-<timestamp>.json` — realizr results at concurrency N
-- `realizr-c<N>-summary-<timestamp>.json` — aggregated realizr metrics
+- `realizr-c1-<timestamp>.jsonl` — realizr c=1 per-iteration results
+- `realizr-c1-summary-<timestamp>.json` — aggregated realizr c=1 metrics
+- `realizr-scaling-c<N>-<timestamp>.jsonl` — scaling per-request results
+- `realizr-scaling-c<N>-summary.json` — aggregated scaling metrics
 
 ---
 
@@ -269,38 +274,42 @@ All results saved as JSON in `results/`:
 
 ### Phase 1: Single-Request Parity (c=1)
 
-| Metric | Prediction | Pass | Fail |
-|--------|-----------|------|------|
-| Decode tok/s | realizr within ±10% of Candle | ratio 0.90-1.10 | ratio < 0.90 |
-| Cold-start tok/s | realizr within ±20% of Candle | ratio 0.80-1.20 | ratio < 0.80 |
-| Model load (GGUF) | Within ±20% | ratio 0.80-1.20 | ratio < 0.80 |
-| Peak RSS | realizr within ±15% of Candle | ratio 0.85-1.15 | ratio < 0.85 |
+| Metric | Prediction | Actual | Status |
+|--------|-----------|--------|--------|
+| Decode tok/s | ratio 0.90-1.10 | **0.63x** (227.4 vs 142.8) | **FAIL** |
+| Cold-start tok/s | ratio 0.80-1.20 | **0.60x** (223.1 vs 134.4) | **FAIL** |
+| Model load (GGUF) | ratio 0.80-1.20 | 0.49s (Candle) vs amortized (realizr) | N/A (different model) |
+| Peak RSS | ratio 0.85-1.15 | **0.15x** (449 vs 3,082 MB) | **FAIL** |
 
-**Rationale:** At c=1, the GPU is underutilized. Fused kernels save one memory pass but the bottleneck is compute, not bandwidth. Serving overhead (HTTP stack, tokenizer init) may penalize realizr slightly.
+**Original rationale (pre-test):** At c=1, the GPU is underutilized. Fused kernels save one memory pass but the bottleneck is compute, not bandwidth. Serving overhead (HTTP stack, tokenizer init) may penalize realizr slightly.
 
-> **F-PARITY-01:** If realizr decode is >20% slower than Candle at c=1, the serving overhead hypothesis is confirmed. Action: benchmark realizr CLI mode (no HTTP) to isolate.
+**Post-test finding:** The penalty is not "slight" — it's 37%. The metric asymmetry (Candle self-reported decode-only vs realizr wall-clock including HTTP+prefill) accounts for part of the gap. A realizr CLI-mode benchmark (PMAT-317) is needed to isolate serving overhead from kernel performance.
 
-### Phase 2: Format Advantage
+> **F-PARITY-01: FALSIFIED.** realizr 37% slower. Action: PMAT-317 (nsys profile) + realizr CLI-mode benchmark to isolate HTTP overhead.
 
-| Metric | Prediction | Pass | Fail |
-|--------|-----------|------|------|
-| APR v2 load time | 2-5x faster than GGUF | ratio 2.0-5.0 | ratio < 1.5 |
-| APR v2 RSS | Lower than GGUF (mmap) | RSS_apr < RSS_gguf | RSS_apr >= RSS_gguf |
-| APR v2 decode | Within ±5% of GGUF decode | ratio 0.95-1.05 | ratio < 0.95 |
+### Phase 2: Scaling Demonstration
 
-> **F-FORMAT-01:** If APR v2 load is <1.5x faster than GGUF, the zero-copy claim needs qualification — metadata parsing overhead is not the bottleneck.
+| c | Predicted | Actual | Status |
+|---|-----------|--------|--------|
+| 1 | ~148 tok/s | 117.0 tok/s | -21% |
+| 4 | ~325 tok/s | 116.7 tok/s | **-64%** |
+| 8 | ~525 tok/s | 126.3 tok/s | **-76%** |
+| 16 | ~931 tok/s | 112.5 tok/s | **-88%** |
+| 32 | ~1,600 tok/s | 145.7 tok/s | **-91%** |
 
-### Phase 3: Scaling Demonstration
+Predictions cross-referenced from qwen-coder-deploy baselines.
 
-| c | Prediction (realizr agg tok/s) | Cross-ref |
-|---|-------------------------------|-----------|
-| 1 | ~148 tok/s | qwen-coder-deploy c=1 |
-| 4 | ~325 tok/s | qwen-coder-deploy c=4 |
-| 8 | ~525 tok/s | qwen-coder-deploy c=8 |
-| 16 | ~931 tok/s | qwen-coder-deploy c=16 |
-| 32 | ~1,600 tok/s | qwen-coder-deploy c=32 |
+> **F-SCALE-01: FALSIFIED.** Throughput flat at ~120-146 tok/s across all concurrency levels. Root cause: realizr started in SINGLE-REQUEST mode (no batch scheduler). The `--openai-api` flag does not activate continuous batching.
 
-> **F-SCALE-01:** If realizr c=32 throughput is >20% below qwen-coder-deploy numbers on same hardware, there is a regression. Action: bisect realizr commits between deploy baseline and current.
+### Phase 3: Format Advantage
+
+| Metric | Prediction | Pass | Fail | Status |
+|--------|-----------|------|------|--------|
+| APR v2 load time | 2-5x faster than GGUF | ratio 2.0-5.0 | ratio < 1.5 | BLOCKED |
+| APR v2 RSS | Lower than GGUF (mmap) | RSS_apr < RSS_gguf | RSS_apr >= RSS_gguf | BLOCKED |
+| APR v2 decode | Within ±5% of GGUF decode | ratio 0.95-1.05 | ratio < 0.95 | BLOCKED |
+
+> **F-FORMAT-01: BLOCKED.** APR model loads (paiml/realizar#167 fixed) but inference produces garbage output (paiml/realizar#168). GPU adapter weight name mapping incomplete.
 
 ---
 
@@ -317,15 +326,15 @@ All results saved as JSON in `results/`:
 | Weight reuse | None (c=1 only) | Batched GEMV: weights shared across M requests |
 | Graph capture | Not implemented | Full forward pass at M=1, eager at M>1 |
 
-### Expected Performance Profile
+### Observed vs Expected Performance
 
-| Phase | Candle Advantage | realizr Advantage |
-|-------|-----------------|-------------------|
-| c=1 decode | Simpler dispatch, no HTTP overhead | Fused dequant+matmul saves 1 memory pass |
-| Model load | — | APR v2 zero-copy mmap (skip parsing) |
-| c>1 | N/A (no server) | Batch-and-step scheduler, weight sharing |
-| Long sequences | — | Flash Decoding, GPU-resident KV |
-| Format flexibility | — | GGUF + SafeTensors + APR v2 |
+| Phase | Predicted Winner | Actual Winner | Notes |
+|-------|-----------------|---------------|-------|
+| c=1 decode | Tie (±10%) | **Candle (1.59x)** | Candle 227 tok/s vs realizr 143 tok/s. Serving overhead + prefill dominates. |
+| Peak RSS | Tie (±15%) | **Candle (6.9x less)** | 449 MB vs 3,082 MB. realizr includes server + KV cache pool for batch_size=32. |
+| Cold start | realizr slower | **Confirmed** | 223 vs 134 tok/s. realizr JIT-compiles PTX on first request. |
+| c>1 scaling | realizr scales | **Not demonstrated** | SINGLE-REQUEST mode: throughput flat at ~120-146 tok/s c=1..32. |
+| APR v2 format | realizr wins | **BLOCKED** | Inference garbage output (paiml/realizar#168). |
 
 ### Format Pipeline
 
