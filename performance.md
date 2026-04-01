@@ -45,8 +45,6 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 
 ## Results
 
-*To be filled after benchmarks run.*
-
 ### Phase 1: Single-Request Decode (c=1)
 
 | Metric | Candle | realizr | Ratio | Status |
@@ -84,10 +82,10 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 | GGUF Q4_K_M | realizr | amortized | 142.8 | 3,082 | Measured |
 | SafeTensors | Candle | — | — | — | TODO |
 | SafeTensors | realizr | — | — | — | TODO |
-| APR v2 Q4K | realizr | — | — | — | **BLOCKED** (missing embed_tokens.weight) |
+| APR v2 Q4K | realizr | — | — | — | **BLOCKED** (loads OK, inference garbage — paiml/realizar#168) |
 
-**F-FORMAT-01: BLOCKED** — APR v2 model file incomplete, cannot load.
-**F-RSS-01: BLOCKED** — Cannot compare APR vs GGUF RSS without working APR model.
+**F-FORMAT-01: BLOCKED** — APR loads (paiml/realizar#167 fixed) but inference produces garbage output. GPU adapter weight name mapping incomplete (paiml/realizar#168).
+**F-RSS-01: BLOCKED** — Cannot compare APR vs GGUF RSS until APR inference is correct.
 
 ## Architectural Comparison
 
