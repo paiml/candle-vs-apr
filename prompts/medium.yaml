@@ -1,0 +1,44 @@
+# Medium prompt (~102 tokens) — same as qwen-coder-deploy production methodology
+# Matches PMAT-177 specification for reproducible comparison
+
+prompts:
+  - name: fibonacci
+    system: "You are a helpful coding assistant."
+    user: |
+      Write a Rust function that computes the nth Fibonacci number using matrix exponentiation
+      for O(log n) time complexity. Include proper error handling for overflow cases.
+      Explain the mathematical basis for why matrix exponentiation works for Fibonacci.
+    max_tokens: 256
+
+  - name: binary_search
+    system: "You are a helpful coding assistant."
+    user: |
+      Implement a generic binary search in Rust that works on any sorted slice of comparable items.
+      It should return the index if found, or the insertion point if not found (like partition_point).
+      Include comprehensive tests with edge cases: empty slice, single element, duplicates.
+    max_tokens: 256
+
+  - name: json_parser
+    system: "You are a helpful coding assistant."
+    user: |
+      Write a simple recursive descent JSON parser in Rust that handles null, booleans, numbers,
+      strings (with escape sequences), arrays, and objects. Use an enum for the JSON value type.
+      Focus on correctness over performance. Show example usage parsing a nested object.
+    max_tokens: 256
+
+  - name: explain_atomics
+    system: "You are a helpful coding assistant."
+    user: |
+      Explain the difference between Ordering::Relaxed, Ordering::Acquire, Ordering::Release,
+      and Ordering::SeqCst in Rust's std::sync::atomic module. Give a concrete example where
+      using Relaxed would be incorrect and Acquire/Release is needed. Show the code.
+    max_tokens: 256
+
+  - name: sql_query
+    system: "You are a helpful coding assistant."
+    user: |
+      Write a SQL query that finds the top 10 customers by total revenue in the last 90 days,
+      including their most frequently purchased product category. Use window functions where
+      appropriate. The schema has tables: customers(id, name), orders(id, customer_id, date, total),
+      order_items(order_id, product_id, qty, price), products(id, name, category).
+    max_tokens: 256

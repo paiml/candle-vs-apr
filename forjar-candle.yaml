@@ -1,0 +1,45 @@
+version: "1.0"
+name: candle-vs-apr-candle
+description: "Build Candle quantized-qwen2-instruct with CUDA, kill competing GPU processes"
+
+params:
+  gguf_model: "/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+  candle_dir: "/home/noah/src/candle"
+
+machines:
+  gpu:
+    hostname: noah-Lambda-Vector
+    addr: 127.0.0.1
+    user: noah
+    arch: x86_64
+    transport: local
+
+resources:
+  candle-build:
+    type: task
+    machine: gpu
+    command: "cd {{params.candle_dir}} && cargo build --release --features cuda --example quantized-qwen2-instruct"
+    completion_check: "test -x {{params.candle_dir}}/target/release/examples/quantized-qwen2-instruct"
+    timeout: 600
+
+  stop-realizr:
+    type: task
+    machine: gpu
+    command: "pkill -f 'realizar serve' 2>/dev/null || true; sleep 2"
+    completion_check: "! pgrep -f 'realizar serve' >/dev/null 2>&1"
+
+  stop-ollama:
+    type: task
+    machine: gpu
+    command: "pkill -f 'ollama serve' 2>/dev/null || true; sudo systemctl stop ollama.service 2>/dev/null || true"
+    completion_check: "! pgrep -f 'ollama serve' >/dev/null 2>&1"
+
+  stop-llamacpp:
+    type: task
+    machine: gpu
+    command: "pkill -f 'llama-server' 2>/dev/null || true"
+    completion_check: "! pgrep -f 'llama-server' >/dev/null 2>&1"
+
+policy:
+  failure: stop_on_first
+  lock_file: true

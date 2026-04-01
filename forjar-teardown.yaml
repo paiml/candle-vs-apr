@@ -1,0 +1,33 @@
+version: "1.0"
+name: candle-vs-apr-teardown
+description: "Stop all inference runtimes, free GPU"
+
+machines:
+  gpu:
+    hostname: noah-Lambda-Vector
+    addr: 127.0.0.1
+    user: noah
+    arch: x86_64
+    transport: local
+
+resources:
+  stop-realizr:
+    type: task
+    machine: gpu
+    command: "pkill -f 'realizar serve' 2>/dev/null || true; sleep 2"
+    completion_check: "! pgrep -f 'realizar serve' >/dev/null 2>&1"
+
+  stop-ollama:
+    type: task
+    machine: gpu
+    command: "pkill -f 'ollama serve' 2>/dev/null || true; sudo systemctl stop ollama.service 2>/dev/null || true"
+    completion_check: "! pgrep -f 'ollama serve' >/dev/null 2>&1"
+
+  stop-llamacpp:
+    type: task
+    machine: gpu
+    command: "pkill -f 'llama-server' 2>/dev/null || true"
+    completion_check: "! pgrep -f 'llama-server' >/dev/null 2>&1"
+
+policy:
+  failure: continue_on_error
