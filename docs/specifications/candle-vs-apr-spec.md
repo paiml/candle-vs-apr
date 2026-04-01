@@ -366,12 +366,12 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 |----|-----------|------------------------|--------|----------|
 | F-SUMMARY-01 | realizr wins on ≥1 of: decode, load, RSS at c=1 | Candle matches/beats all three | **FALSIFIED** | Candle: 227 tok/s, 449 MB RSS. realizr: 143 tok/s, 3082 MB RSS. Candle wins decode AND RSS. |
 | F-PARITY-01 | realizr c=1 decode within ±10% of Candle | realizr >20% slower | **FALSIFIED** | Ratio 0.63x — realizr 37% slower. Candle 227.4 tok/s (decode-only) vs realizr 142.8 tok/s (wall-clock incl. HTTP+prefill). |
-| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **BLOCKED** | APR v2 model errors: "Tensor not found: model.embed_tokens.weight". Format conversion incomplete. |
+| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **BLOCKED** | APR reconverted via `apr import --preserve-q4k`. Loading fixed (paiml/realizar#167). Norm aliasing fixed (paiml/realizar#168). Inference produces garbage — further GPU adapter investigation needed in realizr. |
 | F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | **FALSIFIED** | c=32 agg: 145.7 tok/s (89% below target). Server started in SINGLE-REQUEST mode; no batch scheduling active. Throughput flat across c=1..32. |
 | F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | **CONFIRMED** | Candle CV=0.8% (temp=0, greedy). realizr CV=0.9%. Locked at 2520 MHz on RTX 4090. Note: temp=0.8 produces 13% CV (non-deterministic output lengths). |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF successfully | Candle errors on load | **CONFIRMED** | Loaded 339 tensors (1.11 GB) in 0.49s. Required lazy-curand patch (curand device library missing on Lambda Vector) and CUDA 12.6 toolkit (PTX 9.0 from CUDA 13.0 unsupported by 570.207 driver). |
 | F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | nsys shows equal or higher BW | UNTESTED | Requires nsys profiling (Phase 4). |
-| F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR v2 model fails to load (missing embedding tensor). Cannot compare. |
+| F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR loads successfully but inference output is garbage. Blocked on paiml/realizar#168 resolution. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
 
@@ -418,7 +418,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 |----|------|--------|---------|
 | PMAT-331 | Candle SafeTensors decode (non-quantized) | TODO | PMAT-302 |
 | PMAT-332 | realizr SafeTensors decode | TODO | — |
-| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | APR model missing embed_tokens |
+| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | APR loads (#167 fixed), norms aliased (#168 filed), but inference output garbage — GPU adapter mismatch |
 | PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | BLOCKED | PMAT-334 |
@@ -439,11 +439,11 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-351 | Fill performance.md results tables | TODO | Phase 1-3 |
+| PMAT-351 | Fill performance.md results tables | PARTIAL | Phase 1-2 filled, Phase 3 BLOCKED |
 | PMAT-352 | Write findings section with falsification outcomes | TODO | PMAT-351 |
 | PMAT-353 | Generate comparison charts (throughput, scaling) | TODO | PMAT-351 |
 | PMAT-354 | Cross-reference with qwen-coder-deploy spec | TODO | PMAT-352 |
-| PMAT-355 | README update with key findings table | TODO | PMAT-352 |
+| PMAT-355 | README update with key findings table | DONE | — |
 
 ---
 
