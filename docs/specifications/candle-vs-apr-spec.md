@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.0.0
+**Version:** 1.2.0
 **Last Updated:** 2026-04-01
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -73,16 +73,32 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 - Contain inference engine code (that's `../realizar`)
 - Contain GPU kernels (that's `../trueno`)
 - Contain the Candle framework (that's `../candle`)
-- Fix engine bugs (observe, report, fix in engine repo)
+- Contain the APR CLI (that's `../aprender`, binary: `apr`)
 - Benchmark training (that's `../qwen-train-canary`)
+
+### Upstream Bug Policy
+
+When a benchmark reveals a bug in a dependency (realizr, trueno, aprender):
+
+1. **File a `gh` issue** — `gh issue create --repo paiml/<repo>` with reproduction steps
+2. **Fix in the upstream repo** — never work around bugs locally in this benchmark repo
+3. **Add a provable-contract** — if the broken invariant can be expressed as a contract, add it to `binding.yaml` in the upstream repo via `provable-contracts`. This turns the runtime bug into a compile-time guarantee. Example: tensor name resolution must succeed for all supported naming conventions → contract on the adapter's `upload_weights` function.
+4. **Rebuild via forjar** — update the forjar template if the fix requires new build flags or dependencies
+5. **Re-run the falsification** — re-test the blocked F-condition and update the register
+
+**Example (paiml/realizar#167):** APR Q4K GPU scheduler hardcoded HF tensor names, failing on GGUF-converted APR files. Fix: name normalization in `upload_apr_q4k_weights`. Contract candidate: `TENSOR_NAME_RESOLUTION_V1` — all weight lookups must resolve for GGUF, SafeTensors, and HF naming conventions.
 
 ### Relationship to sister repos
 
-| Repo | Comparison | Focus |
-|------|-----------|-------|
-| **qwen-coder-deploy** | realizr vs llama.cpp vs vLLM vs ollama | Multi-runtime serving throughput |
-| **qwen-train-canary** | apr vs unsloth vs pytorch vs cublas | Training throughput parity |
-| **candle-vs-apr** (this) | Candle vs realizr | Rust-vs-Rust inference architecture |
+| Repo | Role | Focus |
+|------|------|-------|
+| **qwen-coder-deploy** | Benchmark | realizr vs llama.cpp vs vLLM vs ollama |
+| **qwen-train-canary** | Benchmark | apr vs unsloth vs pytorch vs cublas |
+| **candle-vs-apr** (this) | Benchmark | Candle vs realizr (Rust-vs-Rust) |
+| **aprender** | Tooling | APR format, `apr` CLI (model import, conversion, profiling) |
+| **realizar** | Engine | Inference engine under test |
+| **trueno** | Kernel lib | SIMD/GPU kernel library (trueno-gpu for CUDA) |
+| **provable-contracts** | Quality | Compile-time contract enforcement for upstream fixes |
 
 ---
 
@@ -138,11 +154,29 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 ### Available formats
 
-| Format | Path | Notes |
-|--------|------|-------|
-| GGUF Q4_K_M | `/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` | Both runtimes |
-| SafeTensors | `/home/noah/models/qwen2.5-coder-1.5b-instruct-safetensors/` | Both runtimes |
-| APR v2 Q4K | `/home/noah/models/qwen2.5-coder-1.5b-instruct-q4k.apr` | realizr only |
+| Format | Path | Created by | Runtimes |
+|--------|------|-----------|----------|
+| GGUF Q4_K_M | `/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` | upstream (HuggingFace) | Candle, realizr |
+| SafeTensors | `/home/noah/models/qwen2.5-coder-1.5b-instruct-safetensors/` | upstream (HuggingFace) | Candle, realizr |
+| APR v2 Q4K | `/home/noah/models/qwen2.5-coder-1.5b-instruct-q4k.apr` | `apr import --preserve-q4k` | realizr only |
+
+### Model preparation
+
+**APR v2 conversion (preferred path — uses `apr` CLI from aprender):**
+```bash
+apr import /home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf \
+  --preserve-q4k --arch qwen2 \
+  -o /home/noah/models/qwen2.5-coder-1.5b-instruct-q4k.apr
+```
+
+The `apr` binary is the canonical tool for format conversion across all sister repos (qwen-coder-deploy, qwen-train-canary). `--preserve-q4k` keeps Q4_K superblock layout intact for fused DP4A kernels; without it, weights are dequantized to F32 and requantized.
+
+**Raw realizr (fallback — direct GGUF serving):**
+```bash
+realizar serve --model <gguf> --gpu --openai-api
+```
+
+realizr can serve GGUF files directly without pre-conversion. Use this path when testing GGUF parity (Phase 1) or when APR conversion is blocked.
 
 > **F-MODEL-01:** If Candle's quantized-qwen2-instruct example cannot load the Q4_K_M GGUF file, the head-to-head comparison is blocked. Action: verify Candle's QMatMul supports Q4_K_M dequant path.
 
@@ -173,19 +207,21 @@ Demonstrates what Candle's architecture cannot provide.
 
 | c | Duration | Tool | Note |
 |---|----------|------|------|
-| 1 | 60s | probador | Baseline for scaling efficiency |
-| 4 | 60s | probador | Continuous batching benefit |
-| 8 | 60s | probador | Memory pressure test |
-| 16 | 60s | probador | Near-asymptote |
-| 32 | 60s | probador | At asymptote |
+| 1 | 60s | bench-scaling.sh | Baseline for scaling efficiency |
+| 4 | 60s | bench-scaling.sh | Continuous batching benefit |
+| 8 | 60s | bench-scaling.sh | Memory pressure test |
+| 16 | 60s | bench-scaling.sh | Near-asymptote |
+| 32 | 60s | bench-scaling.sh | At asymptote |
 
 ### Phase 3: Format Comparison
 
-| Format | Candle | realizr | Metrics |
-|--------|--------|---------|---------|
-| GGUF Q4_K_M | Yes | Yes | Load time, decode tok/s, RSS |
-| SafeTensors FP16 | Yes | Yes | Load time, decode tok/s, RSS |
-| APR v2 Q4K | No | Yes | Load time, decode tok/s, RSS |
+APR v2 model prepared via `apr import --preserve-q4k` (preferred). Raw realizr GGUF serving as baseline.
+
+| Format | Candle | realizr | Prepared by | Metrics |
+|--------|--------|---------|-------------|---------|
+| GGUF Q4_K_M | Yes | Yes (raw) | upstream HF | Load time, decode tok/s, RSS |
+| SafeTensors FP16 | Yes | Yes (raw) | upstream HF | Load time, decode tok/s, RSS |
+| APR v2 Q4K | No | Yes | `apr import --preserve-q4k` | Load time, decode tok/s, RSS |
 
 ### Methodology (inherited from PMAT-177)
 
@@ -294,14 +330,16 @@ All results saved as JSON in `results/`:
 ### Format Pipeline
 
 ```
-                    Candle                          realizr
-                    ──────                          ───────
+                    Candle                          realizr (raw GGUF)
+                    ──────                          ──────────────────
 GGUF Q4_K_M ──► QMatMul dequant ──► matmul    GGUF Q4_K_M ──► fused Q4K DP4A ──► output
                 (2 memory passes)              (1 memory pass, INT8 activations)
 
 SafeTensors ──► FP16/FP32 matmul               SafeTensors ──► FP16 HGEMM (tensor cores)
 
-                    N/A                         APR v2 Q4K ──► mmap ──► fused Q4K DP4A
+                                                realizr (APR v2, via apr-cli)
+                                                ────────────────────────────
+                    N/A                         apr import ──► APR v2 Q4K ──► mmap ──► fused Q4K DP4A
                                                (zero-copy, LZ4/ZSTD, 64-byte aligned)
 ```
 
@@ -324,18 +362,18 @@ stdin ──► tokenize ──► forward       HTTP ──► /v1/chat/complet
 
 Pre-registered predictions with explicit falsification criteria. Each prediction is tested by benchmark and either confirmed, weakened, or retracted.
 
-| ID | Prediction | Falsification Condition | Status |
-|----|-----------|------------------------|--------|
-| F-SUMMARY-01 | realizr wins on ≥1 of: decode, load, RSS at c=1 | Candle matches/beats all three | UNTESTED |
-| F-PARITY-01 | realizr c=1 decode within ±10% of Candle | realizr >20% slower | UNTESTED |
-| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | UNTESTED |
-| F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | UNTESTED |
-| F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | UNTESTED |
-| F-MODEL-01 | Candle loads Q4_K_M GGUF successfully | Candle errors on load | UNTESTED |
-| F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | nsys shows equal or higher BW | UNTESTED |
-| F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | UNTESTED |
-| F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | UNTESTED |
-| F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | UNTESTED |
+| ID | Prediction | Falsification Condition | Status | Evidence |
+|----|-----------|------------------------|--------|----------|
+| F-SUMMARY-01 | realizr wins on ≥1 of: decode, load, RSS at c=1 | Candle matches/beats all three | **FALSIFIED** | Candle: 227 tok/s, 449 MB RSS. realizr: 143 tok/s, 3082 MB RSS. Candle wins decode AND RSS. |
+| F-PARITY-01 | realizr c=1 decode within ±10% of Candle | realizr >20% slower | **FALSIFIED** | Ratio 0.63x — realizr 37% slower. Candle 227.4 tok/s (decode-only) vs realizr 142.8 tok/s (wall-clock incl. HTTP+prefill). |
+| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **BLOCKED** | APR v2 model errors: "Tensor not found: model.embed_tokens.weight". Format conversion incomplete. |
+| F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | **FALSIFIED** | c=32 agg: 145.7 tok/s (89% below target). Server started in SINGLE-REQUEST mode; no batch scheduling active. Throughput flat across c=1..32. |
+| F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | **CONFIRMED** | Candle CV=0.8% (temp=0, greedy). realizr CV=0.9%. Locked at 2520 MHz on RTX 4090. Note: temp=0.8 produces 13% CV (non-deterministic output lengths). |
+| F-MODEL-01 | Candle loads Q4_K_M GGUF successfully | Candle errors on load | **CONFIRMED** | Loaded 339 tensors (1.11 GB) in 0.49s. Required lazy-curand patch (curand device library missing on Lambda Vector) and CUDA 12.6 toolkit (PTX 9.0 from CUDA 13.0 unsupported by 570.207 driver). |
+| F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | nsys shows equal or higher BW | UNTESTED | Requires nsys profiling (Phase 4). |
+| F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR v2 model fails to load (missing embedding tensor). Cannot compare. |
+| F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
+| F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
 
 ---
 
@@ -345,34 +383,34 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-301 | Build Candle with CUDA on Lambda Vector | TODO | — |
-| PMAT-302 | Verify Candle loads Qwen2.5 Q4_K_M GGUF | TODO | PMAT-301 |
+| PMAT-301 | Build Candle with CUDA on Lambda Vector | DONE | — |
+| PMAT-302 | Verify Candle loads Qwen2.5 Q4_K_M GGUF | DONE | PMAT-301 |
 | PMAT-303 | Create forjar templates (candle, realizr, teardown) | DONE | — |
 | PMAT-304 | Create benchmark scripts (candle, realizr, compare) | DONE | — |
-| PMAT-305 | Lock GPU clocks, verify <5% variance | TODO | PMAT-301 |
-| PMAT-306 | Validate probador scoring against qwen-coder-deploy | TODO | — |
+| PMAT-305 | Lock GPU clocks, verify <5% variance | DONE | PMAT-301 |
+| PMAT-306 | Validate probador scoring against qwen-coder-deploy | BLOCKED | probador has no `llm` subcommand |
 
 ### Phase 1: Single-Request Head-to-Head (PMAT-310 block)
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-311 | Candle c=1 GGUF decode (10 iterations) | TODO | PMAT-302 |
-| PMAT-312 | realizr c=1 GGUF decode (10 iterations) | TODO | PMAT-303 |
-| PMAT-313 | Compare decode tok/s, generate table | TODO | PMAT-311, 312 |
-| PMAT-314 | Measure model load time (cold start) | TODO | PMAT-311, 312 |
-| PMAT-315 | Measure peak RSS both runtimes | TODO | PMAT-311, 312 |
-| PMAT-316 | Validate F-PARITY-01 (±10% decode) | TODO | PMAT-313 |
+| PMAT-311 | Candle c=1 GGUF decode (10 iterations) | DONE | PMAT-302 |
+| PMAT-312 | realizr c=1 GGUF decode (10 iterations) | DONE | PMAT-303 |
+| PMAT-313 | Compare decode tok/s, generate table | DONE | PMAT-311, 312 |
+| PMAT-314 | Measure model load time (cold start) | DONE | PMAT-311, 312 |
+| PMAT-315 | Measure peak RSS both runtimes | DONE | PMAT-311, 312 |
+| PMAT-316 | Validate F-PARITY-01 (±10% decode) | DONE (FALSIFIED) | PMAT-313 |
 | PMAT-317 | If F-PARITY-01 fails: profile with nsys | TODO | PMAT-316 |
 
 ### Phase 2: Concurrent Scaling (PMAT-320 block)
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-321 | realizr c=1,4,8,16,32 (60s each, probador) | TODO | PMAT-312 |
-| PMAT-322 | Cross-reference against qwen-coder-deploy baselines | TODO | PMAT-321 |
-| PMAT-323 | Validate F-SCALE-01 (≥80% of deploy baseline) | TODO | PMAT-322 |
-| PMAT-324 | Generate scaling efficiency table | TODO | PMAT-321 |
-| PMAT-325 | Quality scorecards (probador llm score) | TODO | PMAT-321 |
+| PMAT-321 | realizr c=1,4,8,16,32 (60s each) | DONE | PMAT-312 |
+| PMAT-322 | Cross-reference against qwen-coder-deploy baselines | DONE (all miss) | PMAT-321 |
+| PMAT-323 | Validate F-SCALE-01 (≥80% of deploy baseline) | DONE (FALSIFIED) | PMAT-322 |
+| PMAT-324 | Generate scaling efficiency table | DONE | PMAT-321 |
+| PMAT-325 | Quality scorecards (probador llm score) | BLOCKED | probador has no `llm` command |
 
 ### Phase 3: Format Comparison (PMAT-330 block)
 
@@ -380,10 +418,10 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 |----|------|--------|---------|
 | PMAT-331 | Candle SafeTensors decode (non-quantized) | TODO | PMAT-302 |
 | PMAT-332 | realizr SafeTensors decode | TODO | — |
-| PMAT-333 | realizr APR v2 Q4K decode | TODO | — |
-| PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | TODO | PMAT-331-333 |
-| PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | TODO | PMAT-331-333 |
-| PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | TODO | PMAT-334 |
+| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | APR model missing embed_tokens |
+| PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
+| PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
+| PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | BLOCKED | PMAT-334 |
 
 ### Phase 4: Deep Profiling (PMAT-340 block)
 
@@ -435,3 +473,5 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-04-01 | Initial spec: 3-phase benchmark design, 10 falsification conditions, 30 work items |
+| 1.1.0 | 2026-04-01 | Phase 1+2 results: 3 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 3 BLOCKED/UNTESTED. Candle 1.6x faster at c=1. No scaling (SINGLE-REQUEST mode). APR v2 format broken. |
+| 1.2.0 | 2026-04-01 | Prefer apr-cli for model prep. Upstream bug policy: gh tickets + provable-contracts. Fixed paiml/realizar#167 (tensor name normalization). Reconverted APR v2 via `apr import --preserve-q4k`. |

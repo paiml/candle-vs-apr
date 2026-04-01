@@ -3,11 +3,13 @@
 ## Methodology
 
 Same production methodology as qwen-coder-deploy (PMAT-177):
-- Model: Qwen2.5-Coder-1.5B-Instruct Q4_K_M GGUF
-- Hardware: RTX 4060 Laptop GPU, 1900 MHz locked
-- Duration: 60s runs, 5s warmup
+- Model: Qwen2.5-Coder-1.5B-Instruct Q4_K_M GGUF (1.11 GB)
+- Hardware: RTX 4090 (Lambda Vector), 2520 MHz locked, sm_89
+- Prompt: Fixed coding task (~38 tokens), max_tokens=256, temperature=0 (greedy)
+- Iterations: 10 per runtime, drop first for cold start
 - Isolation: forjar serial deployment (one runtime at a time)
-- Output: uniform(16, 256) tokens, streaming
+- Candle: CUDA 12.6 PTX, lazy-curand patch (device curand missing on Lambda)
+- realizr: CUDA build, GGUF SINGLE-REQUEST mode
 
 ## Predictions (Pre-Registration)
 
@@ -47,33 +49,45 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 
 ### Phase 1: Single-Request Decode (c=1)
 
-| Metric | Candle | realizr | Ratio | P1 Status |
-|--------|--------|---------|-------|-----------|
-| Decode (tok/s, warm) | — | — | — | — |
-| Decode (tok/s, cold) | — | — | — | — |
-| TTFT (ms) | — | — | — | — |
-| Wall time (ms, mean) | — | — | — | — |
-| Peak RSS (MB) | — | — | — | — |
+| Metric | Candle | realizr | Ratio | Status |
+|--------|--------|---------|-------|--------|
+| Decode (tok/s, warm) | 227.4 | 142.8 | 0.63x | **F-PARITY-01: FALSIFIED** |
+| Decode (tok/s, cold) | 223.1 | 134.4 | 0.60x | |
+| Decode CV (%) | 0.8% | 0.9% | — | **F-HW-01: CONFIRMED** |
+| Wall time (ms, mean) | 2,456 | 1,804 | 0.73x | realizr wins wall-clock (no model load) |
+| Model load (ms) | 490 | amortized | — | |
+| Peak RSS (MB) | 449 | 3,082 | 6.9x | realizr 6.9x higher (server + KV cache) |
+
+**Note on decode metric asymmetry:** Candle 227.4 tok/s is self-reported decode-only (excludes prompt processing). realizr 142.8 tok/s is wall-clock end-to-end (includes HTTP round-trip + tokenization + prefill + decode). A fairer realizr decode-only estimate: ~148 tok/s (subtracting ~60ms prefill).
+
+**F-SUMMARY-01: FALSIFIED** — Candle beats realizr on both decode throughput (1.6x) and RSS (6.9x less). realizr only wins on amortized wall-clock (no model reload per request).
 
 ### Phase 2: realizr Scaling (Candle: N/A)
 
-| c | realizr agg tok/s | realizr dec tok/s | vs Candle c=1 |
-|---|-------------------|-------------------|---------------|
-| 1 | — | — | — |
-| 4 | — | — | — |
-| 8 | — | — | — |
-| 16 | — | — | — |
-| 32 | — | — | — |
+| c | Agg tok/s | Per-req tok/s | Wall P50 (ms) | Predicted |
+|---|-----------|---------------|---------------|-----------|
+| 1 | 117.0 | 137.8 | 1,829 | ~148 |
+| 4 | 116.7 | 33.2 | 8,713 | ~325 |
+| 8 | 126.3 | 20.9 | 15,371 | ~525 |
+| 16 | 112.5 | 13.6 | 35,292 | ~931 |
+| 32 | 145.7 | 11.3 | 56,076 | ~1,600 |
+
+**F-SCALE-01: FALSIFIED** — Aggregate throughput flat at ~120-146 tok/s (no scaling). Server in SINGLE-REQUEST mode; continuous batching NOT active. c=32 at 145.7 tok/s is 91% below predicted 1,600 tok/s.
+
+**Root cause:** realizr started in `Mode: SINGLE-REQUEST` with `--openai-api`. Batch scheduling requires `--batch` mode, which was not tested. Requests are queued serially.
 
 ### Phase 3: Format Comparison
 
-| Format | Runtime | Load (ms) | Decode (tok/s) | RSS (MB) |
-|--------|---------|-----------|----------------|----------|
-| GGUF Q4_K_M | Candle | — | — | — |
-| GGUF Q4_K_M | realizr | — | — | — |
-| SafeTensors | Candle | — | — | — |
-| SafeTensors | realizr | — | — | — |
-| APR v2 Q4K | realizr | — | — | — |
+| Format | Runtime | Load (ms) | Decode (tok/s) | RSS (MB) | Status |
+|--------|---------|-----------|----------------|----------|--------|
+| GGUF Q4_K_M | Candle | 490 | 227.4 | 449 | Measured |
+| GGUF Q4_K_M | realizr | amortized | 142.8 | 3,082 | Measured |
+| SafeTensors | Candle | — | — | — | TODO |
+| SafeTensors | realizr | — | — | — | TODO |
+| APR v2 Q4K | realizr | — | — | — | **BLOCKED** (missing embed_tokens.weight) |
+
+**F-FORMAT-01: BLOCKED** — APR v2 model file incomplete, cannot load.
+**F-RSS-01: BLOCKED** — Cannot compare APR vs GGUF RSS without working APR model.
 
 ## Architectural Comparison
 
