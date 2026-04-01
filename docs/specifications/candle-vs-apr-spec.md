@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.2.0
+**Version:** 1.3.0
 **Last Updated:** 2026-04-01
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -52,9 +52,9 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 **Step 2: Why c=1 as the primary comparison?** Candle has no server mode — it's CLI-only. The only fair head-to-head is single-request decode. Concurrent benchmarks (c=4..32) demonstrate what Candle architecturally cannot provide.
 
-**Step 3: What constitutes a win?** realizr must demonstrate measurable advantage in at least one of: decode throughput, model load time, or memory footprint at c=1. Concurrent scaling (c>1) and APR v2 format are realizr-exclusive capabilities — Candle cannot participate.
+**Step 3: What constitutes a win?** realizr must demonstrate measurable advantage in at least one of: decode throughput, model load time, or memory footprint at c=1. **Result: Candle won all three at c=1 (F-SUMMARY-01 FALSIFIED).** Concurrent scaling (c>1) was not demonstrated (SINGLE-REQUEST mode). APR v2 format comparison is blocked (paiml/realizar#168).
 
-> **F-SUMMARY-01:** If Candle matches or beats realizr at c=1 on all three metrics (decode tok/s, load time, peak RSS), the fused-kernel advantage claim for single-request inference is falsified.
+> **F-SUMMARY-01: FALSIFIED.** Candle beats realizr on decode (1.59x) and RSS (6.9x less) at c=1. The fused-kernel advantage does not materialize for single-request inference on RTX 4090. realizr's serving overhead (HTTP + prefill) is the dominant factor.
 
 ---
 
@@ -471,7 +471,6 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 ### Spec Maintenance
 
 - Maximum 500 lines (this document)
-- Component specs in `docs/specifications/components/` for deep dives
 - Version bump on every structural change
 - Work items tracked in PMAT-300 block
 
@@ -484,3 +483,4 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | 1.0.0 | 2026-04-01 | Initial spec: 3-phase benchmark design, 10 falsification conditions, 30 work items |
 | 1.1.0 | 2026-04-01 | Phase 1+2 results: 3 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 3 BLOCKED/UNTESTED. Candle 1.6x faster at c=1. No scaling (SINGLE-REQUEST mode). APR v2 format broken. |
 | 1.2.0 | 2026-04-01 | Prefer apr-cli for model prep. Upstream bug policy: gh tickets + provable-contracts. Fixed paiml/realizar#167 (tensor name normalization). Reconverted APR v2 via `apr import --preserve-q4k`. |
+| 1.3.0 | 2026-04-01 | Reconcile all predictions with actuals. Section 7 Phase numbering fixed (scaling=2, format=3). Section 8 observed vs expected. Section 1 summary updated with F-SUMMARY-01 FALSIFIED. Temperature=0 documented as mandatory. |
