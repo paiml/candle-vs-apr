@@ -1,0 +1,11 @@
+{
+  "concurrency": 16,
+  "duration_s": 93,
+  "total_requests": 41,
+  "total_tokens": 10462,
+  "agg_tok_sec": 112.5,
+  "per_req_tok_sec": 13.6,
+  "wall_p50_ms": 35292,
+  "wall_min_ms": 2261,
+  "wall_max_ms": 39718
+}

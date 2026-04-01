@@ -1,0 +1,17 @@
+{
+  "runtime": "realizr",
+  "concurrency": 1,
+  "max_tokens": 256,
+  "iterations": 10,
+  "tok_sec": {
+    "mean": 142.7888888888889,
+    "min": 141.4,
+    "max": 145.0,
+    "cold_start": 134.4
+  },
+  "wall_ms": {
+    "mean": 1804.3,
+    "min": 1765,
+    "max": 1905
+  }
+}

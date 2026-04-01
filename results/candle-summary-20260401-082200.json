@@ -1,0 +1,22 @@
+{
+  "runtime": "candle",
+  "model": "/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+  "max_tokens": 256,
+  "iterations": 10,
+  "tok_sec": {
+    "mean": 227.4088888888889,
+    "min": 224.83,
+    "max": 230.14,
+    "cold_start": 223.08
+  },
+  "wall_ms": {
+    "mean": 2455.6,
+    "min": 2429,
+    "max": 2483
+  },
+  "rss_kb": {
+    "mean": 459234.8,
+    "min": 457384,
+    "max": 460724
+  }
+}
