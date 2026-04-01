@@ -113,9 +113,9 @@ When a benchmark reveals a bug in a dependency (realizr, trueno, aprender):
 | VRAM | 24 GB GDDR6X |
 | Memory BW | 1,008 GB/s |
 | SMs | 128 |
-| Clock | Locked (nvidia-smi -lgc) |
-| CUDA | 12.6 Runtime / 13.1 Driver |
-| CPU | AMD Threadripper / Intel Xeon |
+| Clock | Locked 2520 MHz (nvidia-smi -lgc 2520) |
+| CUDA | 12.6 Toolkit (forced) / 12.8 Driver (570.207) |
+| CPU | Intel Xeon |
 | Transport | Local |
 
 ### Yoga (SECONDARY — RTX 4060 Laptop)
@@ -128,7 +128,7 @@ When a benchmark reveals a bug in a dependency (realizr, trueno, aprender):
 | Memory BW | 256 GB/s |
 | SMs | 24 |
 | Clock | Locked 1900 MHz |
-| CUDA | 12.6 Runtime / 13.1 Driver |
+| CUDA | 12.6 Toolkit / TBD Driver |
 | Transport | SSH (192.168.50.38) |
 
 > **F-HW-01:** If run-to-run variance exceeds 5% with locked clocks, the determinism claim is falsified. Action: investigate thermal throttle or background GPU processes.
@@ -190,7 +190,7 @@ The only fair comparison — both runtimes process one request at a time.
 
 | Parameter | Value |
 |-----------|-------|
-| Prompt | Medium (~102 tokens), coding task |
+| Prompt | Coding task (~38 tokens after chat template) |
 | Max tokens | 256 |
 | Iterations | 10 (drop first for cold-start) |
 | Measurement | Wall time, tok/s (from runtime output) |
@@ -229,7 +229,7 @@ APR v2 model prepared via `apr import --preserve-q4k` (preferred). Raw realizr G
 - **Locked GPU clocks** — eliminates thermal throttle variance
 - **Isolated serial** — one runtime at a time, clean GPU state
 - **forjar deploy/teardown** — reproducible environment setup
-- **probador scoring** — standardized quality scorecards (Phase 2)
+- **bench-scaling.sh** — concurrent load testing (Phase 2). Note: `probador` on this system is a WASM test tool, not an LLM load tester.
 
 ---
 
