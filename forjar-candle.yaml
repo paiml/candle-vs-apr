@@ -1,10 +1,12 @@
 version: "1.0"
 name: candle-vs-apr-candle
-description: "Build Candle quantized-qwen2-instruct with CUDA, kill competing GPU processes"
+description: "Build Candle quantized-qwen2-instruct with CUDA 12.6, kill competing GPU processes, lock clocks"
 
 params:
   gguf_model: "/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
   candle_dir: "/home/noah/src/candle"
+  candle_bin: "/mnt/nvme-raid0/targets/candle/release/examples/quantized-qwen2-instruct"
+  cuda_toolkit: "/usr/local/cuda-12.6"
 
 machines:
   gpu:
@@ -15,13 +17,6 @@ machines:
     transport: local
 
 resources:
-  candle-build:
-    type: task
-    machine: gpu
-    command: "cd {{params.candle_dir}} && cargo build --release --features cuda --example quantized-qwen2-instruct"
-    completion_check: "test -x {{params.candle_dir}}/target/release/examples/quantized-qwen2-instruct"
-    timeout: 600
-
   stop-realizr:
     type: task
     machine: gpu
@@ -39,6 +34,30 @@ resources:
     machine: gpu
     command: "pkill -f 'llama-server' 2>/dev/null || true"
     completion_check: "! pgrep -f 'llama-server' >/dev/null 2>&1"
+
+  lock-gpu-clocks:
+    type: task
+    machine: gpu
+    command: "sudo nvidia-smi -lgc 2520"
+    completion_check: "nvidia-smi --query-gpu=clocks.gr --format=csv,noheader | grep -q 2520"
+    depends_on: [stop-realizr, stop-ollama, stop-llamacpp]
+
+  candle-build:
+    type: task
+    machine: gpu
+    command: |
+      cd {{params.candle_dir}} && \
+      sudo mv /usr/local/cuda-13.0/bin/nvcc /usr/local/cuda-13.0/bin/nvcc.bak 2>/dev/null || true && \
+      rm -rf /mnt/nvme-raid0/targets/candle/release/build/candle-kernels-* && \
+      PATH={{params.cuda_toolkit}}/bin:/home/noah/.cargo/bin:/usr/bin:/bin \
+        CARGO_TARGET_DIR=/mnt/nvme-raid0/targets/candle \
+        CUDA_ROOT={{params.cuda_toolkit}} \
+        CUDA_PATH={{params.cuda_toolkit}} \
+        cargo build --release --features cuda --example quantized-qwen2-instruct && \
+      sudo mv /usr/local/cuda-13.0/bin/nvcc.bak /usr/local/cuda-13.0/bin/nvcc 2>/dev/null || true
+    completion_check: "test -x {{params.candle_bin}} && head -7 /mnt/nvme-raid0/targets/candle/release/build/candle-kernels-*/out/quantized.ptx | grep -q 'release 12.6'"
+    timeout: 600
+    depends_on: [lock-gpu-clocks]
 
 policy:
   failure: stop_on_first

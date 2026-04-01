@@ -74,8 +74,8 @@ if [ "$CONCURRENCY" -eq 1 ]; then
     python3 -c "
 import json
 
-tok_sec = [${TOK_SEC_VALUES[*]}]
-wall_ms = [${WALL_TIMES[*]}]
+tok_sec = [$(IFS=,; echo "${TOK_SEC_VALUES[*]}")]
+wall_ms = [$(IFS=,; echo "${WALL_TIMES[*]}")]
 warm_tok = tok_sec[1:] if len(tok_sec) > 1 else tok_sec
 
 summary = {

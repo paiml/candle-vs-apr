@@ -16,7 +16,7 @@ APR_MODEL  := /home/noah/models/qwen2.5-coder-1.5b-instruct-q4k.apr
 ST_MODEL   := /home/noah/models/qwen2.5-coder-1.5b-instruct-safetensors
 
 CANDLE_DIR := /home/noah/src/candle
-CANDLE_BIN := $(CANDLE_DIR)/target/release/examples/quantized-qwen2-instruct
+CANDLE_BIN := /mnt/nvme-raid0/targets/candle/release/examples/quantized-qwen2-instruct
 REALIZR_BIN := /mnt/nvme-raid0/targets/realizar/release/realizar
 REALIZR_URL := http://127.0.0.1:8081
 

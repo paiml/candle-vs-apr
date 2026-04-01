@@ -1,9 +1,10 @@
 version: "1.0"
 name: candle-vs-apr-realizr
-description: "Build CUDA realizr, kill competing GPU processes, start serving"
+description: "Build CUDA realizr with CUDA 12.6, kill competing GPU processes, start serving"
 
 params:
   gguf_model: "/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+  cuda_toolkit: "/usr/local/cuda-12.6"
 
 machines:
   gpu:
@@ -17,7 +18,14 @@ resources:
   realizr-build:
     type: task
     machine: gpu
-    command: "cd /home/noah/src/realizar && CARGO_TARGET_DIR=/mnt/nvme-raid0/targets/realizar cargo build --release --features cuda"
+    command: |
+      cd /home/noah/src/realizar && \
+      sudo mv /usr/local/cuda-13.0/bin/nvcc /usr/local/cuda-13.0/bin/nvcc.bak 2>/dev/null || true && \
+      PATH={{params.cuda_toolkit}}/bin:/home/noah/.cargo/bin:/usr/bin:/bin \
+        CARGO_TARGET_DIR=/mnt/nvme-raid0/targets/realizar \
+        CUDA_ROOT={{params.cuda_toolkit}} \
+        cargo build --release --features cuda && \
+      sudo mv /usr/local/cuda-13.0/bin/nvcc.bak /usr/local/cuda-13.0/bin/nvcc 2>/dev/null || true
     completion_check: "test -x /mnt/nvme-raid0/targets/realizar/release/realizar"
     timeout: 600
 

@@ -54,13 +54,15 @@ for i in $(seq 1 "$ITERATIONS"); do
         --model "$MODEL" \
         --prompt "$PROMPT" \
         --sample-len "$MAX_TOKENS" \
+        --temperature 0 \
         2>&1 ) || true
 
     END=$(date +%s%N)
     WALL_MS=$(( (END - START) / 1000000 ))
 
-    # Extract tokens/sec from Candle output (format: "N tokens generated (X.XX token/s)")
-    TOK_SEC=$(echo "$OUTPUT" | grep -oP '[\d.]+\s+token/s' | grep -oP '[\d.]+' | head -1 || echo "0")
+    # Extract DECODE tokens/sec from Candle output (format: "N tokens generated (X.XX token/s)")
+    # Must grep for "generated" line specifically, NOT the "processed" (prompt) line
+    TOK_SEC=$(echo "$OUTPUT" | grep 'generated' | grep -oP '[\d.]+\s+token/s' | grep -oP '[\d.]+' | head -1 || echo "0")
 
     # Extract peak RSS from /usr/bin/time output (in KB)
     RSS_KB=$(echo "$OUTPUT" | grep -oP 'Maximum resident set size.*?:\s*\K\d+' || echo "0")
@@ -79,9 +81,9 @@ done
 python3 -c "
 import json, sys
 
-tok_sec = [${TOK_SEC_VALUES[*]}]
-wall_ms = [${WALL_TIMES[*]}]
-rss_kb = [${RSS_VALUES[*]}]
+tok_sec = [$(IFS=,; echo "${TOK_SEC_VALUES[*]}")]
+wall_ms = [$(IFS=,; echo "${WALL_TIMES[*]}")]
+rss_kb = [$(IFS=,; echo "${RSS_VALUES[*]}")]
 
 # Drop first iteration (cold start) for tok/s stats
 warm_tok = tok_sec[1:] if len(tok_sec) > 1 else tok_sec
