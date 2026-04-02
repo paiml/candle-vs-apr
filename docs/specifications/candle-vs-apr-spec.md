@@ -380,7 +380,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-303 | Create forjar templates (candle, realizr, teardown) | DONE | — |
 | PMAT-304 | Create benchmark scripts (candle, realizr, compare) | DONE | — |
 | PMAT-305 | Lock GPU clocks, verify <5% variance | DONE | PMAT-301 |
-| PMAT-306 | Validate probador scoring against qwen-coder-deploy | WONTFIX | probador is WASM-only — no LLM scoring capability |
+| PMAT-306 | Validate probador scoring against qwen-coder-deploy | TODO | probador has LLM load testing — investigate sister repo usage |
 
 ### Phase 1: Single-Request Head-to-Head (PMAT-310 block)
 
@@ -402,7 +402,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-322 | Cross-reference against qwen-coder-deploy baselines | DONE (all miss) | PMAT-321 |
 | PMAT-323 | Validate F-SCALE-01 (≥80% of deploy baseline) | DONE (FALSIFIED) | PMAT-322 |
 | PMAT-324 | Generate scaling efficiency table | DONE | PMAT-321 |
-| PMAT-325 | Quality scorecards (probador llm score) | WONTFIX | probador is WASM-only — no LLM scoring capability |
+| PMAT-325 | Quality scorecards (probador llm score) | TODO | probador has LLM load testing — investigate sister repo usage |
 
 ### Phase 3: Format + Tool Parity (PMAT-330 block)
 
