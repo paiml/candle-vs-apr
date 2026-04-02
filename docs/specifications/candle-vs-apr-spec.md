@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.7.0
+**Version:** 1.8.0
 **Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -497,3 +497,4 @@ Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 bl
 | 1.5.0 | 2026-04-02 | Measure-and-Fix: mandatory apr-cli (brick profiling, layer tracing, provable-contracts) + NVIDIA nsys/ncu parity. F-BRICKPARITY-01 added. Phase 4 redesigned: apr-cli primary, NVIDIA validation. |
 | 1.6.0 | 2026-04-02 | All 13 F-conditions tested (0 UNTESTED). 32/44 PMAT DONE. nsys + ncu profiling complete. tensor-name-resolution-v1 contract added upstream. Comparison charts. 5 upstream tickets filed. Remaining 12 items blocked on realizr #168/#169/#170. |
 | 1.7.0 | 2026-04-02 | Cross-doc consistency sweep. §7 Phase 3: BLOCKED→FALSIFIED/CONFIRMED (3 rows measured). §8 Format Pipeline: stale BUG tags→FIXED with tok/s. §1 summary: APR BLOCKED→measured. Score: 6F/4C/2W/1P/0B/0U. README register adds 3 missing F-conditions. |
+| 1.8.0 | 2026-04-02 | **ALL 43 PMAT items resolved (41 DONE, 2 WONTFIX, 0 BLOCKED).** PMAT-361/362: apr-cli APR Q4K GPU 21.9 tok/s benchmarked. F-TOOLPARITY-01 PARTIAL→WEAKENED (APR 25.6% delta, version skew). PMAT-306/325 WONTFIX (probador is WASM-only). Score: 6F/4C/3W/0P/0B/0U. |
