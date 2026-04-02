@@ -379,7 +379,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR loads successfully but inference output is garbage. Blocked on paiml/realizar#168 resolution. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
-| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | SafeTensors has no GPU path (0.4 tok/s CPU vs 143 GGUF GPU = 357x gap, paiml/realizar#169). APR v2 inference garbage (paiml/realizar#168). Only GGUF has working GPU inference. |
+| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | SafeTensors GPU serve path added (#169, WIP — loads, routing TODO). APR v2 inference garbage (#170). GGUF is only fully working GPU format. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **PARTIAL** | GGUF: 142.8 vs 139.8 tok/s = 2.1% delta — **PASS**. APR v2: BLOCKED (#168). |
 
 ---
