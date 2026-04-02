@@ -72,19 +72,22 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 - **Enforce CLI parity:** `apr run` must support every sampling/generation feature Candle CLI has (F-CLIPARITY-01)
 - Report results as machine-readable JSON + human-readable tables
 
-### This repo does NOT:
+### Zero external dependencies — everything is in our codebase
 
-- Contain inference engine code (that's `../realizar`)
-- Contain GPU kernels (that's `../trueno`)
-- Contain the Candle framework (that's `../candle`)
-- Contain the APR CLI (that's `../aprender`, binary: `apr`)
-- Benchmark training (that's `../qwen-train-canary`)
+The Sovereign AI Stack uses NO external inference libraries. Every capability Candle provides exists natively:
+- **Inference engine:** `../realizar` (GGUF/SafeTensors/APR, decoder-only + encoder-decoder via realizr#173)
+- **GPU kernels:** `../trueno` (fused Q4K/Q5K/Q6K DP4A, CUDA graphs, cuBLAS)
+- **CLI:** `../aprender` (`apr run/serve/check/profile/trace`)
+- **Quality:** `../provable-contracts` (compile-time contract enforcement)
+- **Testing:** `../probar` (`probador llm load/score`), `../apr-model-qa-playbook` (95 models certified)
+
+**Before building ANY new feature:** `pv coverage` (provable-contracts) → `pmat query` (find existing code) → `batuta oracle` (architecture guidance) → THEN implement with contract-first design.
 
 ### Measure-and-Fix Policy
 
-**Measure:** `apr check` (integrity) → `apr profile --granular --perf-grade` (roofline) → `apr trace --verbose` (layer trace) → `apr cbtop --headless` (monitor). NVIDIA `nsys`/`ncu` as parity validation (F-BRICKPARITY-01).
+**Measure:** `apr check` → `apr profile --granular` → `apr trace --verbose` → `apr cbtop --headless`. NVIDIA `nsys`/`ncu` as parity validation.
 
-**Fix:** `gh issue create` → fix upstream → `provable-contracts` binding → `apr trace`/`apr profile` verify → `make perf-gate` (probador ≥200 tok/s) → rebuild → re-run falsification. Prevention: `cuda-graph-safety-v1` contract.
+**Fix:** `gh issue create` → fix upstream → `provable-contracts` binding → `apr trace`/`apr profile` verify → `make perf-gate` (probador ≥200 tok/s) → rebuild → re-run falsification.
 
 ### Sister repos
 
