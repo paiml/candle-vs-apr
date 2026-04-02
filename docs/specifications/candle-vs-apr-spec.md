@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 3.0.0
+**Version:** 3.1.0
 **Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -69,6 +69,7 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 - Measure decode throughput, TTFT, model load time, and memory footprint
 - **Enforce format parity:** all 3 formats (GGUF, SafeTensors, APR v2) must have GPU inference — any gap is a bug, not a limitation
 - **Enforce tool parity:** `apr` CLI and raw `realizr` must produce equivalent results on the same model
+- **Enforce CLI parity:** `apr run` must support every sampling/generation feature Candle CLI has (F-CLIPARITY-01)
 - Report results as machine-readable JSON + human-readable tables
 
 ### This repo does NOT:
@@ -361,6 +362,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | GGUF 273.8 (v3), SafeT 21.2 (-92%), APR 17.4 (-94%). Not at parity — SafeT/APR use dequant path. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
 | F-PARITY-02 | realizr c=4 GGUF ≤1.5x slower than llama.cpp (≥149.9 tok/s) | realizr <149.9 tok/s after fixes | **CONFIRMED** | **274.5 tok/s at c=4 (1.22x FASTER than llama.cpp 224.8).** Graph poison fix: 22.7→273.8 at c=1 (12.1x). |
+| F-CLIPARITY-01 | `apr run` supports all Candle CLI sampling/gen features | Any Candle feature missing from `apr run` | **FALSIFIED** | Missing: `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n`. See PMAT-380 block. |
 
 ---
 
@@ -464,33 +466,35 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). Beats Candle (227.4) and llama.cpp (224.8).
 
+### Phase 7: CLI Parity — `apr run` vs Candle CLI (PMAT-380 block)
+
+**Invariant:** `apr run` must do everything Candle's `quantized-qwen2-instruct` CLI can do. Source: `candle/candle-examples/examples/quantized-qwen2-instruct/main.rs`.
+
+| ID | Candle Feature | `apr run` | Status |
+|----|---------------|----------|--------|
+| PMAT-381 | `--top-p <f64>` (nucleus sampling) | missing | TODO |
+| PMAT-382 | `--seed <u64>` (deterministic RNG, default 299792458) | missing | TODO |
+| PMAT-383 | `--repeat-penalty <f32>` (default 1.1) | missing | TODO |
+| PMAT-384 | `--repeat-last-n <usize>` (default 64) | missing | TODO |
+| PMAT-385 | `--split-prompt` (token-by-token prefill) | missing | TODO |
+| PMAT-386 | `--tracing` (chrome trace JSON) | `--trace` (different format) | PARTIAL |
+
+Already at parity: `--temperature`, `--top-k`, `--chat`, `hf://` auto-download, `--gpu`/`--no-gpu`, `--max-tokens`. `apr run` extras Candle lacks: `--serve`, `--profile`, `--batch-jsonl`, `--offline`, `--backend`, multi-format.
+
 ---
 
 ## 11. PMAT Compliance
 
 ### Quality Gates
 
-| Gate | Requirement | Enforcement |
-|------|-------------|-------------|
-| Determinism | <5% run-to-run variance | F-HW-01, locked clocks |
-| Isolation | One runtime at a time | forjar serial deploy/teardown |
-| Reproducibility | All results as JSON | `results/` directory, git-tracked |
-| Falsifiability | Every claim has F-condition | Section 9 register |
-| Cross-validation | Results match sister repos | F-SCALE-01 vs qwen-coder-deploy |
-| **Format parity** | All 3 formats (GGUF, SafeTensors, APR v2) tested on GPU | F-FMTPARITY-01 |
-| **Tool parity** | `apr` CLI and raw `realizr` produce equivalent inference | F-TOOLPARITY-01 |
-| **apr-cli gates** | `apr profile`/`apr trace`/`apr check` before and after every fix | Measure-and-Fix Policy |
-| **Contracts** | Every upstream fix adds a `provable-contracts` binding | Measure-and-Fix Policy |
-| **probador** | All benchmarks via `probador llm load` (matches qwen-coder-deploy) | PMAT-306 |
-| **NVIDIA parity** | `apr profile` brick scores match `ncu` roofline ±15% | F-BRICKPARITY-01 |
+Determinism (<5% CV, locked clocks) · Isolation (serial, forjar) · Reproducibility (JSON results) · Falsifiability (all claims have F-conditions) · Format parity (F-FMTPARITY-01) · Tool parity (F-TOOLPARITY-01) · **CLI parity** (F-CLIPARITY-01) · apr-cli gates (`apr profile`/`trace`/`check`) · Contracts (provable-contracts per fix) · probador (`probador llm load`, PMAT-306) · perf-gate (`make perf-gate` ≥200 tok/s, cuda-graph-safety-v1)
 
-### Spec Maintenance — max 500 lines. Version bump on structural changes.
+### Spec Maintenance — max 500 lines.
 
 ## 12. Revision History
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0–1.8 | 2026-04-01..02 | Phases 1-5 complete. 13 F-conditions, 43 PMAT items. 5 upstream bugs fixed. Score: 6F/4C/3W. |
-| 1.9–2.0 | 2026-04-02 | Phase 6 parity sprint. **MEASUREMENT CORRECTION:** probador replaces curl (21 tok/s, not 142.8). qcd cross-ref. |
-| 2.1.0 | 2026-04-02 | ROOT CAUSE CORRECTED: 89% serving overhead, not kernel. qcd GAP-GPU-001 stale. |
-| 3.0.0 | 2026-04-02 | **F-PARITY-02 CONFIRMED.** Graph poison fix (realizr 81c912d2): 22.7→273.8 tok/s (12.1x). Beats Candle 227.4 AND llama.cpp 224.8. c=4: 274.5 tok/s. |
+| 1.0–2.1 | 2026-04-01..02 | Phases 1-6. probador replaces curl. Root cause: serving overhead. |
+| 3.0.0 | 2026-04-02 | **F-PARITY-02 CONFIRMED.** Graph fix: 273.8 tok/s. Beats Candle + llama.cpp. |
+| 3.1.0 | 2026-04-02 | Phase 7: CLI parity (F-CLIPARITY-01). `apr run` must match Candle CLI features. 5 gaps → PMAT-381..386. |
