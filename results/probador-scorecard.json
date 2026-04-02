@@ -1,0 +1,190 @@
+{
+  "contract_version": "2.0.0",
+  "timestamp": "2026-04-02T13:09:01.713722632+00:00",
+  "concurrency": 1,
+  "runtimes": [
+    {
+      "name": "realizr-fixed-c1",
+      "source_file": "probador-fixed-c1.json",
+      "metrics": {
+        "error_rate": {
+          "value": 0.0,
+          "score": 100,
+          "best": false
+        },
+        "ttft_p50_ms": {
+          "value": 934.979277,
+          "score": 9,
+          "best": true
+        },
+        "itl_p50_ms": {
+          "value": 3.65232903515625,
+          "score": 100,
+          "best": true,
+          "jitter_penalty": 3
+        },
+        "decode_tok_s": {
+          "value": 273.7978945418917,
+          "score": 100,
+          "best": true
+        },
+        "ttft_p99_ms": {
+          "value": 985.27308616,
+          "score": 9,
+          "best": true
+        }
+      },
+      "composite": 59.0,
+      "grade": "C"
+    },
+    {
+      "name": "realizr-patched-eager-c1",
+      "source_file": "probador-patched-eager-c1.json",
+      "metrics": {
+        "ttft_p50_ms": {
+          "value": 959.5249725,
+          "score": 4,
+          "best": false
+        },
+        "error_rate": {
+          "value": 0.0,
+          "score": 100,
+          "best": false
+        },
+        "ttft_p99_ms": {
+          "value": 1025.36762775,
+          "score": 4,
+          "best": false
+        },
+        "itl_p50_ms": {
+          "value": 3.748205767578125,
+          "score": 97,
+          "best": false,
+          "jitter_penalty": 3
+        },
+        "decode_tok_s": {
+          "value": 266.79431760389787,
+          "score": 100,
+          "best": false
+        }
+      },
+      "composite": 56.0,
+      "grade": "C"
+    },
+    {
+      "name": "realizr-original-gguf",
+      "source_file": "probador-original-c1.json",
+      "metrics": {
+        "error_rate": {
+          "value": 0.0,
+          "score": 100,
+          "best": true
+        },
+        "decode_tok_s": {
+          "value": 20.140889734396865,
+          "score": 13,
+          "best": false
+        },
+        "ttft_p50_ms": {
+          "value": 12710.446972,
+          "score": 0,
+          "best": false
+        },
+        "ttft_p99_ms": {
+          "value": 12889.3089231,
+          "score": 0,
+          "best": false
+        },
+        "itl_p50_ms": {
+          "value": 49.650239546875,
+          "score": 6,
+          "best": false,
+          "jitter_penalty": 9
+        }
+      },
+      "composite": 15.0,
+      "grade": "F"
+    },
+    {
+      "name": "realizr-patched-gguf",
+      "source_file": "probador-patched-c1.json",
+      "metrics": {
+        "ttft_p99_ms": {
+          "value": 14050.06815826,
+          "score": 0,
+          "best": false
+        },
+        "ttft_p50_ms": {
+          "value": 11258.975545,
+          "score": 0,
+          "best": false
+        },
+        "error_rate": {
+          "value": 0.0,
+          "score": 100,
+          "best": false
+        },
+        "itl_p50_ms": {
+          "value": 43.98044090625,
+          "score": 7,
+          "best": false,
+          "jitter_penalty": 10
+        },
+        "decode_tok_s": {
+          "value": 22.737380057913228,
+          "score": 14,
+          "best": false
+        }
+      },
+      "composite": 15.0,
+      "grade": "F"
+    }
+  ]
+}
+
+{
+  "contract_version": "2.0.0",
+  "timestamp": "2026-04-02T13:09:01.713758907+00:00",
+  "concurrency": 4,
+  "runtimes": [
+    {
+      "name": "realizr-fixed-c4",
+      "source_file": "probador-fixed-c4.json",
+      "metrics": {
+        "throughput_scaling": {
+          "value": 1.002411399178172,
+          "score": 43,
+          "best": true
+        },
+        "error_rate": {
+          "value": 0.0,
+          "score": 100,
+          "best": true
+        },
+        "itl_p50_ms": {
+          "value": 14.58614105859375,
+          "score": 46,
+          "best": true,
+          "jitter_penalty": 10
+        },
+        "ttft_p50_ms": {
+          "value": 3734.035280999999,
+          "score": 6,
+          "best": true
+        },
+        "aggregate_tok_s": {
+          "value": 274.45813055977527,
+          "score": 74,
+          "best": true
+        },
+        "decode_tok_s": {
+          "value": 68.55822907394878,
+          "score": 48,
+          "best": true
+        }
+      },
+      "composite": 54.0,
+      "grade": "C"
+    }
+  ]
+}
