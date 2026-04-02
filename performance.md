@@ -84,7 +84,7 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 | SafeTensors FP32 | realizr (GPU) | ~11,000 | 21.2 | — | **#169 FIXED** (was 0.4 CPU) |
 | APR v2 Q4K | realizr (GPU) | ~60,000 | 17.4 | 2,278 | **#170 FIXED** (via from_apr→GGUF CUDA) |
 
-**F-FORMAT-01: WEAKENED** — APR load is ~60s (vs GGUF 0.49s) due to dequant+requant roundtrip. Not faster; significantly slower. Zero-copy claim does not hold for the `from_apr` path.
+**F-FORMAT-01: FALSIFIED** — APR load is ~60s (vs GGUF 0.49s) due to dequant+requant roundtrip — 120x slower, not 2-5x faster. Zero-copy claim does not hold for the `from_apr` path.
 **F-RSS-01: CONFIRMED** — APR RSS 2,278 MB < GGUF RSS 3,082 MB (26% less, mmap paging).
 
 ## Comparison Charts
@@ -96,7 +96,8 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
   realizr GGUF Q4K (GPU)       █████████████████████████ 142.8
   apr-cli GGUF Q4K (GPU)       ████████████████████████ 139.8
   Candle SafeT FP32 (GPU)      ███████████ 65.7
-  realizr SafeT FP32 (CPU)      0.4
+  realizr SafeT FP32 (GPU)     ████ 21.2
+  realizr APR Q4K (GPU)        ███ 17.4
 ```
 
 ### realizr Scaling (SINGLE-REQUEST mode)
@@ -178,13 +179,18 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 
 **Implication:** RSS comparison is only meaningful at matched concurrency. At c=1, realizr over-provisions by 32x.
 
-### Finding 4: SafeTensors GPU path missing (paiml/realizar#169)
+### Finding 4: SafeTensors GPU path fixed (paiml/realizar#169 FIXED)
 
-**What:** Candle: 65.7 tok/s (GPU FP32). realizr: 0.4 tok/s (CPU FP32). Candle 164x faster.
+**What:** Before fix: Candle 65.7 tok/s (GPU FP32), realizr 0.4 tok/s (CPU FP32) — 164x gap. After fix: realizr 21.2 tok/s (GPU FP32) — 3.1x gap remains.
 
-**Why:** Candle dispatches FP32 SafeTensors matmul to CUDA. realizr's GPU path only supports quantized formats (Q4K, Q6K via DP4A); SafeTensors FP32 falls back to CPU with no SIMD optimization beyond what the Rust compiler auto-vectorizes.
+**Why (five-whys):**
+1. Why was realizr CPU-only? → GPU path only supported quantized formats (Q4K, Q6K via DP4A).
+2. Why 21.2 vs 65.7 after fix? → realizr uses FP32 SGEMM; Candle uses optimized QMatMul with FP16 tensor cores.
+3. Why not use tensor cores? → SafeTensors FP32 weights need FP16 downcast for HGEMM, not yet implemented.
+4. Why not auto-quantize on load? → Would add latency and change numerical behavior.
+5. Root cause: **FP32 SGEMM is compute-limited vs Candle's FP16 tensor core path.**
 
-**Implication:** This is a format parity bug, not a trade-off. All three formats (GGUF, SafeTensors, APR v2) must have GPU inference paths. SafeTensors FP16 should dispatch to HGEMM via tensor cores; FP32 to SGEMM or auto-quantize on load. Filed as paiml/realizar#169.
+**Implication:** #169 fixed the missing GPU path. The 3.1x gap is now a performance optimization issue, not a correctness bug. FP16 HGEMM or on-load quantization would close it.
 
 ### Finding 5: Infrastructure blockers on Lambda Vector
 
@@ -274,11 +280,11 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | **CONFIRMED** |
 | F-COLD-01 | realizr cold-start slower | **CONFIRMED** |
 | F-SERVING-01 | Serving overhead <5ms | **WEAKENED** (HTTP 5ms, E2E 27ms) |
-| F-FORMAT-01 | APR v2 load 2-5x faster | **BLOCKED** (#168) |
-| F-RSS-01 | APR v2 RSS < GGUF RSS | **BLOCKED** (#168) |
+| F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (60s vs 0.49s — 120x slower) |
+| F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (2,278 < 3,082 MB, 26% less) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (1.8x fewer launches, same GPU time) |
-| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (SafeTensors CPU, APR garbage) |
+| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (all GPU now: GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity) |
 | F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **PARTIAL** (GGUF 2.1% PASS, APR BLOCKED) |
 | F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (20% vs 55% mem, aprender#567) |
 
-**Score: 5 FALSIFIED, 3 CONFIRMED, 2 WEAKENED, 1 PARTIAL, 2 BLOCKED, 0 UNTESTED**
+**Score: 6 FALSIFIED, 4 CONFIRMED, 2 WEAKENED, 1 PARTIAL, 0 BLOCKED, 0 UNTESTED**

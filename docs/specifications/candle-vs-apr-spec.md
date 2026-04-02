@@ -321,9 +321,9 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 
 | Metric | Prediction | Pass | Fail | Status |
 |--------|-----------|------|------|--------|
-| APR v2 load time | 2-5x faster than GGUF | ratio 2.0-5.0 | ratio < 1.5 | BLOCKED |
-| APR v2 RSS | Lower than GGUF (mmap) | RSS_apr < RSS_gguf | RSS_apr >= RSS_gguf | BLOCKED |
-| APR v2 decode | Within ±5% of GGUF decode | ratio 0.95-1.05 | ratio < 0.95 | BLOCKED |
+| APR v2 load time | 2-5x faster than GGUF | ratio 2.0-5.0 | ratio < 1.5 | **FALSIFIED** (60s vs 0.49s — 120x slower) |
+| APR v2 RSS | Lower than GGUF (mmap) | RSS_apr < RSS_gguf | RSS_apr >= RSS_gguf | **CONFIRMED** (2,278 < 3,082 MB) |
+| APR v2 decode | Within ±5% of GGUF decode | ratio 0.95-1.05 | ratio < 0.95 | **FALSIFIED** (17.4 vs 142.8 = 0.12x) |
 
 > **F-FORMAT-01: BLOCKED.** APR model loads (paiml/realizar#167 fixed) but inference produces garbage output (paiml/realizar#168). GPU adapter weight name mapping incomplete.
 
@@ -355,8 +355,8 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 | Format | Candle path | realizr path |
 |--------|------------|-------------|
 | GGUF Q4_K_M | QMatMul dequant → matmul (2 mem passes) | fused Q4K DP4A (1 mem pass) |
-| SafeTensors | FP16/FP32 GPU matmul | **BUG:** CPU-only FP32 (#169) |
-| APR v2 Q4K | N/A | `apr import` → mmap → fused Q4K DP4A (**BUG:** garbage #168) |
+| SafeTensors | FP16/FP32 GPU matmul | FP32 GPU SGEMM (#169 FIXED) — 21.2 tok/s |
+| APR v2 Q4K | N/A | `apr import` → from_apr → GGUF CUDA (#170 FIXED) — 17.4 tok/s |
 
 Candle: CLI only (`stdin → forward → stdout`). realizr: full serving stack (`HTTP → batch scheduler → CUDA graph → SSE`).
 

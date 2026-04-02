@@ -65,8 +65,8 @@ No throughput scaling observed — server in SINGLE-REQUEST mode, requests queue
 | GGUF Q4_K_M | Candle (GPU) | 227.4 tok/s |
 | GGUF Q4_K_M | realizr (GPU) | 142.8 tok/s |
 | SafeTensors FP32 | Candle (GPU) | 65.7 tok/s |
-| SafeTensors FP32 | realizr (CPU only) | 0.4 tok/s |
-| APR v2 Q4K | realizr | BLOCKED (paiml/realizar#168) |
+| SafeTensors FP32 | realizr (GPU) | 21.2 tok/s (#169 FIXED) |
+| APR v2 Q4K | realizr (GPU) | 17.4 tok/s (#170 FIXED) |
 
 ## Hardware
 
@@ -143,6 +143,9 @@ forjar apply -f forjar-teardown.yaml
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | **CONFIRMED** |
 | F-COLD-01 | realizr cold-start slower | **CONFIRMED** |
 | F-SERVING-01 | Serving overhead <5ms | **WEAKENED** |
-| F-FORMAT-01 | APR v2 load 2-5x faster | BLOCKED |
-| F-RSS-01 | APR v2 RSS < GGUF RSS | BLOCKED |
-| F-KERNEL-01 | Fused Q4K lower mem traffic | UNTESTED |
+| F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (120x slower) |
+| F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
+| F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (fewer launches, same GPU time) |
+| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (GGUF 142.8, SafeT 21.2, APR 17.4) |
+| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **PARTIAL** (GGUF 2.1% PASS, APR blocked) |
+| F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (35pp/28pp delta, aprender#567) |
