@@ -87,6 +87,37 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 **F-FORMAT-01: BLOCKED** — APR loads (paiml/realizar#167 fixed) but inference produces garbage output. GPU adapter weight name mapping incomplete (paiml/realizar#168).
 **F-RSS-01: BLOCKED** — Cannot compare APR vs GGUF RSS until APR inference is correct.
 
+## Comparison Charts
+
+### Decode Throughput (tok/s, c=1, RTX 4090)
+
+```
+  Candle GGUF Q4K (GPU)        ████████████████████████████████████████ 227.4
+  realizr GGUF Q4K (GPU)       █████████████████████████ 142.8
+  apr-cli GGUF Q4K (GPU)       ████████████████████████ 139.8
+  Candle SafeT FP32 (GPU)      ███████████ 65.7
+  realizr SafeT FP32 (CPU)      0.4
+```
+
+### realizr Scaling (SINGLE-REQUEST mode)
+
+```
+  c=1   ███████████████████████████████ 117.0
+  c=4   ███████████████████████████████ 116.7
+  c=8   █████████████████████████████████ 126.3
+  c=16  ██████████████████████████████ 112.5
+  c=32  ██████████████████████████████████████ 145.7
+  (flat — no batch scheduling active)
+```
+
+### Kernel Launches (32 tokens, nsys)
+
+```
+  Candle   ████████████████████████████████████████ 40,513
+  realizr  ██████████████████████ 22,360
+  (1.8x fewer launches, same total GPU time: 106ms vs 105ms)
+```
+
 ## Architectural Comparison
 
 ### Kernel Strategy

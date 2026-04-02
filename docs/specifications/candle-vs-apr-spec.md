@@ -455,9 +455,9 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-351 | Fill performance.md results tables | PARTIAL | Phase 1-2 + SafeTensors filled; APR v2 BLOCKED |
+| PMAT-351 | Fill performance.md results tables | DONE | All filled except APR v2 row (BLOCKED on #170) |
 | PMAT-352 | Write findings section with falsification outcomes | DONE | PMAT-351 |
-| PMAT-353 | Generate comparison charts (throughput, scaling) | TODO | PMAT-351 |
+| PMAT-353 | Generate comparison charts (throughput, scaling) | DONE | — |
 | PMAT-354 | Cross-reference with qwen-coder-deploy spec | DONE | PMAT-352 |
 | PMAT-355 | README update with key findings table | DONE | — |
 
