@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Last Updated:** 2026-04-01
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -65,7 +65,8 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 - Build Candle and realizr from source with CUDA support
 - Run deterministic, isolated benchmarks via forjar
 - Measure decode throughput, TTFT, model load time, and memory footprint
-- Compare GGUF, SafeTensors, and APR v2 format performance
+- **Enforce format parity:** all 3 formats (GGUF, SafeTensors, APR v2) must have GPU inference — any gap is a bug, not a limitation
+- **Enforce tool parity:** `apr` CLI and raw `realizr` must produce equivalent results on the same model
 - Report results as machine-readable JSON + human-readable tables
 
 ### This repo does NOT:
@@ -215,15 +216,28 @@ Demonstrates what Candle's architecture cannot provide.
 | 16 | 60s | bench-scaling.sh | Near-asymptote |
 | 32 | 60s | bench-scaling.sh | At asymptote |
 
-### Phase 3: Format Comparison
+### Phase 3: Format + Tool Parity
 
-APR v2 model prepared via `apr import --preserve-q4k` (preferred). Raw realizr GGUF serving as baseline.
+**Invariant:** All 3 formats must have GPU inference. Both `apr` CLI and raw `realizr` must produce equivalent results. Any format without a GPU path is a bug, not a limitation.
 
-| Format | Candle | realizr | Prepared by | Metrics |
-|--------|--------|---------|-------------|---------|
-| GGUF Q4_K_M | 227.4 tok/s (GPU) | 142.8 tok/s (GPU) | upstream HF | **Measured** |
-| SafeTensors FP32 | 65.7 tok/s (GPU) | 0.4 tok/s (CPU only) | upstream HF | **BUG** paiml/realizar#169 |
-| APR v2 Q4K | N/A | BLOCKED | `apr import --preserve-q4k` | paiml/realizar#168 |
+#### 3a. Format parity (F-FMTPARITY-01)
+
+| Format | Candle (GPU) | realizr (GPU) | Status | Blocker |
+|--------|-------------|---------------|--------|---------|
+| GGUF Q4_K_M | 227.4 tok/s | 142.8 tok/s | **Measured** | — |
+| SafeTensors FP32 | 65.7 tok/s | 0.4 tok/s (CPU!) | **BUG** | paiml/realizar#169 |
+| APR v2 Q4K | N/A | garbage output | **BUG** | paiml/realizar#168 |
+
+#### 3b. Tool parity: `apr` CLI vs `realizr` (F-TOOLPARITY-01)
+
+| Format | Tool | Command | Status |
+|--------|------|---------|--------|
+| GGUF Q4_K_M | `realizr serve --gpu` | direct GGUF serving | Measured (142.8 tok/s) |
+| GGUF Q4_K_M | `apr serve run --gpu` | apr-cli GGUF serving | UNTESTED |
+| APR v2 Q4K | `realizr serve --gpu` | raw APR serving | BLOCKED (#168) |
+| APR v2 Q4K | `apr serve run --gpu` | apr-cli APR serving | UNTESTED |
+
+Both tools loading the same model in the same format must produce tok/s within ±5%.
 
 ### Methodology (inherited from PMAT-177)
 
@@ -354,16 +368,8 @@ SafeTensors ──► FP16/FP32 matmul               SafeTensors ──► FP16 
 
 ### Serving Architecture
 
-```
-Candle (CLI only)                    realizr (full serving stack)
-─────────────────                    ──────────────────────────
-stdin ──► tokenize ──► forward       HTTP ──► /v1/chat/completions
-      ──► sample ──► stdout                ──► tokenize ──► batch scheduler
-                                           ──► forward (CUDA graph / eager)
-                                           ──► sample ──► SSE stream
-                                           ──► circuit breaker / failover
-                                           ──► privacy tier enforcement
-```
+Candle: `stdin → tokenize → forward → sample → stdout` (CLI only, no server).
+realizr: `HTTP → /v1/chat/completions → tokenize → batch scheduler → forward (CUDA graph) → SSE stream`.
 
 ---
 
@@ -383,6 +389,8 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR loads successfully but inference output is garbage. Blocked on paiml/realizar#168 resolution. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
+| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | SafeTensors has no GPU path (0.4 tok/s CPU vs 143 GGUF GPU = 357x gap, paiml/realizar#169). APR v2 inference garbage (paiml/realizar#168). Only GGUF has working GPU inference. |
+| F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | UNTESTED | Requires apr-cli serve path + realizr serve path on same GGUF and same APR. |
 
 ---
 
@@ -421,16 +429,22 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-324 | Generate scaling efficiency table | DONE | PMAT-321 |
 | PMAT-325 | Quality scorecards (probador llm score) | BLOCKED | probador has no `llm` command |
 
-### Phase 3: Format Comparison (PMAT-330 block)
+### Phase 3: Format + Tool Parity (PMAT-330 block)
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
 | PMAT-331 | Candle SafeTensors decode (non-quantized) | DONE | PMAT-302 |
-| PMAT-332 | realizr SafeTensors decode | DONE | — |
-| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | APR loads (#167 fixed), norms aliased (#168 filed), but inference output garbage — GPU adapter mismatch |
+| PMAT-332 | realizr SafeTensors decode | DONE (BUG: CPU only, #169) | — |
+| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | #167 fixed, #168 open — inference garbage |
 | PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | BLOCKED | PMAT-334 |
+| PMAT-337 | Re-test SafeTensors GPU after #169 fix | TODO | paiml/realizar#169 |
+| PMAT-338 | Re-test APR v2 GPU after #168 fix | TODO | paiml/realizar#168 |
+| PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | TODO | PMAT-337, 338 |
+| PMAT-360 | apr-cli serve GGUF vs realizr serve GGUF | TODO | — |
+| PMAT-361 | apr-cli serve APR vs realizr serve APR | TODO | PMAT-338 |
+| PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | TODO | PMAT-360, 361 |
 
 ### Phase 4: Deep Profiling (PMAT-340 block)
 
@@ -467,14 +481,12 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | Reproducibility | All results as JSON | `results/` directory, git-tracked |
 | Falsifiability | Every claim has F-condition | Section 9 register |
 | Cross-validation | Results match sister repos | F-SCALE-01 vs qwen-coder-deploy |
+| **Format parity** | All 3 formats (GGUF, SafeTensors, APR v2) tested on GPU | F-FMTPARITY-01 |
+| **Tool parity** | `apr` CLI and raw `realizr` produce equivalent inference | F-TOOLPARITY-01 |
 
 ### Spec Maintenance
 
-- Maximum 500 lines (this document)
-- Version bump on every structural change
-- Work items tracked in PMAT-300 block
-
----
+Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 block.
 
 ## 12. Revision History
 
@@ -484,3 +496,4 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | 1.1.0 | 2026-04-01 | Phase 1+2 results: 3 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 3 BLOCKED/UNTESTED. Candle 1.6x faster at c=1. No scaling (SINGLE-REQUEST mode). APR v2 format broken. |
 | 1.2.0 | 2026-04-01 | Prefer apr-cli for model prep. Upstream bug policy: gh tickets + provable-contracts. Fixed paiml/realizar#167 (tensor name normalization). Reconverted APR v2 via `apr import --preserve-q4k`. |
 | 1.3.0 | 2026-04-01 | Reconcile all predictions with actuals. Section 7 Phase numbering fixed (scaling=2, format=3). Section 8 observed vs expected. Section 1 summary updated with F-SUMMARY-01 FALSIFIED. Temperature=0 documented as mandatory. |
+| 1.4.0 | 2026-04-02 | Format + tool parity as hard requirements. F-FMTPARITY-01 (all 3 formats GPU), F-TOOLPARITY-01 (apr-cli vs realizr). SafeTensors CPU-only is a bug (#169), not a trade-off. 6 new PMAT items (337-339, 360-362). |
