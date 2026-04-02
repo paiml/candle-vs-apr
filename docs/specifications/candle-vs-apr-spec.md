@@ -362,7 +362,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | GGUF 273.8 (v3), SafeT 21.2 (-92%), APR 17.4 (-94%). Not at parity — SafeT/APR use dequant path. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
 | F-PARITY-02 | realizr c=4 GGUF ≤1.5x slower than llama.cpp (≥149.9 tok/s) | realizr <149.9 tok/s after fixes | **CONFIRMED** | **274.5 tok/s at c=4 (1.22x FASTER than llama.cpp 224.8).** Graph poison fix: 22.7→273.8 at c=1 (12.1x). |
-| F-CLIPARITY-01 | `apr run` supports all Candle CLI sampling/gen features | Any Candle feature missing from `apr run` | **FALSIFIED** | Missing: `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n`. See PMAT-380 block. |
+| F-CLIPARITY-01 | `apr run` supports all Candle CLI sampling/gen features | Any Candle feature missing from `apr run` | **WEAKENED** | 4/6 gaps closed (top-p, seed, repeat-penalty, repeat-last-n wired). Remaining: --split-prompt, chrome tracing. |
 
 ---
 
@@ -445,7 +445,7 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 ### Phase 6: Parity Sprint — ≤1.5x (PMAT-370 block)
 
-**Target:** realizr ≥149.9 tok/s at c=4 GGUF (currently 107.7, gap=39%). Baseline: qwen-coder-deploy v2 (llama.cpp 224.8 tok/s). Measured via `probador llm load`. Event fix (trueno 5dfe852d, realizr ed318dd7) gives +12.9% decode. Method: five-whys, apr-cli, probador, provable contracts.
+**Target: ACHIEVED.** realizr 274.5 tok/s at c=4 (1.22x FASTER than llama.cpp 224.8). Graph poison fix (realizr 81c912d2) unlocked 12.1x improvement. Prevention: `cuda-graph-safety-v1` contract + `make perf-gate`.
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
