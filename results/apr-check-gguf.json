@@ -1,0 +1,58 @@
+{
+  "all_passed": true,
+  "model": "/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+  "passed": 10,
+  "stages": [
+    {
+      "details": "tokens=[1, 2] → 3072 floats",
+      "name": "Tokenizer",
+      "status": "PASS"
+    },
+    {
+      "details": "Found embedding tensor",
+      "name": "Embedding",
+      "status": "PASS"
+    },
+    {
+      "details": "rope_theta=1000000.0",
+      "name": "Positional Encoding",
+      "status": "PASS"
+    },
+    {
+      "details": "Q/K/V tensors found",
+      "name": "Q/K/V Projection",
+      "status": "PASS"
+    },
+    {
+      "details": "Attention output tensor found",
+      "name": "Attention Scores",
+      "status": "PASS"
+    },
+    {
+      "details": "MLP tensors found",
+      "name": "Feed-Forward (MLP)",
+      "status": "PASS"
+    },
+    {
+      "details": "28 layers",
+      "name": "Layer Norm",
+      "status": "PASS"
+    },
+    {
+      "details": "vocab_size=151936",
+      "name": "LM Head",
+      "status": "PASS"
+    },
+    {
+      "details": "logits[151936]: min=-17.21, max=15.67",
+      "name": "Logits → Probs",
+      "status": "PASS"
+    },
+    {
+      "details": "softmax sum = 1.000047 ✓",
+      "name": "Sampler/Decode",
+      "status": "PASS"
+    }
+  ],
+  "total": 10
+}

@@ -1,0 +1,105 @@
+
+=== apr profile (Real Per-Operation Telemetry) ===
+
+  Model: /home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
+  Format: gguf
+
+Loading gguf model for GPU generation profiling...
+[GpuProfile] sm_89: q4k=HwDp4a, q6k=HwDp4a, warps=3, batched_prefill=true, hgemm_decode=false, fused_gate_up=true, fp8_prefill=true, fp8_decode=true, w4a16_il=false, sms=128
+[PMAT-399] Memory fit: 24.0 GB free, 0.1 GB/slot KV, max_batch=32
+[PMAT-399] Auto-sized CUDA_MAX_BATCH=32 (no env var set)
+GPU measurement: 10 passes x 32 tokens...
+  Pass 0: 32 tokens in 109.3ms (prefill: 4.4ms, decode: 105.0ms = 304.9 tok/s)
+Per-operation profiling pass (no CUDA graph)...
+╭──────────────┬────────────────────────────────────────────────╮
+│ Architecture │ qwen2 (28 layers, hidden=1,536, vocab=151,936) │
+├──────────────┼────────────────────────────────────────────────┤
+│      Backend │ CUDA                                           │
+│       Warmup │ 3 passes                                       │
+│      Measure │ 10 passes                                      │
+╰──────────────┴────────────────────────────────────────────────╯
+
+  ✓ REAL PER-OPERATION TELEMETRY
+
+
+  ─── Per-Operation Hotspots
+
+╭────┬──────────────────┬────────┬───────┬───────┬────────────┬────────────────────────┬───────────────────────────────────────────────────────────╮
+│ #  │ Operation        │ Time   │ %     │ Calls │ Bottleneck │ Bar                    │ Detail                                                    │
+├────┼──────────────────┼────────┼───────┼───────┼────────────┼────────────────────────┼───────────────────────────────────────────────────────────┤
+│ #1 │ AttentionScore   │ 7589µs │ 44.4% │ 420   │ MEMORY     │ [████████░░░░░░░░░░░░] │ avg=18.1µs, min=13.9µs, max=1084.9µs, bw=1.4GB/s, eff=0%  │
+│ #2 │ QkvProjection    │ 2417µs │ 14.1% │ 420   │ MEMORY     │ [██░░░░░░░░░░░░░░░░░░] │ avg=5.8µs, min=5.3µs, max=22.0µs                          │
+│ #3 │ RmsNorm          │ 1287µs │ 7.5%  │ 855   │ MEMORY     │ [█░░░░░░░░░░░░░░░░░░░] │ avg=1.5µs, min=1.3µs, max=8.8µs, bw=12.2GB/s, eff=1%      │
+│ #4 │ DownProjection   │ 1229µs │ 7.2%  │ 420   │ MEMORY     │ [█░░░░░░░░░░░░░░░░░░░] │ avg=2.9µs, min=2.6µs, max=8.6µs                           │
+│ #5 │ RopeEmbedding    │ 1209µs │ 7.1%  │ 420   │ COMPUTE    │ [█░░░░░░░░░░░░░░░░░░░] │ avg=2.9µs, min=2.6µs, max=7.6µs, bw=4.3GB/s, eff=0%       │
+│ #6 │ OutputProjection │ 1201µs │ 7.0%  │ 420   │ MEMORY     │ [█░░░░░░░░░░░░░░░░░░░] │ avg=2.9µs, min=2.6µs, max=7.6µs, bw=46132.1GB/s, eff=100% │
+│ #7 │ LmHead           │ 1015µs │ 5.9%  │ 15    │ MEMORY     │ [█░░░░░░░░░░░░░░░░░░░] │ avg=67.7µs, min=55.5µs, max=91.6µs                        │
+│ #8 │ Residual2        │ 578µs  │ 3.4%  │ 420   │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=1.4µs, min=1.2µs, max=5.7µs                           │
+│ #9 │ Residual1        │ 562µs  │ 3.3%  │ 420   │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=1.3µs, min=1.2µs, max=4.9µs                           │
+╰────┴──────────────────┴────────┴───────┴───────┴────────────┴────────────────────────┴───────────────────────────────────────────────────────────╯
+
+
+  ─── Category Summary
+
+  Attention:  72.7%  █████████████████████████████
+  FFN:        13.1%  █████
+  Norm:        7.5%  ███
+  Other:       6.7%  ██
+
+
+  ─── Kernel Launch Overhead (F-PROFILE-009)
+
+  Overhead: 84875µs (83.2% of decode time)
+  WARNING: >20% overhead — consider kernel fusion
+
+
+  ─── Roofline Analysis
+
+  Hardware:       NVIDIA GeForce RTX 4090 (peak 82580.0 GFLOPS, 1008.0 GB/s)
+  Achieved:       809.9 GFLOPS, 202.5 GB/s
+  Compute eff:    1.0%
+  Memory eff:     20.1%
+  Arithmetic int: 4.00 (threshold=82.0)
+  ℹ MEMORY BOUND
+
+[INFO] Decode is memory-bandwidth limited. Matmul operations transfer
+[INFO] more bytes than FLOPs computed. Focus on memory access patterns.
+
+
+  ─── Performance Grade
+
+  Grade: C  —  Fair — room for improvement
+  Efficiency: 20.1%
+
+
+  ─── Generation Performance
+
+╭────────────────────┬──────────────╮
+│  Decode throughput │ 313.8 tok/s  │
+├────────────────────┼──────────────┤
+│ Prefill throughput │ 1113.2 tok/s │
+│   Tokens generated │ 320          │
+╰────────────────────┴──────────────╯
+
+
+  ─── Latency Distribution (decode pass)
+
+╭──────────────┬──────────╮
+│ p50 (median) │ 100.9 ms │
+├──────────────┼──────────┤
+│          p95 │ 105.0 ms │
+│          p99 │ 105.0 ms │
+│          min │ 99.8 ms  │
+│          max │ 106.1 ms │
+╰──────────────┴──────────╯
+
+
+  ─── Summary
+
+  Avg forward pass: 110947.0µs (110.95ms)
+  Throughput: 313.84 tok/s
+  Tokens per pass: 32
+  Operations profiled: 9
+
+
+Profile completed in 4.27s

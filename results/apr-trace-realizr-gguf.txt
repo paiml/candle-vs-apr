@@ -1,0 +1,47 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Layer Trace: /home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+╭────────────┬───────────────╮
+│     Format │ GGUF (qwen2)  │
+├────────────┼───────────────┤
+│     Layers │ 30            │
+│ Parameters │ 1,777,088,000 │
+╰────────────┴───────────────╯
+
+
+  ─── Layer Breakdown
+╭────┬──────────────────────┬─────────┬───────────────────────────────────────────┬───────────╮
+│ #  │ Layer                │ Weights │ Output                                    │ Anomalies │
+├────┼──────────────────────┼─────────┼───────────────────────────────────────────┼───────────┤
+│    │ embedding            │ -       │ mean=0.0000, std=0.0000, [0.0000, 0.0000] │           │
+│ 0  │ transformer_block_0  │ -       │ -                                         │           │
+│ 1  │ transformer_block_1  │ -       │ -                                         │           │
+│ 2  │ transformer_block_2  │ -       │ -                                         │           │
+│ 3  │ transformer_block_3  │ -       │ -                                         │           │
+│ 4  │ transformer_block_4  │ -       │ -                                         │           │
+│ 5  │ transformer_block_5  │ -       │ -                                         │           │
+│ 6  │ transformer_block_6  │ -       │ -                                         │           │
+│ 7  │ transformer_block_7  │ -       │ -                                         │           │
+│ 8  │ transformer_block_8  │ -       │ -                                         │           │
+│ 9  │ transformer_block_9  │ -       │ -                                         │           │
+│ 10 │ transformer_block_10 │ -       │ -                                         │           │
+│ 11 │ transformer_block_11 │ -       │ -                                         │           │
+│ 12 │ transformer_block_12 │ -       │ -                                         │           │
+│ 13 │ transformer_block_13 │ -       │ -                                         │           │
+│ 14 │ transformer_block_14 │ -       │ -                                         │           │
+│ 15 │ transformer_block_15 │ -       │ -                                         │           │
+│ 16 │ transformer_block_16 │ -       │ -                                         │           │
+│ 17 │ transformer_block_17 │ -       │ -                                         │           │
+│ 18 │ transformer_block_18 │ -       │ -                                         │           │
+│ 19 │ transformer_block_19 │ -       │ -                                         │           │
+│ 20 │ transformer_block_20 │ -       │ -                                         │           │
+│ 21 │ transformer_block_21 │ -       │ -                                         │           │
+│ 22 │ transformer_block_22 │ -       │ -                                         │           │
+│ 23 │ transformer_block_23 │ -       │ -                                         │           │
+│ 24 │ transformer_block_24 │ -       │ -                                         │           │
+│ 25 │ transformer_block_25 │ -       │ -                                         │           │
+│ 26 │ transformer_block_26 │ -       │ -                                         │           │
+│ 27 │ transformer_block_27 │ -       │ -                                         │           │
+│    │ final_layer_norm     │ -       │ -                                         │           │
+╰────┴──────────────────────┴─────────┴───────────────────────────────────────────┴───────────╯
