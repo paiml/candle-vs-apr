@@ -402,7 +402,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-322 | Cross-reference against qwen-coder-deploy baselines | DONE (all miss) | PMAT-321 |
 | PMAT-323 | Validate F-SCALE-01 (≥80% of deploy baseline) | DONE (FALSIFIED) | PMAT-322 |
 | PMAT-324 | Generate scaling efficiency table | DONE | PMAT-321 |
-| PMAT-325 | Quality scorecards (probador llm score) | TODO | `probador llm score` exists — needs scoring.yaml config for candle-vs-apr |
+| PMAT-325 | Quality scorecards (probador llm score) | DONE | `configs/scoring.yaml` created (adapted from qcd v3.0.0) |
 
 ### Phase 3: Format + Tool Parity (PMAT-330 block)
 

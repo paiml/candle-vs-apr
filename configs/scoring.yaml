@@ -1,0 +1,63 @@
+# Candle vs APR Scoring Contract v1.0.0
+#
+# Adapted from qwen-coder-deploy/docs/specifications/scoring.yaml v3.0.0.
+# Quantitative grading for Candle vs realizr Rust-vs-Rust comparison.
+#
+# Tool: probador llm score --results results/ --contract configs/scoring.yaml
+# Data: probador llm load --stream false --max-tokens 256 --num-layers 28
+
+metadata:
+  version: "1.0.0"
+  created: "2026-04-02"
+  author: "PAIML Engineering"
+  model: "Qwen2.5-Coder-1.5B-Instruct (Q4_K_M, 1.5B params, 28 layers)"
+  tool: "probador llm score"
+  data_source: "probador llm load --stream false --max-tokens 256"
+  methodology: "30s duration, 5s warmup, locked GPU 2520 MHz, RTX 4090"
+  parent_spec: "qwen-coder-deploy/docs/specifications/scoring.yaml v3.0.0"
+
+# Thresholds adapted from qcd v3.0.0 (yoga RTX 4060L → Lambda RTX 4090)
+# RTX 4090 has ~4x the compute of 4060L, so thresholds scaled accordingly.
+thresholds:
+  decode_tok_s:    { excellent: 250, good: 150, direction: "higher_is_better" }
+  ttft_p50_ms:     { excellent: 10,  good: 50,  direction: "lower_is_better" }
+  itl_p50_ms:      { excellent: 5.0, good: 15,  direction: "lower_is_better" }
+  ttft_p99_ms:     { excellent: 15,  good: 60,  direction: "lower_is_better" }
+  error_rate:      { excellent: 0.0, good: 0.01, direction: "lower_is_better" }
+  us_per_layer:    { excellent: 150, good: 500, direction: "lower_is_better" }
+
+weights:
+  interactive:  # c=1 (primary comparison — Candle has no server)
+    decode_tok_s:   0.30
+    ttft_p50_ms:    0.25
+    itl_p50_ms:     0.20
+    us_per_layer:   0.15
+    error_rate:     0.10
+
+# Current scores from probador llm load (2026-04-02)
+scores:
+  lambda_rtx4090:
+    date: "2026-04-02"
+    gpu: "RTX 4090 (128 SMs, sm_89, 24GB VRAM)"
+    clock: "locked 2520 MHz"
+
+    interactive:
+      raw_data:
+        realizr_original:
+          decode_tok_s: 20.1
+          ttft_p50_ms: 12710
+          itl_p50_ms: 49.7
+          us_per_layer: 1773
+          error_rate: 0.0
+        realizr_patched:
+          decode_tok_s: 22.7
+          ttft_p50_ms: 11259
+          itl_p50_ms: 44.0
+          us_per_layer: 1571
+          error_rate: 0.0
+
+    cross_reference:
+      qwen_coder_deploy_v2:
+        llamacpp_gpu_c4: { decode_tok_s: 224.8, note: "Target for ≤1.5x parity" }
+        apr_gpu_c4: { decode_tok_s: 107.7, note: "2.1x gap vs llama.cpp" }
+        apr_gpu_c1: { decode_tok_s: 15.1, note: "Baseline before event fix" }
