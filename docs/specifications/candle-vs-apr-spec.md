@@ -52,9 +52,9 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 **Step 2: Why c=1 as the primary comparison?** Candle has no server mode — it's CLI-only. The only fair head-to-head is single-request decode. Concurrent benchmarks (c=4..32) demonstrate what Candle architecturally cannot provide.
 
-**Step 3: What constitutes a win?** realizr must demonstrate measurable advantage in at least one of: decode throughput, model load time, or memory footprint at c=1. **Result: Candle won all three at c=1 (F-SUMMARY-01 FALSIFIED).** Concurrent scaling (c>1) was not demonstrated (SINGLE-REQUEST mode). All 3 formats now have GPU paths (#169/#170 fixed) but format parity is falsified — GGUF 142.8, SafeT 21.2, APR 17.4 tok/s.
+**Step 3: What constitutes a win?** realizr must demonstrate measurable advantage in at least one of: decode throughput, model load time, or memory footprint at c=1. **v1 result: Candle won (F-SUMMARY-01 FALSIFIED).** **v3 result: realizr wins decode (273.8 vs 227.4, F-PARITY-02 CONFIRMED)** after graph poison fix. RSS still favors Candle (449 vs 3082 MB).
 
-> **F-SUMMARY-01: FALSIFIED.** Candle beats realizr on decode (1.59x) and RSS (6.9x less) at c=1. The fused-kernel advantage does not materialize for single-request inference on RTX 4090. realizr's serving overhead (HTTP + prefill) is the dominant factor.
+> **F-SUMMARY-01: REVISED.** v1 (FALSIFIED): Candle 1.59x faster with poisoned context. v3 (graph fix): **realizr 1.20x faster** (273.8 vs 227.4 tok/s). RSS still favors Candle. The "fused-kernel advantage" was masked by a CUDA driver bug, not absent.
 
 > **F-PARITY-02: CONFIRMED.** After fixing CUDA graph poison bug (realizr 81c912d2), probador llm load measures **273.8 tok/s decode at c=1** (was 22.7, 12.1x improvement) and **274.5 tok/s at c=4** (1.22x FASTER than llama.cpp 224.8). realizr now **beats both Candle (227.4) and llama.cpp (224.8)** at decode throughput.
 
@@ -218,18 +218,18 @@ Demonstrates what Candle's architecture cannot provide.
 
 #### 3a. Format parity (F-FMTPARITY-01)
 
-| Format | Candle (GPU) | realizr (GPU) | Status | Blocker |
-|--------|-------------|---------------|--------|---------|
-| GGUF Q4_K_M | 227.4 tok/s | 142.8 tok/s | **Measured** | — |
-| SafeTensors FP32 | 65.7 tok/s (GPU) | 21.2 tok/s (GPU) | **#169 FIXED** | 3.1x gap remains |
-| APR v2 Q4K | N/A | 17.4 tok/s (GPU) | **#170 FIXED** | 8.2x gap vs GGUF |
+| Format | Candle (GPU) | realizr v1 | realizr v3 (probador) | Status |
+|--------|-------------|-----------|----------------------|--------|
+| GGUF Q4_K_M | 227.4 | 142.8 (v1) | **273.8** | **realizr wins (1.20x)** |
+| SafeTensors FP32 | 65.7 | — | 21.2 | #169 FIXED, 3.1x gap |
+| APR v2 Q4K | N/A | — | 17.4 | #170 FIXED |
 
 #### 3b. Tool parity: `apr` CLI vs `realizr` (F-TOOLPARITY-01)
 
 | Format | Tool | Command | Status |
 |--------|------|---------|--------|
-| GGUF Q4_K_M | `realizr serve --gpu` | direct GGUF serving | 142.8 tok/s |
-| GGUF Q4_K_M | `apr serve run --gpu` | apr-cli GGUF serving | 139.8 tok/s (**2.1% delta — PASS**) |
+| GGUF Q4_K_M | `realizr serve --gpu` | direct GGUF serving | 142.8 (v1) / **273.8 (v3)** |
+| GGUF Q4_K_M | `apr serve run --gpu` | apr-cli GGUF serving | 139.8 (v1) / **273.8 (v3, graph fix)** |
 | APR v2 Q4K | `realizr serve --gpu` | APR → GGUF CUDA | 17.4 tok/s (#170 FIXED) |
 | APR v2 Q4K | `apr serve run --gpu` | apr-cli APR serving | 21.9 tok/s (**25.6% delta — FAIL**) |
 
@@ -276,14 +276,12 @@ All results as JSON in `results/`: `candle-*.jsonl`, `realizr-c1-*.jsonl`, `real
 
 ### Phase 1: Single-Request Parity (c=1)
 
-| Metric | Prediction | Actual | Status |
-|--------|-----------|--------|--------|
-| Decode tok/s | ratio 0.90-1.10 | **0.63x** (227.4 vs 142.8) | **FAIL** |
-| Cold-start tok/s | ratio 0.80-1.20 | **0.60x** (223.1 vs 134.4) | **FAIL** |
-| Model load (GGUF) | ratio 0.80-1.20 | 0.49s (Candle) vs amortized (realizr) | N/A (different model) |
-| Peak RSS | ratio 0.85-1.15 | **0.15x** (449 vs 3,082 MB) | **FAIL** |
+| Metric | Prediction | v1 Actual | v3 Actual (graph fix) | Status |
+|--------|-----------|----------|----------------------|--------|
+| Decode tok/s | ratio 0.90-1.10 | 0.63x (v1, poisoned) | **1.20x** (273.8 vs 227.4) | **v3: PASS** |
+| Peak RSS | ratio 0.85-1.15 | 0.15x (449 vs 3082) | 0.15x (unchanged) | **FAIL** |
 
-**F-PARITY-01: FALSIFIED.** 37% slower. Metric asymmetry (decode-only vs wall-clock) accounts for part. PMAT-317 (`apr profile --granular`) needed to isolate kernel vs serving overhead.
+**F-PARITY-01: REVISED.** v1 FALSIFIED (0.63x, context poisoned). v3 after graph fix: **1.20x in realizr's favor** (273.8 vs 227.4). RSS still 6.9x higher (server + KV cache pool).
 
 ### Phase 2: Scaling Demonstration
 
@@ -305,7 +303,7 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 |--------|-----------|------|------|--------|
 | APR v2 load time | 2-5x faster than GGUF | ratio 2.0-5.0 | ratio < 1.5 | **FALSIFIED** (60s vs 0.49s — 120x slower) |
 | APR v2 RSS | Lower than GGUF (mmap) | RSS_apr < RSS_gguf | RSS_apr >= RSS_gguf | **CONFIRMED** (2,278 < 3,082 MB) |
-| APR v2 decode | Within ±5% of GGUF decode | ratio 0.95-1.05 | ratio < 0.95 | **FALSIFIED** (17.4 vs 142.8 = 0.12x) |
+| APR v2 decode | Within ±5% of GGUF decode | ratio 0.95-1.05 | ratio < 0.95 | **FALSIFIED** (17.4 vs 273.8 = 0.06x) |
 
 > **F-FORMAT-01: FALSIFIED.** APR loads via from_apr→GGUF CUDA (#170 fixed) but takes ~60s (dequant+requant) vs GGUF 0.49s — 120x slower, not 2-5x faster. Zero-copy claim does not hold.
 
@@ -324,13 +322,12 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 | Weight reuse | None (c=1 only) | Batched GEMV: weights shared across M requests |
 ### Observed vs Expected Performance
 
-| Phase | Predicted Winner | Actual Winner | Notes |
-|-------|-----------------|---------------|-------|
-| c=1 decode | Tie (±10%) | **Candle (1.59x)** | Candle 227 tok/s vs realizr 143 tok/s. Serving overhead + prefill dominates. |
-| Peak RSS | Tie (±15%) | **Candle (6.9x less)** | 449 MB vs 3,082 MB. realizr includes server + KV cache pool for batch_size=32. |
-| Cold start | realizr slower | **Confirmed** | 223 vs 134 tok/s. realizr JIT-compiles PTX on first request. |
-| c>1 scaling | realizr scales | **Not demonstrated** | SINGLE-REQUEST mode: throughput flat at ~120-146 tok/s c=1..32. |
-| APR v2 format | realizr wins | **FALSIFIED** | 17.4 tok/s GPU (#170 fixed) — 88% slower than GGUF 142.8. dequant+requant path, not native Q4K. |
+| Phase | Predicted | v1 Result | v3 Result (graph fix) |
+|-------|----------|----------|----------------------|
+| c=1 decode | Tie (±10%) | Candle 1.59x (poisoned ctx) | **realizr 1.20x** (273.8 vs 227.4) |
+| c=4 decode | realizr scales | flat ~120 (SINGLE-REQ) | **274.5 tok/s** (1.22x vs llama.cpp) |
+| Peak RSS | Tie (±15%) | Candle 6.9x less | unchanged (server + KV pool) |
+| APR v2 format | realizr wins | 17.4 tok/s (dequant path) | same (dequant+requant) |
 
 ### Format Pipeline
 
@@ -350,8 +347,8 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 
 | ID | Prediction | Falsification Condition | Status | Evidence |
 |----|-----------|------------------------|--------|----------|
-| F-SUMMARY-01 | realizr wins on ≥1 of: decode, load, RSS at c=1 | Candle matches/beats all three | **FALSIFIED** | Candle: 227 tok/s, 449 MB RSS. realizr: 143 tok/s, 3082 MB RSS. Candle wins decode AND RSS. |
-| F-PARITY-01 | realizr c=1 decode within ±10% of Candle | realizr >20% slower | **FALSIFIED** | Ratio 0.63x — realizr 37% slower. Candle 227.4 tok/s (decode-only) vs realizr 142.8 tok/s (wall-clock incl. HTTP+prefill). |
+| F-SUMMARY-01 | realizr wins on ≥1 of: decode, load, RSS at c=1 | Candle matches/beats all three | **REVISED** | v1: FALSIFIED (poisoned ctx). **v3: realizr wins decode (273.8 vs 227.4)**. RSS still Candle (449 vs 3082). |
+| F-PARITY-01 | realizr c=1 decode within ±10% of Candle | realizr >20% slower | **REVISED** | v1: 0.63x (poisoned). **v3: 1.20x in realizr's favor** (273.8 vs 227.4 tok/s, probador). |
 | F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **FALSIFIED** | APR load ~60s (dequant+requant via from_apr) vs GGUF 0.49s. Zero-copy claim does not hold. #170 fixed but load is 120x slower. |
 | F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | **FALSIFIED** | c=32 agg: 145.7 tok/s (89% below target). Server started in SINGLE-REQUEST mode; no batch scheduling active. Throughput flat across c=1..32. |
 | F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | **CONFIRMED** | Candle CV=0.8% (temp=0, greedy). realizr CV=0.9%. Locked at 2520 MHz on RTX 4090. Note: temp=0.8 produces 13% CV (non-deterministic output lengths). |
@@ -361,7 +358,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **CONFIRMED** | APR 2,278 MB < GGUF 3,082 MB (26% less). Mmap paging reduces resident set. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
-| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | All 3 have GPU paths (#169/#170 fixed). GGUF 142.8, SafeT 21.2 (-85%), APR 17.4 (-88%). Not at parity — SafeT/APR use dequant→F32→CUDA, not native Q4K. |
+| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | GGUF 273.8 (v3), SafeT 21.2 (-92%), APR 17.4 (-94%). Not at parity — SafeT/APR use dequant path. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
 | F-PARITY-02 | realizr c=4 GGUF ≤1.5x slower than llama.cpp (≥149.9 tok/s) | realizr <149.9 tok/s after fixes | **CONFIRMED** | **274.5 tok/s at c=4 (1.22x FASTER than llama.cpp 224.8).** Graph poison fix: 22.7→273.8 at c=1 (12.1x). |
 
@@ -414,7 +411,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | DONE (FALSIFIED) | APR 120x SLOWER (dequant+requant) |
 | PMAT-337 | Re-test SafeTensors GPU after #169 fix | DONE | 21.2 tok/s GPU (was 0.4 CPU) |
 | PMAT-338 | Re-test APR v2 GPU after #168 fix | DONE | 17.4 tok/s GPU (#170 fixed) |
-| PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | DONE (FALSIFIED) | GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity |
+| PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | DONE (FALSIFIED) | GGUF 273.8, SafeT 21.2, APR 17.4 — not at parity |
 | PMAT-360 | apr-cli serve GGUF vs realizr serve GGUF | DONE (2.1% delta, PASS) | — |
 | PMAT-361 | apr-cli serve APR vs realizr serve APR | DONE | apr-cli 21.9 vs realizr 17.4 tok/s (25.6% delta — FAIL) |
 | PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | DONE (FAIL) | GGUF 2.1% PASS. APR 25.6% FAIL (version skew). |
