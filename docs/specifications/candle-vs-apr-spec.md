@@ -462,7 +462,9 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 
 **Invariant:** `apr run` must do everything each Candle quantized example can do. Source: `candle/candle-examples/examples/`. Cross-ref: `apr-model-qa-playbook` (95 models certified A+, 18 test combinations per model).
 
-**Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired (realizr f42fbceb). Remaining: `--split-prompt` (TODO), `--tracing` (PARTIAL).
+**Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired. Remaining: `--split-prompt` (TODO), `--tracing` (PARTIAL).
+
+**CRITICAL: `apr run --gpu` = 0.7 tok/s (paiml/aprender#573).** GPU validates then falls back to wgpu→F32 dequant. `apr serve run --gpu` = 273.8 tok/s. Same model. `validate_gpu_first_token` returns false despite successful CUDA init. Fix blocked on realizr validation debugging.
 
 | Candle Example | Architecture | `apr run` | QA Playbook | Status |
 |---------------|-------------|----------|-------------|--------|
@@ -470,9 +472,9 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 | quantized (llama) | LLaMA | `apr run llama.gguf "prompt"` | llama-3.1-8b-mvp ✓ | Certified A+ |
 | quantized-phi | Phi-2/3 | `apr run phi.gguf "prompt"` | phi-3-mini-mvp ✓ | Certified A+ |
 | quantized-gemma | Gemma | `apr run gemma.gguf "prompt"` | gemma-2b-mvp ✓ | Certified A+ |
-| quantized-qwen3 | Qwen3 | `apr run qwen3.gguf "prompt"` | — | TODO |
-| quantized-t5 | T5 | `apr run t5.gguf "prompt"` | — | TODO (encoder-decoder) |
-| whisper | Whisper | `apr run whisper -i audio.wav` | — | TODO (ASR) |
+| quantized-qwen3 | Qwen3 | `apr run qwen3.gguf "prompt"` | arch supported | NEEDS BENCHMARK |
+| quantized-t5 | T5 (enc-dec) | not supported | — | OUT OF SCOPE (encoder-decoder) |
+| whisper | Whisper (ASR) | `apr run --input audio.wav` | arch constraints exist | BLOCKED (GH-516) |
 
 `apr run` extras Candle lacks: `--serve`, `--profile`, `--batch-jsonl`, `--offline`, `--backend`, multi-format (GGUF + SafeTensors + APR), `hf://` auto-download, 95-model QA certification matrix.
 
