@@ -167,6 +167,16 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
 ### Upstream bugs discovered
 
+### Finding 6: Tool parity confirmed for GGUF (F-TOOLPARITY-01 PARTIAL)
+
+**What:** apr-cli `apr serve run --gpu` produces 139.8 tok/s. realizr `realizr serve --gpu` produces 142.8 tok/s. Delta: 2.1% — within ±5% threshold.
+
+**Why:** Both tools embed the same realizr inference engine. apr-cli adds a thin wrapper for model import/profiling but uses the same GPU kernels and serving stack. The 2.1% delta is within measurement noise.
+
+**Implication:** GGUF tool parity confirmed. APR v2 tool parity blocked on #168.
+
+### Upstream bugs discovered
+
 | Issue | Repo | Status | Contract candidate |
 |-------|------|--------|-------------------|
 | paiml/realizar#167 | GPU scheduler hardcodes HF tensor names | Fixed | `TENSOR_NAME_RESOLUTION_V1` |
@@ -187,5 +197,7 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 | F-FORMAT-01 | APR v2 load 2-5x faster | **BLOCKED** (#168) |
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **BLOCKED** (#168) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | UNTESTED |
+| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (SafeTensors CPU, APR garbage) |
+| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **PARTIAL** (GGUF 2.1% PASS, APR BLOCKED) |
 
-**Score: 3 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 2 BLOCKED, 1 UNTESTED**
+**Score: 4 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 1 PARTIAL, 2 BLOCKED, 1 UNTESTED**
