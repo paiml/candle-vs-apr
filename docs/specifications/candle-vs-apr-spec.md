@@ -442,8 +442,8 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-341 | `apr profile --granular` realizr GGUF (brick scores + roofline) | TODO | PMAT-312 |
-| PMAT-342 | `apr trace --verbose` realizr c=1 decode (layer timing) | TODO | PMAT-312 |
+| PMAT-341 | `apr profile --granular` realizr GGUF (brick scores + roofline) | DONE | PMAT-312 |
+| PMAT-342 | `apr trace --verbose` realizr c=1 decode (layer timing) | DONE | PMAT-312 |
 | PMAT-343 | `nsys profile` realizr c=1 decode (NVIDIA ground truth) | TODO | PMAT-312 |
 | PMAT-344 | `ncu --set roofline` realizr fused Q4K DP4A kernel | TODO | PMAT-343 |
 | PMAT-345 | Parity check: `apr profile` brick scores vs `ncu` roofline | TODO | PMAT-341, 344 |

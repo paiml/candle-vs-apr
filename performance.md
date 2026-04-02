@@ -165,8 +165,6 @@ Two infrastructure issues required workarounds to run benchmarks:
 
 Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
-### Upstream bugs discovered
-
 ### Finding 6: Tool parity confirmed for GGUF (F-TOOLPARITY-01 PARTIAL)
 
 **What:** apr-cli `apr serve run --gpu` produces 139.8 tok/s. realizr `realizr serve --gpu` produces 142.8 tok/s. Delta: 2.1% — within ±5% threshold.
@@ -174,6 +172,21 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 **Why:** Both tools embed the same realizr inference engine. apr-cli adds a thin wrapper for model import/profiling but uses the same GPU kernels and serving stack. The 2.1% delta is within measurement noise.
 
 **Implication:** GGUF tool parity confirmed. APR v2 tool parity blocked on #168.
+
+### Finding 7: 83.8% kernel launch overhead (apr profile, PMAT-341)
+
+**What:** `apr profile --granular --perf-grade` reports 83.8% of decode time is kernel launch overhead. Grade: C. Memory bound (arithmetic intensity 4.0 vs roofline threshold 82.0). Achieved 808 GFLOPS / 202 GB/s vs RTX 4090 peak of 82,580 GFLOPS / 1,008 GB/s.
+
+**Why (five-whys):**
+1. Why 83.8% overhead? → Each decode step launches many small kernels (RMSNorm, Q4K GEMV ×3, attention, FFN ×3, output norm).
+2. Why not fused? → The Q4K GEMV kernels are fused (dequant+matmul), but RMSNorm, attention, and sampling are separate launches.
+3. Why does launch overhead dominate? → At M=1 (single request), each kernel does very little work — the GPU is idle between launches.
+4. Why memory bound at M=1? → With 1536-dim hidden state, each GEMV reads ~1 MB of weights for ~3 MFLOP of compute. Arithmetic intensity = 3, well below the roofline crossover at 82.
+5. Why does Candle not have this problem? → Candle also launches separate kernels, but its QMatMul is a single fused call per projection, and it avoids the HTTP/tokenization/scheduling overhead.
+
+**Implication:** The fused Q4K kernel saves one memory pass but the launch overhead between kernels is the dominant cost. CUDA graph capture (realizr has this at M=1) should help — investigate whether CUDA graphs are actually active in the benchmarked configuration.
+
+### Upstream bugs discovered
 
 ### Upstream bugs discovered
 
