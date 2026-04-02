@@ -2,14 +2,14 @@
 
 ## Methodology
 
-Same production methodology as qwen-coder-deploy (PMAT-177):
+**v2 (current):** `probador llm load` — same tool as qwen-coder-deploy inference showdown.
 - Model: Qwen2.5-Coder-1.5B-Instruct Q4_K_M GGUF (1.11 GB)
 - Hardware: RTX 4090 (Lambda Vector), 2520 MHz locked, sm_89
-- Prompt: Fixed coding task (~38 tokens), max_tokens=256, temperature=0 (greedy)
-- Iterations: 10 per runtime, drop first for cold start
-- Isolation: forjar serial deployment (one runtime at a time)
-- Candle: CUDA 12.6 PTX, lazy-curand patch (device curand missing on Lambda)
-- realizr: CUDA build, GGUF SINGLE-REQUEST mode
+- `--concurrency 1 --duration 30s --warmup 5s --max-tokens 256 --stream false --num-layers 28 --gpu-telemetry`
+- Candle: CUDA 12.6 PTX, lazy-curand patch (CLI decode-only, no server)
+- realizr: via `apr serve run --gpu` (OpenAI-compatible API)
+
+**v1 (superseded):** Ad-hoc 10-iteration curl scripts via forjar-deployed realizr. v1 numbers (142.8 tok/s) are NOT comparable to probador — forjar used a different realizr build with different serving overhead. qwen-coder-deploy baselines confirm: apr GGUF GPU = 15.1 tok/s at c=1, 107.7 at c=4.
 
 ## Predictions (Pre-Registration)
 
@@ -89,17 +89,19 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 
 ## Comparison Charts
 
-### Decode Throughput (tok/s, c=1, RTX 4090)
+### Decode Throughput — probador llm load (c=1, 30s, RTX 4090)
 
 ```
-  Candle GGUF Q4K (GPU)        ████████████████████████████████████████ 227.4
-  realizr GGUF Q4K (GPU)       █████████████████████████ 142.8
-  apr-cli GGUF Q4K (GPU)       ████████████████████████ 139.8
-  Candle SafeT FP32 (GPU)      ███████████ 65.7
-  realizr SafeT FP32 (GPU)     ████ 21.2
-  apr-cli APR Q4K (GPU)        ████ 21.9
-  realizr APR Q4K (GPU)        ███ 17.4
+  Candle GGUF Q4K (decode-only)  ████████████████████████████████████████ 227.4
+  llama.cpp GGUF (qcd c=4 ref)  ███████████████████████████████████████ 224.8
+  apr GGUF Q4K (qcd c=4)        ██████████████████ 107.7
+  realizr patched (probador c=1) ████ 22.7
+  realizr original (probador c=1)███ 20.1
+  realizr SafeT FP32 (probador)  ███ 21.2
+  realizr APR Q4K (probador)     ██ 17.4
 ```
+
+> **Note:** Candle 227.4 is decode-only (no HTTP). realizr numbers are full wall-clock via probador. The v1 numbers (142.8) were from a different realizr build and are superseded.
 
 ### realizr Scaling (SINGLE-REQUEST mode)
 

@@ -8,17 +8,20 @@ Both are pure Rust. Both load GGUF Q4_K_M. The question: **does the Sovereign AI
 
 ## Key Findings
 
-| Metric | Candle | realizr | Winner |
-|--------|--------|---------|--------|
-| Decode tok/s (c=1, warm) | **227.4** | 142.8 | Candle (1.59x) |
-| Decode tok/s (c=1, cold) | **223.1** | 134.4 | Candle (1.66x) |
-| Peak RSS (MB) | **449** | 3,082 | Candle (6.9x less) |
-| Run-to-run CV | 0.8% | 0.9% | Tie (<5% threshold) |
-| Concurrent scaling (c=32) | N/A | 145.7 tok/s | realizr (Candle has no server) |
+### probador llm load (v2 methodology, aligned with [qwen-coder-deploy](https://github.com/paiml/qwen-coder-deploy))
 
-**Candle is 1.6x faster than realizr at single-request GPU decode.** The fused-kernel advantage does not materialize at c=1 on RTX 4090. realizr's serving overhead (HTTP + tokenization + scheduling) is measurable. Scaling was not demonstrated — realizr ran in SINGLE-REQUEST mode with no batch scheduling active. All 3 formats (GGUF, SafeTensors, APR v2) now have GPU paths after upstream fixes (#169, #170), but format parity is falsified (GGUF 142.8, SafeT 21.2, APR 17.4 tok/s).
+| Metric | Candle | realizr (original) | realizr (patched) | llama.cpp (qcd ref) |
+|--------|--------|-------------------|-------------------|---------------------|
+| Decode tok/s (c=1) | **227.4** (decode-only) | 20.1 | **22.7** (+12.9%) | — |
+| ITL P50 (c=1) | — | 49.7ms | **44.0ms** | — |
+| µs/layer (c=1) | — | 1773 | **1571** | — |
+| Decode tok/s (c=4) | N/A | — | — | **224.8** (qcd baseline) |
+| Decode tok/s (c=4, apr) | N/A | 107.7 (qcd baseline) | — | — |
+| Peak RSS (MB) | **449** | 3,082 | — | — |
 
-See [performance.md](performance.md) for full analysis and [docs/specifications/candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md) for the falsification register.
+> **MEASUREMENT CORRECTION (v2.0.0):** Prior results (142.8 tok/s) were from a forjar-deployed realizr build measured with ad-hoc curl scripts. `probador llm load` — the same tool used in qwen-coder-deploy — measures **20.1 tok/s** (original) / **22.7 tok/s** (event-fix patched). The qwen-coder-deploy c=4 baseline confirms: apr GGUF GPU = 107.7 tok/s vs llama.cpp 224.8 tok/s (2.1x gap). Candle's 227.4 decode-only is consistent with llama.cpp.
+
+**Parity target: ≤1.5x vs llama.cpp at c=4** → realizr needs ≥149.9 tok/s (currently 107.7, 39% gap). Event-based sync fix provides 12.9% improvement. See [docs/specifications/candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md) for Phase 6 sprint.
 
 ## The Two Runtimes
 
@@ -35,16 +38,16 @@ APR v2 model prepared via `apr import --preserve-q4k` from [aprender](https://gi
 
 ## Benchmark Design
 
-### Phase 1: Single-Request Decode (Fair Comparison)
+### Phase 1: Single-Request Decode (probador llm load, c=1, 30s, warmup=5s)
 
-Candle has no server, so the fairest comparison is raw decode throughput at c=1:
+| Metric | Candle (decode-only) | realizr (probador) | llama.cpp (qcd ref) |
+|--------|---------------------|-------------------|---------------------|
+| Decode tok/s | 227.4 | 22.7 (patched) | — |
+| ITL P50 | — | 44.0ms | — |
+| µs/layer | — | 1571 | — |
+| Peak RSS (MB) | 449 | 3,082 | — |
 
-| Metric | Candle | realizr | Ratio |
-|--------|--------|---------|-------|
-| Decode (tok/s, warm) | 227.4 | 142.8 | 0.63x |
-| Decode (tok/s, cold) | 223.1 | 134.4 | 0.60x |
-| Wall time (ms, mean) | 2,456 | 1,804 | — |
-| Peak RSS (MB) | 449 | 3,082 | 6.9x |
+Note: Candle 227.4 is self-reported decode-only (no HTTP overhead). realizr 22.7 is full wall-clock via `probador llm load` (includes HTTP + tokenization + prefill + decode).
 
 ### Phase 2: realizr Scaling (Candle: N/A)
 
@@ -60,13 +63,13 @@ No throughput scaling observed — server in SINGLE-REQUEST mode, requests queue
 
 ### Phase 3: Format Comparison
 
-| Format | Runtime | Status |
-|--------|---------|--------|
-| GGUF Q4_K_M | Candle (GPU) | 227.4 tok/s |
-| GGUF Q4_K_M | realizr (GPU) | 142.8 tok/s |
-| SafeTensors FP32 | Candle (GPU) | 65.7 tok/s |
-| SafeTensors FP32 | realizr (GPU) | 21.2 tok/s (#169 FIXED) |
-| APR v2 Q4K | realizr (GPU) | 17.4 tok/s (#170 FIXED) |
+| Format | Runtime | tok/s (probador) | Notes |
+|--------|---------|-----------------|-------|
+| GGUF Q4_K_M | Candle (GPU) | 227.4 (decode-only) | CLI, no server |
+| GGUF Q4_K_M | realizr (GPU) | 22.7 (patched) | probador llm load |
+| SafeTensors FP32 | Candle (GPU) | 65.7 (decode-only) | |
+| SafeTensors FP32 | realizr (GPU) | 21.2 | #169 FIXED |
+| APR v2 Q4K | realizr (GPU) | 17.4 | #170 FIXED |
 
 ## Hardware
 
@@ -77,44 +80,45 @@ No throughput scaling observed — server in SINGLE-REQUEST mode, requests queue
 
 ## Methodology
 
-Same production methodology as qwen-coder-deploy (PMAT-177):
-- 10 iterations, temperature 0 (greedy), drop first for cold start
-- Locked GPU clocks (eliminates thermal variance)
-- Isolated serial execution via [forjar](https://github.com/paiml/forjar)
-- Results as JSON in `results/`
-- Upstream bugs filed via `gh` and fixed with [provable-contracts](https://github.com/paiml/provable-contracts)
+**v2 (current):** `probador llm load` — same tool as [qwen-coder-deploy](https://github.com/paiml/qwen-coder-deploy) inference showdown. `--concurrency 1 --duration 30s --warmup 5s --max-tokens 256 --stream false --num-layers 28 --gpu-telemetry`.
+
+**v1 (superseded):** Ad-hoc curl scripts with 10 iterations — produced inflated numbers (142.8 tok/s) due to different realizr build via forjar. Results in `results/` are v1; probador results are authoritative.
+
+**Common:**
+- Locked GPU clocks 2520 MHz (eliminates thermal variance)
+- Temperature 0 (greedy, deterministic)
+- `apr check` pre-flight, `apr profile`/`apr trace` per fix
+- Upstream bugs filed via `gh` + [provable-contracts](https://github.com/paiml/provable-contracts)
 
 ## How to Replicate
 
 ### Prerequisites
 
 - Linux with NVIDIA GPU (CUDA 12.6+ toolkit)
+- [probador](https://github.com/paiml/probar) with `llm` subcommand (build from source at `../probar`)
+- [apr](https://github.com/paiml/aprender) CLI for model conversion + serving
 - [forjar](https://github.com/paiml/forjar) for isolated deployment
-- [apr](https://github.com/paiml/aprender) CLI for APR model conversion
-- Candle source at `../candle`
-- realizr source at `../realizar`
+- Candle source at `../candle`, realizr source at `../realizar`
 - Model: `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf`
 
 ### Quick Run
 
 ```bash
-# Build (via forjar)
-forjar apply -f forjar-candle.yaml    # Build Candle with CUDA 12.6
-forjar apply -f forjar-realizr.yaml   # Build + start realizr
+# Start realizr via apr-cli
+apr serve run /path/to/model.gguf --gpu --port 8080
 
-# Phase 1: Single-request head-to-head
-make bench-candle        # Candle CLI decode
-make bench-realizr-c1    # realizr single-request decode
-make compare             # Side-by-side table
+# Benchmark with probador (v2 methodology)
+probador llm load --url http://127.0.0.1:8080 \
+  --model qwen2.5-coder-1.5b-instruct \
+  --concurrency 1 --duration 30s --warmup 5s \
+  --max-tokens 256 --stream false --num-layers 28 \
+  --gpu-telemetry --expected-clock-mhz 2520 \
+  --runtime-name realizr-gguf \
+  -o results/probador-realizr-c1.json
 
-# Phase 2: realizr scaling
-make bench-realizr-scaling   # c=1,4,8,16,32
-
-# Phase 3: Format comparison
-make bench-formats       # GGUF vs SafeTensors vs APR v2
-
-# Teardown
-forjar apply -f forjar-teardown.yaml
+# Candle (CLI only, no server)
+quantized-qwen2-instruct --model model.gguf \
+  --prompt "Write fibonacci" --sample-len 256 --temperature 0
 ```
 
 ## Repository Structure
@@ -146,6 +150,7 @@ forjar apply -f forjar-teardown.yaml
 | F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (120x slower) |
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (fewer launches, same GPU time) |
-| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (GGUF 142.8, SafeT 21.2, APR 17.4) |
+| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (GGUF 22.7, SafeT 21.2, APR 17.4) |
 | F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **WEAKENED** (GGUF 2.1% PASS, APR 25.6% FAIL) |
 | F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (35pp/28pp delta, aprender#567) |
+| F-PARITY-02 | realizr c=4 ≤1.5x llama.cpp | **TESTING** (107.7 vs 224.8, 2.1x gap) |
