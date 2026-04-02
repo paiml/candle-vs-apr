@@ -12,15 +12,16 @@ Both are pure Rust. Both load GGUF Q4_K_M. The question: **does the Sovereign AI
 
 | Metric | Candle | realizr (fixed) | llama.cpp (qcd ref) | Winner |
 |--------|--------|----------------|---------------------|--------|
-| Decode tok/s (c=1) | 227.4 (decode-only) | **273.8** | — | **realizr (1.20x)** |
+| Decode tok/s (c=1) | 227.4 (decode-only) | **263.8** (streaming) | — | **realizr (1.16x)** |
+| TTFT P50 (c=1) | — | **8.4ms** | — | — |
+| ITL P50 (c=1) | — | **3.8ms** | — | — |
 | Decode tok/s (c=4) | N/A | **274.5** | 224.8 | **realizr (1.22x)** |
-| ITL P50 (c=1) | — | **3.7ms** | — | — |
-| µs/layer (c=1) | — | **130.4** | — | — |
 | Peak RSS (MB) | **449** | 3,082 | — | Candle |
+| **probador Grade** | — | **A+ (99.0)** | — | — |
 
-> **F-PARITY-02: CONFIRMED (v3.0.0).** realizr beats Candle (1.20x) and llama.cpp (1.22x) at decode throughput after fixing CUDA graph context poisoning (realizr 81c912d2). Root cause: `forward_graphed_decode.rs` attempted graph capture by default, failed on driver 570.207, poisoned context → 12.1x degradation. Prevention: `cuda-graph-safety-v1` contract + `make perf-gate` CI gate.
+> **probador A+ (99.0):** SSE streaming fixed (realizr cf10c0f7 — `..Default::default()` in Default impl = infinite recursion). TTFT 8.4ms, decode 263.8 tok/s, ITL 3.8ms. realizr beats Candle (1.16x streaming, 1.20x non-streaming) and llama.cpp (1.22x at c=4).
 
-See [docs/specifications/candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md) for full falsification register (14 F-conditions, 7 FALSIFIED, 5 CONFIRMED, 2 WEAKENED).
+See [docs/specifications/candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md) for full falsification register (15 F-conditions).
 
 ## The Two Runtimes
 
