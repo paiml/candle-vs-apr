@@ -1,0 +1,10 @@
+{"iteration": 1, "tok_sec": 132.8, "wall_ms": 1928, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 2, "tok_sec": 136.9, "wall_ms": 1870, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 3, "tok_sec": 138.8, "wall_ms": 1844, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 4, "tok_sec": 138.3, "wall_ms": 1851, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 5, "tok_sec": 136.3, "wall_ms": 1878, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 6, "tok_sec": 138.9, "wall_ms": 1843, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 7, "tok_sec": 143.8, "wall_ms": 1780, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 8, "tok_sec": 143.0, "wall_ms": 1790, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 9, "tok_sec": 143.8, "wall_ms": 1780, "completion_tokens": 256, "tool": "apr-cli"}
+{"iteration": 10, "tok_sec": 138.4, "wall_ms": 1850, "completion_tokens": 256, "tool": "apr-cli"}

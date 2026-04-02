@@ -59,7 +59,14 @@ if [ "$CONCURRENCY" -eq 1 ]; then
         WALL_MS=$(( (END - START) / 1000000 ))
 
         # Extract usage from OpenAI response
-        COMPLETION_TOKENS=$(echo "$RESPONSE" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('usage',{}).get('completion_tokens',0))" 2>/dev/null || echo "0")
+        COMPLETION_TOKENS=$(echo "$RESPONSE" | python3 -c "
+import sys, json
+try:
+    r = json.loads(sys.stdin.read(), strict=False)
+    print(r.get('usage',{}).get('completion_tokens',0))
+except:
+    print(0)
+" 2>/dev/null || echo "0")
         TOK_SEC=$(python3 -c "print(round($COMPLETION_TOKENS / ($WALL_MS / 1000), 1) if $WALL_MS > 0 else 0)")
 
         echo "  tok/s: $TOK_SEC | tokens: $COMPLETION_TOKENS | wall: ${WALL_MS}ms"

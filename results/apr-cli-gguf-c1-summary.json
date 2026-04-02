@@ -1,0 +1,19 @@
+{
+  "tool": "apr-cli",
+  "runtime": "realizr (via apr-cli)",
+  "format": "gguf",
+  "gpu": true,
+  "max_tokens": 256,
+  "iterations": 10,
+  "tok_sec": {
+    "mean": 139.8,
+    "min": 136.3,
+    "max": 143.8,
+    "cold_start": 132.8
+  },
+  "wall_ms": {
+    "mean": 1841,
+    "min": 1780,
+    "max": 1928
+  }
+}
