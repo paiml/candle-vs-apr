@@ -208,7 +208,7 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
 **Why:** Both tools embed the same realizr inference engine. apr-cli adds a thin wrapper for model import/profiling but uses the same GPU kernels and serving stack. The 2.1% delta is within measurement noise.
 
-**Implication:** GGUF tool parity confirmed. APR v2 tool parity blocked on #168.
+**Implication:** GGUF tool parity confirmed. APR v2 tool parity blocked on apr-cli rebuild against realizr #170 fix (PMAT-361).
 
 ### Finding 7: 83.8% kernel launch overhead (apr profile, PMAT-341)
 

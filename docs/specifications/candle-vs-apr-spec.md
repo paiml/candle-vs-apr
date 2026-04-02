@@ -325,7 +325,7 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 | APR v2 RSS | Lower than GGUF (mmap) | RSS_apr < RSS_gguf | RSS_apr >= RSS_gguf | **CONFIRMED** (2,278 < 3,082 MB) |
 | APR v2 decode | Within ±5% of GGUF decode | ratio 0.95-1.05 | ratio < 0.95 | **FALSIFIED** (17.4 vs 142.8 = 0.12x) |
 
-> **F-FORMAT-01: BLOCKED.** APR model loads (paiml/realizar#167 fixed) but inference produces garbage output (paiml/realizar#168). GPU adapter weight name mapping incomplete.
+> **F-FORMAT-01: FALSIFIED.** APR loads via from_apr→GGUF CUDA (#170 fixed) but takes ~60s (dequant+requant) vs GGUF 0.49s — 120x slower, not 2-5x faster. Zero-copy claim does not hold.
 
 ---
 
@@ -348,7 +348,7 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 | Peak RSS | Tie (±15%) | **Candle (6.9x less)** | 449 MB vs 3,082 MB. realizr includes server + KV cache pool for batch_size=32. |
 | Cold start | realizr slower | **Confirmed** | 223 vs 134 tok/s. realizr JIT-compiles PTX on first request. |
 | c>1 scaling | realizr scales | **Not demonstrated** | SINGLE-REQUEST mode: throughput flat at ~120-146 tok/s c=1..32. |
-| APR v2 format | realizr wins | **BLOCKED** | Inference garbage output (paiml/realizar#168). |
+| APR v2 format | realizr wins | **FALSIFIED** | 17.4 tok/s GPU (#170 fixed) — 88% slower than GGUF 142.8. dequant+requant path, not native Q4K. |
 
 ### Format Pipeline
 
