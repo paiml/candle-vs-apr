@@ -296,7 +296,7 @@ All results as JSON in `results/`: `candle-*.jsonl`, `realizr-c1-*.jsonl`, `real
 
 Predictions cross-referenced from qwen-coder-deploy baselines.
 
-> **F-SCALE-01: FALSIFIED.** v1: flat (SINGLE-REQUEST). v3: streaming + batch crash with stack overflow (realizr#171/#172, tokio 2MB thread). Partially fixed (realizr 2e9218a9, d26505fc, 3b9a0a31) — needs further dispatch investigation. Blocks scaling test.
+> **F-SCALE-01: FALSIFIED.** v1: flat (SINGLE-REQUEST). v3: streaming crashes with **infinite recursion** (realizr#172 — even 64MB stack overflows). Non-streaming (273.8 tok/s) unaffected. Blocks streaming TTFT measurement + batch scaling test.
 
 ### Phase 3: Format Advantage
 
