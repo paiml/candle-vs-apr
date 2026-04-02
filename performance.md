@@ -186,7 +186,15 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
 **Implication:** The fused Q4K kernel saves one memory pass but the launch overhead between kernels is the dominant cost. CUDA graph capture (realizr has this at M=1) should help — investigate whether CUDA graphs are actually active in the benchmarked configuration.
 
-### Upstream bugs discovered
+### Finding 8: Cross-reference with qwen-coder-deploy (PMAT-354)
+
+| c | qwen-coder-deploy | candle-vs-apr | Delta | Notes |
+|---|-------------------|---------------|-------|-------|
+| 1 | 148.6 tok/s | 142.8 tok/s | -3.9% | Same engine, same model, same GPU |
+| 4 | 325.2 tok/s | 116.7 tok/s | -64% | No batching (SINGLE-REQUEST mode) |
+| 32 | ~1,500 tok/s | 145.7 tok/s | -90% | qwen-coder-deploy used BATCH=32 |
+
+c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a regression.
 
 ### Upstream bugs discovered
 
