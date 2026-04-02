@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.8.0
+**Version:** 1.9.0
 **Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -56,6 +56,8 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 > **F-SUMMARY-01: FALSIFIED.** Candle beats realizr on decode (1.59x) and RSS (6.9x less) at c=1. The fused-kernel advantage does not materialize for single-request inference on RTX 4090. realizr's serving overhead (HTTP + prefill) is the dominant factor.
 
+> **Phase 6 target: ≤1.5x gap.** realizr must reach ≥151.6 tok/s (currently 142.8). Requires 6.2% improvement via upstream serving overhead reduction in `../realizar`. Method: five-whys root cause analysis, `apr trace`/`apr profile` measurement, provable-contracts enforcement.
+
 ---
 
 ## 2. Scope
@@ -79,27 +81,9 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 ### Measure-and-Fix Policy
 
-All measurement and bug-fixing MUST use the full apr-cli toolchain as the primary tool, with NVIDIA nsys/ncu as parity validation.
+**Measure:** `apr check` (integrity) → `apr profile --granular --perf-grade` (roofline) → `apr trace --verbose` (layer trace) → `apr cbtop --headless` (monitor). NVIDIA `nsys`/`ncu` as parity validation (F-BRICKPARITY-01).
 
-**Measure (every benchmark run):**
-- `apr check <model>` — pipeline integrity before benchmarking
-- `apr profile --granular --perf-grade --json` — ComputeBrick roofline (brick scores, GFLOPS, BW)
-- `apr trace --verbose --json` — layer-by-layer trace (shape/NaN/name failures)
-- `apr cbtop --headless --json` — live pipeline monitor (`--ci` to gate on thresholds)
-
-**NVIDIA parity (Phase 4 — validates apr-cli accuracy):**
-- `nsys profile` — ground truth timeline, compare vs `apr trace`
-- `ncu --set roofline` — ground truth roofline, compare vs `apr profile` brick scores
-- Disagreement >15% → file bug in aprender (F-BRICKPARITY-01)
-
-**Fix (every upstream bug):**
-1. `gh issue create --repo paiml/<repo>` — with `apr trace` / `apr profile` output
-2. Fix in the upstream repo — never work around locally
-3. Add a `provable-contracts` binding — every fix MUST add a contract. No exceptions.
-4. Verify: `apr trace` + `apr profile --granular` before/after to confirm fix + no regression
-5. Rebuild via forjar, re-run falsification
-
-**Example (#167):** `apr trace` → tensor name failure at layer 0. Fix: name normalization. Contract: `TENSOR_NAME_RESOLUTION_V1`.
+**Fix:** `gh issue create` with trace data → fix upstream (never local workaround) → add `provable-contracts` binding → verify with `apr trace`/`apr profile` before/after → rebuild via forjar → re-run falsification.
 
 ### Relationship to sister repos
 
@@ -381,6 +365,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | All 3 have GPU paths (#169/#170 fixed). GGUF 142.8, SafeT 21.2 (-85%), APR 17.4 (-88%). Not at parity — SafeT/APR use dequant→F32→CUDA, not native Q4K. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
+| F-PARITY-02 | realizr c=1 GGUF decode ≤1.5x slower than Candle (≥151.6 tok/s) | realizr <151.6 tok/s after overhead fixes | **TESTING** | Baseline: 142.8 tok/s (1.59x). Need +6.2%. Serving overhead ~35ms is the target. |
 
 ---
 
@@ -461,6 +446,20 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 | PMAT-354 | Cross-reference with qwen-coder-deploy spec | DONE | PMAT-352 |
 | PMAT-355 | README update with key findings table | DONE | — |
 
+### Phase 6: Parity Sprint — ≤1.5x (PMAT-370 block)
+
+**Target:** realizr ≥151.6 tok/s at c=1 GGUF (currently 142.8, gap=6.2%). Method: fix serving overhead upstream in `../realizar` using apr-cli tooling, five-whys, provable contracts.
+
+| ID | Task | Status | Depends |
+|----|------|--------|---------|
+| PMAT-371 | `apr trace` + `apr profile` serving overhead breakdown | TODO | — |
+| PMAT-372 | Five-whys: isolate dominant overhead source (HTTP? tokenizer? prefill? scheduling?) | TODO | PMAT-371 |
+| PMAT-373 | `gh issue create` upstream ticket with trace data | TODO | PMAT-372 |
+| PMAT-374 | Fix root cause in `../realizar` + provable contract | TODO | PMAT-373 |
+| PMAT-375 | Rebuild realizr, re-benchmark c=1 (10 iter, temp=0, locked clocks) | TODO | PMAT-374 |
+| PMAT-376 | Validate F-PARITY-02 (≥151.6 tok/s = ≤1.5x) | TODO | PMAT-375 |
+| PMAT-377 | Update spec, perf.md, README with new numbers | TODO | PMAT-376 |
+
 ---
 
 ## 11. PMAT Compliance
@@ -489,12 +488,7 @@ Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 bl
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-04-01 | Initial spec: 3-phase benchmark design, 10 falsification conditions, 30 work items |
-| 1.1.0 | 2026-04-01 | Phase 1+2 results: 3 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 3 BLOCKED/UNTESTED. Candle 1.6x faster at c=1. No scaling (SINGLE-REQUEST mode). APR v2 format broken. |
-| 1.2.0 | 2026-04-01 | Prefer apr-cli for model prep. Upstream bug policy: gh tickets + provable-contracts. Fixed paiml/realizar#167 (tensor name normalization). Reconverted APR v2 via `apr import --preserve-q4k`. |
-| 1.3.0 | 2026-04-01 | Reconcile all predictions with actuals. Section 7 Phase numbering fixed (scaling=2, format=3). Section 8 observed vs expected. Section 1 summary updated with F-SUMMARY-01 FALSIFIED. Temperature=0 documented as mandatory. |
-| 1.4.0 | 2026-04-02 | Format + tool parity as hard requirements. F-FMTPARITY-01, F-TOOLPARITY-01. SafeTensors CPU-only is a bug (#169). |
-| 1.5.0 | 2026-04-02 | Measure-and-Fix: mandatory apr-cli (brick profiling, layer tracing, provable-contracts) + NVIDIA nsys/ncu parity. F-BRICKPARITY-01 added. Phase 4 redesigned: apr-cli primary, NVIDIA validation. |
-| 1.6.0 | 2026-04-02 | All 13 F-conditions tested (0 UNTESTED). 32/44 PMAT DONE. nsys + ncu profiling complete. tensor-name-resolution-v1 contract added upstream. Comparison charts. 5 upstream tickets filed. Remaining 12 items blocked on realizr #168/#169/#170. |
-| 1.7.0 | 2026-04-02 | Cross-doc consistency sweep. §7 Phase 3: BLOCKED→FALSIFIED/CONFIRMED (3 rows measured). §8 Format Pipeline: stale BUG tags→FIXED with tok/s. §1 summary: APR BLOCKED→measured. Score: 6F/4C/2W/1P/0B/0U. README register adds 3 missing F-conditions. |
-| 1.8.0 | 2026-04-02 | **ALL 43 PMAT items resolved (41 DONE, 2 WONTFIX, 0 BLOCKED).** PMAT-361/362: apr-cli APR Q4K GPU 21.9 tok/s benchmarked. F-TOOLPARITY-01 PARTIAL→WEAKENED (APR 25.6% delta, version skew). PMAT-306/325 WONTFIX (probador is WASM-only). Score: 6F/4C/3W/0P/0B/0U. |
+| 1.0–1.3 | 2026-04-01 | Initial spec → Phase 1+2 results. Candle 1.59x faster. F-SCALE-01 FALSIFIED (SINGLE-REQUEST). 5 upstream bugs filed. |
+| 1.4–1.7 | 2026-04-02 | Format/tool parity enforced. SafeTensors GPU (#169), APR GPU (#170) fixed. Measure-and-Fix policy. All 13 F-conditions tested. |
+| 1.8.0 | 2026-04-02 | All 43 PMAT items resolved. F-TOOLPARITY-01 WEAKENED (APR 25.6% version skew). Score: 6F/4C/3W. |
+| 1.9.0 | 2026-04-02 | **Phase 6: Parity Sprint.** Target ≤1.5x gap (realizr ≥151.6 tok/s). PMAT-370 block: upstream serving overhead fixes via five-whys + provable contracts. F-PARITY-02 added. |
