@@ -1,8 +1,8 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.5.0
-**Last Updated:** 2026-04-01
+**Version:** 1.6.0
+**Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
 **Primary Target:** Lambda Vector (RTX 4090, 24 GB VRAM, sm_89)
@@ -495,3 +495,4 @@ Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 bl
 | 1.3.0 | 2026-04-01 | Reconcile all predictions with actuals. Section 7 Phase numbering fixed (scaling=2, format=3). Section 8 observed vs expected. Section 1 summary updated with F-SUMMARY-01 FALSIFIED. Temperature=0 documented as mandatory. |
 | 1.4.0 | 2026-04-02 | Format + tool parity as hard requirements. F-FMTPARITY-01, F-TOOLPARITY-01. SafeTensors CPU-only is a bug (#169). |
 | 1.5.0 | 2026-04-02 | Measure-and-Fix: mandatory apr-cli (brick profiling, layer tracing, provable-contracts) + NVIDIA nsys/ncu parity. F-BRICKPARITY-01 added. Phase 4 redesigned: apr-cli primary, NVIDIA validation. |
+| 1.6.0 | 2026-04-02 | All 13 F-conditions tested (0 UNTESTED). 32/44 PMAT DONE. nsys + ncu profiling complete. tensor-name-resolution-v1 contract added upstream. Comparison charts. 5 upstream tickets filed. Remaining 12 items blocked on realizr #168/#169/#170. |
