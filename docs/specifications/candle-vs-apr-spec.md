@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Last Updated:** 2026-04-01
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -77,17 +77,29 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 - Contain the APR CLI (that's `../aprender`, binary: `apr`)
 - Benchmark training (that's `../qwen-train-canary`)
 
-### Upstream Bug Policy
+### Measure-and-Fix Policy
 
-When a benchmark reveals a bug in a dependency (realizr, trueno, aprender):
+All measurement and bug-fixing MUST use the full apr-cli toolchain as the primary tool, with NVIDIA nsys/ncu as parity validation.
 
-1. **File a `gh` issue** — `gh issue create --repo paiml/<repo>` with reproduction steps
-2. **Fix in the upstream repo** — never work around bugs locally in this benchmark repo
-3. **Add a provable-contract** — if the broken invariant can be expressed as a contract, add it to `binding.yaml` in the upstream repo via `provable-contracts`. This turns the runtime bug into a compile-time guarantee. Example: tensor name resolution must succeed for all supported naming conventions → contract on the adapter's `upload_weights` function.
-4. **Rebuild via forjar** — update the forjar template if the fix requires new build flags or dependencies
-5. **Re-run the falsification** — re-test the blocked F-condition and update the register
+**Measure (every benchmark run):**
+- `apr check <model>` — pipeline integrity before benchmarking
+- `apr profile --granular --perf-grade --json` — ComputeBrick roofline (brick scores, GFLOPS, BW)
+- `apr trace --verbose --json` — layer-by-layer trace (shape/NaN/name failures)
+- `apr cbtop --headless --json` — live pipeline monitor (`--ci` to gate on thresholds)
 
-**Example (paiml/realizar#167):** APR Q4K GPU scheduler hardcoded HF tensor names, failing on GGUF-converted APR files. Fix: name normalization in `upload_apr_q4k_weights`. Contract candidate: `TENSOR_NAME_RESOLUTION_V1` — all weight lookups must resolve for GGUF, SafeTensors, and HF naming conventions.
+**NVIDIA parity (Phase 4 — validates apr-cli accuracy):**
+- `nsys profile` — ground truth timeline, compare vs `apr trace`
+- `ncu --set roofline` — ground truth roofline, compare vs `apr profile` brick scores
+- Disagreement >15% → file bug in aprender (F-BRICKPARITY-01)
+
+**Fix (every upstream bug):**
+1. `gh issue create --repo paiml/<repo>` — with `apr trace` / `apr profile` output
+2. Fix in the upstream repo — never work around locally
+3. Add a `provable-contracts` binding — every fix MUST add a contract. No exceptions.
+4. Verify: `apr trace` + `apr profile --granular` before/after to confirm fix + no regression
+5. Rebuild via forjar, re-run falsification
+
+**Example (#167):** `apr trace` → tensor name failure at layer 0. Fix: name normalization. Contract: `TENSOR_NAME_RESOLUTION_V1`.
 
 ### Relationship to sister repos
 
@@ -96,7 +108,7 @@ When a benchmark reveals a bug in a dependency (realizr, trueno, aprender):
 | **qwen-coder-deploy** | Benchmark | realizr vs llama.cpp vs vLLM vs ollama |
 | **qwen-train-canary** | Benchmark | apr vs unsloth vs pytorch vs cublas |
 | **candle-vs-apr** (this) | Benchmark | Candle vs realizr (Rust-vs-Rust) |
-| **aprender** | Tooling | APR format, `apr` CLI (model import, conversion, profiling) |
+| **aprender** | Tooling | `apr` CLI: import, profile (ComputeBrick), trace (layer), check (integrity), cbtop (monitor) |
 | **realizar** | Engine | Inference engine under test |
 | **trueno** | Kernel lib | SIMD/GPU kernel library (trueno-gpu for CUDA) |
 | **provable-contracts** | Quality | Compile-time contract enforcement for upstream fixes |
@@ -246,7 +258,13 @@ Both tools loading the same model in the same format must produce tok/s within �
 - **Locked GPU clocks** — eliminates thermal throttle variance (<1% CV measured)
 - **Isolated serial** — one runtime at a time, clean GPU state
 - **forjar deploy/teardown** — reproducible environment setup
-- **bench-scaling.sh** — concurrent load testing (Phase 2). Note: `probador` on this system is a WASM test tool, not an LLM load tester.
+- **bench-scaling.sh** — concurrent load testing (Phase 2)
+
+**Required apr-cli gates (every run):**
+- Pre-flight: `apr check <model>` — pipeline integrity before benchmarking
+- Profiling: `apr profile <model> --granular --perf-grade --json` — brick scores + roofline
+- Tracing: `apr trace <model> --verbose --json` — layer-by-layer correctness
+- Monitoring: `apr cbtop --model-path <model> --headless --json` — live pipeline health
 
 ---
 
@@ -264,23 +282,11 @@ Both tools loading the same model in the same format must produce tok/s within �
 
 ### Derived Metrics (Phase 2)
 
-| Metric | Definition | Unit |
-|--------|-----------|------|
-| Aggregate tok/s | Total tokens/sec across all concurrent requests | tok/s |
-| Per-request decode | Tokens/sec experienced by individual request | tok/s |
-| Scaling efficiency | (agg_c / agg_1) / c | ratio (1.0 = perfect) |
-| ITL P50 | Inter-token latency, median | ms |
-| TTFT P50 | Time to first token, median | ms |
+Aggregate tok/s, per-request tok/s, scaling efficiency `(agg_c / agg_1) / c`, ITL P50, TTFT P50.
 
 ### Data Format
 
-All results saved as JSON in `results/`:
-- `candle-<timestamp>.jsonl` — per-iteration Candle results
-- `candle-summary-<timestamp>.json` — aggregated Candle metrics
-- `realizr-c1-<timestamp>.jsonl` — realizr c=1 per-iteration results
-- `realizr-c1-summary-<timestamp>.json` — aggregated realizr c=1 metrics
-- `realizr-scaling-c<N>-<timestamp>.jsonl` — scaling per-request results
-- `realizr-scaling-c<N>-summary.json` — aggregated scaling metrics
+All results as JSON in `results/`: `candle-*.jsonl`, `realizr-c1-*.jsonl`, `realizr-scaling-c<N>-*.jsonl`, `apr-cli-*.jsonl`, plus `-summary.json` aggregates.
 
 ---
 
@@ -295,11 +301,7 @@ All results saved as JSON in `results/`:
 | Model load (GGUF) | ratio 0.80-1.20 | 0.49s (Candle) vs amortized (realizr) | N/A (different model) |
 | Peak RSS | ratio 0.85-1.15 | **0.15x** (449 vs 3,082 MB) | **FAIL** |
 
-**Original rationale (pre-test):** At c=1, the GPU is underutilized. Fused kernels save one memory pass but the bottleneck is compute, not bandwidth. Serving overhead (HTTP stack, tokenizer init) may penalize realizr slightly.
-
-**Post-test finding:** The penalty is not "slight" — it's 37%. The metric asymmetry (Candle self-reported decode-only vs realizr wall-clock including HTTP+prefill) accounts for part of the gap. A realizr CLI-mode benchmark (PMAT-317) is needed to isolate serving overhead from kernel performance.
-
-> **F-PARITY-01: FALSIFIED.** realizr 37% slower. Action: PMAT-317 (nsys profile) + realizr CLI-mode benchmark to isolate HTTP overhead.
+**F-PARITY-01: FALSIFIED.** 37% slower. Metric asymmetry (decode-only vs wall-clock) accounts for part. PMAT-317 (`apr profile --granular`) needed to isolate kernel vs serving overhead.
 
 ### Phase 2: Scaling Demonstration
 
@@ -338,8 +340,6 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 | Attention | Standard scaled dot-product | Flash Decoding (KV chunked across CTAs) |
 | KV cache | Manual, per-call allocation | GPU-resident, per-slot for batching |
 | Weight reuse | None (c=1 only) | Batched GEMV: weights shared across M requests |
-| Graph capture | Not implemented | Full forward pass at M=1, eager at M>1 |
-
 ### Observed vs Expected Performance
 
 | Phase | Predicted Winner | Actual Winner | Notes |
@@ -352,24 +352,13 @@ Predictions cross-referenced from qwen-coder-deploy baselines.
 
 ### Format Pipeline
 
-```
-                    Candle                          realizr (raw GGUF)
-                    ──────                          ──────────────────
-GGUF Q4_K_M ──► QMatMul dequant ──► matmul    GGUF Q4_K_M ──► fused Q4K DP4A ──► output
-                (2 memory passes)              (1 memory pass, INT8 activations)
+| Format | Candle path | realizr path |
+|--------|------------|-------------|
+| GGUF Q4_K_M | QMatMul dequant → matmul (2 mem passes) | fused Q4K DP4A (1 mem pass) |
+| SafeTensors | FP16/FP32 GPU matmul | **BUG:** CPU-only FP32 (#169) |
+| APR v2 Q4K | N/A | `apr import` → mmap → fused Q4K DP4A (**BUG:** garbage #168) |
 
-SafeTensors ──► FP16/FP32 matmul               SafeTensors ──► FP16 HGEMM (tensor cores)
-
-                                                realizr (APR v2, via apr-cli)
-                                                ────────────────────────────
-                    N/A                         apr import ──► APR v2 Q4K ──► mmap ──► fused Q4K DP4A
-                                               (zero-copy, LZ4/ZSTD, 64-byte aligned)
-```
-
-### Serving Architecture
-
-Candle: `stdin → tokenize → forward → sample → stdout` (CLI only, no server).
-realizr: `HTTP → /v1/chat/completions → tokenize → batch scheduler → forward (CUDA graph) → SSE stream`.
+Candle: CLI only (`stdin → forward → stdout`). realizr: full serving stack (`HTTP → batch scheduler → CUDA graph → SSE`).
 
 ---
 
@@ -385,7 +374,8 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | **FALSIFIED** | c=32 agg: 145.7 tok/s (89% below target). Server started in SINGLE-REQUEST mode; no batch scheduling active. Throughput flat across c=1..32. |
 | F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | **CONFIRMED** | Candle CV=0.8% (temp=0, greedy). realizr CV=0.9%. Locked at 2520 MHz on RTX 4090. Note: temp=0.8 produces 13% CV (non-deterministic output lengths). |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF successfully | Candle errors on load | **CONFIRMED** | Loaded 339 tensors (1.11 GB) in 0.49s. Required lazy-curand patch (curand device library missing on Lambda Vector) and CUDA 12.6 toolkit (PTX 9.0 from CUDA 13.0 unsupported by 570.207 driver). |
-| F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | nsys shows equal or higher BW | UNTESTED | Requires nsys profiling (Phase 4). |
+| F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | `apr profile` brick scores equal or worse | UNTESTED | Requires `apr profile --granular` + `ncu --set roofline` (Phase 4). |
+| F-BRICKPARITY-01 | `apr profile` brick scores match `ncu` roofline within ±15% | Disagreement >15% on GFLOPS or BW | UNTESTED | Phase 4: PMAT-345. Disagreement → file bug in aprender. |
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR loads successfully but inference output is garbage. Blocked on paiml/realizar#168 resolution. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
@@ -417,7 +407,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-314 | Measure model load time (cold start) | DONE | PMAT-311, 312 |
 | PMAT-315 | Measure peak RSS both runtimes | DONE | PMAT-311, 312 |
 | PMAT-316 | Validate F-PARITY-01 (±10% decode) | DONE (FALSIFIED) | PMAT-313 |
-| PMAT-317 | If F-PARITY-01 fails: profile with nsys | TODO | PMAT-316 |
+| PMAT-317 | F-PARITY-01 failed: `apr profile --granular` to isolate overhead | TODO | PMAT-316 |
 
 ### Phase 2: Concurrent Scaling (PMAT-320 block)
 
@@ -446,17 +436,20 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-361 | apr-cli serve APR vs realizr serve APR | TODO | PMAT-338 |
 | PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | TODO | PMAT-360, 361 |
 
-### Phase 4: Deep Profiling (PMAT-340 block)
+### Phase 4: Deep Profiling + Parity (PMAT-340 block)
+
+apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference — when apr-cli and NVIDIA tools disagree, file a bug in aprender.
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-341 | nsys timeline: Candle c=1 decode step | TODO | PMAT-311 |
-| PMAT-342 | nsys timeline: realizr c=1 decode step | TODO | PMAT-312 |
-| PMAT-343 | ncu roofline: Candle QMatMul kernel | TODO | PMAT-341 |
-| PMAT-344 | ncu roofline: realizr fused Q4K DP4A kernel | TODO | PMAT-342 |
-| PMAT-345 | Kernel launch count comparison | TODO | PMAT-341, 342 |
-| PMAT-346 | Memory bandwidth utilization comparison | TODO | PMAT-343, 344 |
-| PMAT-347 | Validate F-KERNEL-01 (fused kernel lower BW) | TODO | PMAT-346 |
+| PMAT-341 | `apr profile --granular` realizr GGUF (brick scores + roofline) | TODO | PMAT-312 |
+| PMAT-342 | `apr trace --verbose` realizr c=1 decode (layer timing) | TODO | PMAT-312 |
+| PMAT-343 | `nsys profile` realizr c=1 decode (NVIDIA ground truth) | TODO | PMAT-312 |
+| PMAT-344 | `ncu --set roofline` realizr fused Q4K DP4A kernel | TODO | PMAT-343 |
+| PMAT-345 | Parity check: `apr profile` brick scores vs `ncu` roofline | TODO | PMAT-341, 344 |
+| PMAT-346 | `nsys profile` Candle c=1 decode (NVIDIA ground truth) | TODO | PMAT-311 |
+| PMAT-347 | Compare: Candle kernel launches vs realizr (nsys + apr trace) | TODO | PMAT-343, 346 |
+| PMAT-348 | Validate F-KERNEL-01 (fused kernel lower BW) | TODO | PMAT-345, 347 |
 
 ### Phase 5: Publication (PMAT-350 block)
 
@@ -483,6 +476,10 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | Cross-validation | Results match sister repos | F-SCALE-01 vs qwen-coder-deploy |
 | **Format parity** | All 3 formats (GGUF, SafeTensors, APR v2) tested on GPU | F-FMTPARITY-01 |
 | **Tool parity** | `apr` CLI and raw `realizr` produce equivalent inference | F-TOOLPARITY-01 |
+| **Brick profiling** | `apr profile --granular` before and after every fix | Measure-and-Fix Policy |
+| **Layer tracing** | `apr trace --verbose` for every correctness investigation | Measure-and-Fix Policy |
+| **Contracts** | Every upstream fix adds a `provable-contracts` binding | Measure-and-Fix Policy |
+| **NVIDIA parity** | `apr profile` brick scores match `ncu` roofline ±15% | F-BRICKPARITY-01 |
 
 ### Spec Maintenance
 
@@ -496,4 +493,5 @@ Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 bl
 | 1.1.0 | 2026-04-01 | Phase 1+2 results: 3 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 3 BLOCKED/UNTESTED. Candle 1.6x faster at c=1. No scaling (SINGLE-REQUEST mode). APR v2 format broken. |
 | 1.2.0 | 2026-04-01 | Prefer apr-cli for model prep. Upstream bug policy: gh tickets + provable-contracts. Fixed paiml/realizar#167 (tensor name normalization). Reconverted APR v2 via `apr import --preserve-q4k`. |
 | 1.3.0 | 2026-04-01 | Reconcile all predictions with actuals. Section 7 Phase numbering fixed (scaling=2, format=3). Section 8 observed vs expected. Section 1 summary updated with F-SUMMARY-01 FALSIFIED. Temperature=0 documented as mandatory. |
-| 1.4.0 | 2026-04-02 | Format + tool parity as hard requirements. F-FMTPARITY-01 (all 3 formats GPU), F-TOOLPARITY-01 (apr-cli vs realizr). SafeTensors CPU-only is a bug (#169), not a trade-off. 6 new PMAT items (337-339, 360-362). |
+| 1.4.0 | 2026-04-02 | Format + tool parity as hard requirements. F-FMTPARITY-01, F-TOOLPARITY-01. SafeTensors CPU-only is a bug (#169). |
+| 1.5.0 | 2026-04-02 | Measure-and-Fix: mandatory apr-cli (brick profiling, layer tracing, provable-contracts) + NVIDIA nsys/ncu parity. F-BRICKPARITY-01 added. Phase 4 redesigned: apr-cli primary, NVIDIA validation. |
