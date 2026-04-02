@@ -221,9 +221,9 @@ APR v2 model prepared via `apr import --preserve-q4k` (preferred). Raw realizr G
 
 | Format | Candle | realizr | Prepared by | Metrics |
 |--------|--------|---------|-------------|---------|
-| GGUF Q4_K_M | Yes | Yes (raw) | upstream HF | Load time, decode tok/s, RSS |
-| SafeTensors FP16 | Yes | Yes (raw) | upstream HF | Load time, decode tok/s, RSS |
-| APR v2 Q4K | No | Yes | `apr import --preserve-q4k` | Load time, decode tok/s, RSS |
+| GGUF Q4_K_M | 227.4 tok/s (GPU) | 142.8 tok/s (GPU) | upstream HF | **Measured** |
+| SafeTensors FP32 | 65.7 tok/s (GPU) | 0.4 tok/s (CPU only) | upstream HF | **Measured** |
+| APR v2 Q4K | N/A | BLOCKED | `apr import --preserve-q4k` | paiml/realizar#168 |
 
 ### Methodology (inherited from PMAT-177)
 
@@ -425,8 +425,8 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-331 | Candle SafeTensors decode (non-quantized) | TODO | PMAT-302 |
-| PMAT-332 | realizr SafeTensors decode | TODO | — |
+| PMAT-331 | Candle SafeTensors decode (non-quantized) | DONE | PMAT-302 |
+| PMAT-332 | realizr SafeTensors decode | DONE | — |
 | PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | APR loads (#167 fixed), norms aliased (#168 filed), but inference output garbage — GPU adapter mismatch |
 | PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
@@ -448,7 +448,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-351 | Fill performance.md results tables | PARTIAL | Phase 1-2 filled, Phase 3 BLOCKED |
+| PMAT-351 | Fill performance.md results tables | PARTIAL | Phase 1-2 + SafeTensors filled; APR v2 BLOCKED |
 | PMAT-352 | Write findings section with falsification outcomes | TODO | PMAT-351 |
 | PMAT-353 | Generate comparison charts (throughput, scaling) | TODO | PMAT-351 |
 | PMAT-354 | Cross-reference with qwen-coder-deploy spec | TODO | PMAT-352 |

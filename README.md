@@ -62,10 +62,11 @@ No throughput scaling observed — server in SINGLE-REQUEST mode, requests queue
 
 | Format | Runtime | Status |
 |--------|---------|--------|
-| GGUF Q4_K_M | Candle | Measured |
-| GGUF Q4_K_M | realizr | Measured |
-| APR v2 Q4K | realizr | In progress (paiml/realizar#167 fix applied, re-testing) |
-| SafeTensors | Both | TODO |
+| GGUF Q4_K_M | Candle (GPU) | 227.4 tok/s |
+| GGUF Q4_K_M | realizr (GPU) | 142.8 tok/s |
+| SafeTensors FP32 | Candle (GPU) | 65.7 tok/s |
+| SafeTensors FP32 | realizr (CPU only) | 0.4 tok/s |
+| APR v2 Q4K | realizr | BLOCKED (paiml/realizar#168) |
 
 ## Hardware
 
