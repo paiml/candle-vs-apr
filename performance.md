@@ -206,7 +206,7 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
 ### Finding 6: Tool parity confirmed for GGUF (F-TOOLPARITY-01 PARTIAL)
 
-**What:** apr-cli `apr serve run --gpu` produces 139.8 tok/s. realizr `realizr serve --gpu` produces 142.8 tok/s. Delta: 2.1% — within ±5% threshold.
+**What (v1):** apr-cli 139.8 tok/s, realizr 142.8 tok/s (2.1% delta — PASS). **(v3: both achieve 273.8 tok/s after graph fix.)**
 
 **Why:** Both tools embed the same realizr inference engine. apr-cli adds a thin wrapper for model import/profiling but uses the same GPU kernels and serving stack. The 2.1% delta is within measurement noise.
 
@@ -229,7 +229,7 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
 | c | qwen-coder-deploy | candle-vs-apr | Delta | Notes |
 |---|-------------------|---------------|-------|-------|
-| 1 | 148.6 tok/s | 142.8 tok/s | -3.9% | Same engine, same model, same GPU |
+| 1 | 148.6 tok/s | 142.8 (v1) / **273.8 (v3)** | v1: -3.9% / v3: +84% | Graph fix unlocked kernel throughput |
 | 4 | 325.2 tok/s | 116.7 tok/s | -64% | No batching (SINGLE-REQUEST mode) |
 | 32 | ~1,500 tok/s | 145.7 tok/s | -90% | qwen-coder-deploy used BATCH=32 |
 
