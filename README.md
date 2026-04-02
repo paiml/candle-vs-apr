@@ -16,7 +16,7 @@ Both are pure Rust. Both load GGUF Q4_K_M. The question: **does the Sovereign AI
 | Run-to-run CV | 0.8% | 0.9% | Tie (<5% threshold) |
 | Concurrent scaling (c=32) | N/A | 145.7 tok/s | realizr (Candle has no server) |
 
-**Candle is 1.6x faster than realizr at single-request GPU decode.** The fused-kernel advantage does not materialize at c=1 on RTX 4090. realizr's serving overhead (HTTP + tokenization + scheduling) is measurable. Scaling was not demonstrated — realizr ran in SINGLE-REQUEST mode with no batch scheduling active.
+**Candle is 1.6x faster than realizr at single-request GPU decode.** The fused-kernel advantage does not materialize at c=1 on RTX 4090. realizr's serving overhead (HTTP + tokenization + scheduling) is measurable. Scaling was not demonstrated — realizr ran in SINGLE-REQUEST mode with no batch scheduling active. All 3 formats (GGUF, SafeTensors, APR v2) now have GPU paths after upstream fixes (#169, #170), but format parity is falsified (GGUF 142.8, SafeT 21.2, APR 17.4 tok/s).
 
 See [performance.md](performance.md) for full analysis and [docs/specifications/candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md) for the falsification register.
 

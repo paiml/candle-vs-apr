@@ -262,8 +262,8 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 | Issue | Repo | Status | Contract |
 |-------|------|--------|----------|
 | paiml/realizar#167 | GPU scheduler hardcodes HF tensor names | Fixed | `tensor-name-resolution-v1` (FALSIFY-TNR-004) |
-| paiml/realizar#168 | RMSNorm cache aliasing mismatch | Filed | `tensor-name-resolution-v1` (FALSIFY-TNR-001) |
-| paiml/realizar#169 | SafeTensors GPU inference missing | Filed | `tensor-name-resolution-v1` (format_parity eq) |
+| paiml/realizar#168 | RMSNorm cache aliasing mismatch | **Fixed** (#170) | `tensor-name-resolution-v1` (FALSIFY-TNR-001) |
+| paiml/realizar#169 | SafeTensors GPU inference missing | **Fixed** | `tensor-name-resolution-v1` (format_parity eq) |
 | paiml/realizar#170 | 0 contracts on tensor name resolution | **CONTRACT ADDED** | `tensor-name-resolution-v1.yaml` — 3 eq, 4 ob, 4 ft, 2 kani |
 | paiml/aprender#567 | apr profile conflates pipeline/kernel roofline | Filed | Needs `PROFILING_ACCURACY_V1` contract |
 

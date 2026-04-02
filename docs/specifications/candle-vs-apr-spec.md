@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -52,7 +52,7 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 **Step 2: Why c=1 as the primary comparison?** Candle has no server mode — it's CLI-only. The only fair head-to-head is single-request decode. Concurrent benchmarks (c=4..32) demonstrate what Candle architecturally cannot provide.
 
-**Step 3: What constitutes a win?** realizr must demonstrate measurable advantage in at least one of: decode throughput, model load time, or memory footprint at c=1. **Result: Candle won all three at c=1 (F-SUMMARY-01 FALSIFIED).** Concurrent scaling (c>1) was not demonstrated (SINGLE-REQUEST mode). APR v2 format comparison is blocked (paiml/realizar#168).
+**Step 3: What constitutes a win?** realizr must demonstrate measurable advantage in at least one of: decode throughput, model load time, or memory footprint at c=1. **Result: Candle won all three at c=1 (F-SUMMARY-01 FALSIFIED).** Concurrent scaling (c>1) was not demonstrated (SINGLE-REQUEST mode). All 3 formats now have GPU paths (#169/#170 fixed) but format parity is falsified — GGUF 142.8, SafeT 21.2, APR 17.4 tok/s.
 
 > **F-SUMMARY-01: FALSIFIED.** Candle beats realizr on decode (1.59x) and RSS (6.9x less) at c=1. The fused-kernel advantage does not materialize for single-request inference on RTX 4090. realizr's serving overhead (HTTP + prefill) is the dominant factor.
 
@@ -496,3 +496,4 @@ Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 bl
 | 1.4.0 | 2026-04-02 | Format + tool parity as hard requirements. F-FMTPARITY-01, F-TOOLPARITY-01. SafeTensors CPU-only is a bug (#169). |
 | 1.5.0 | 2026-04-02 | Measure-and-Fix: mandatory apr-cli (brick profiling, layer tracing, provable-contracts) + NVIDIA nsys/ncu parity. F-BRICKPARITY-01 added. Phase 4 redesigned: apr-cli primary, NVIDIA validation. |
 | 1.6.0 | 2026-04-02 | All 13 F-conditions tested (0 UNTESTED). 32/44 PMAT DONE. nsys + ncu profiling complete. tensor-name-resolution-v1 contract added upstream. Comparison charts. 5 upstream tickets filed. Remaining 12 items blocked on realizr #168/#169/#170. |
+| 1.7.0 | 2026-04-02 | Cross-doc consistency sweep. §7 Phase 3: BLOCKED→FALSIFIED/CONFIRMED (3 rows measured). §8 Format Pipeline: stale BUG tags→FIXED with tok/s. §1 summary: APR BLOCKED→measured. Score: 6F/4C/2W/1P/0B/0U. README register adds 3 missing F-conditions. |
