@@ -1,0 +1,10 @@
+{"iteration": 1, "tok_sec": 65.22, "wall_ms": 5206, "rss_kb": 3509612, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 2, "tok_sec": 65.10, "wall_ms": 5199, "rss_kb": 3507792, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 3, "tok_sec": 64.89, "wall_ms": 5218, "rss_kb": 3508396, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 4, "tok_sec": 71.13, "wall_ms": 4958, "rss_kb": 3508208, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 5, "tok_sec": 65.19, "wall_ms": 5215, "rss_kb": 3508776, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 6, "tok_sec": 64.83, "wall_ms": 5223, "rss_kb": 3507840, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 7, "tok_sec": 64.87, "wall_ms": 5242, "rss_kb": 3509124, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 8, "tok_sec": 64.99, "wall_ms": 5282, "rss_kb": 3509104, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 9, "tok_sec": 65.01, "wall_ms": 5237, "rss_kb": 3509096, "max_tokens": 256, "format": "safetensors"}
+{"iteration": 10, "tok_sec": 64.87, "wall_ms": 5211, "rss_kb": 3507896, "max_tokens": 256, "format": "safetensors"}

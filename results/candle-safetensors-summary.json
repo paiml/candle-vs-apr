@@ -1,0 +1,22 @@
+{
+  "runtime": "candle",
+  "format": "safetensors",
+  "max_tokens": 256,
+  "iterations": 10,
+  "tok_sec": {
+    "mean": 65.7,
+    "min": 64.8,
+    "max": 71.1,
+    "cold_start": 65.2
+  },
+  "wall_ms": {
+    "mean": 5199,
+    "min": 4958,
+    "max": 5282
+  },
+  "rss_kb": {
+    "mean": 3508584,
+    "min": 3507792,
+    "max": 3509612
+  }
+}

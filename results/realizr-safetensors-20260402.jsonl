@@ -1,0 +1,5 @@
+{"iteration": 1, "tok_sec": 0.4, "wall_ms": 89407, "max_tokens": 32, "format": "safetensors"}
+{"iteration": 2, "tok_sec": 0.4, "wall_ms": 88842, "max_tokens": 32, "format": "safetensors"}
+{"iteration": 3, "tok_sec": 0.4, "wall_ms": 89552, "max_tokens": 32, "format": "safetensors"}
+{"iteration": 4, "tok_sec": 0.4, "wall_ms": 92438, "max_tokens": 32, "format": "safetensors"}
+{"iteration": 5, "tok_sec": 0.4, "wall_ms": 87690, "max_tokens": 32, "format": "safetensors"}

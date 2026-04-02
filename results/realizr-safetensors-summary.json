@@ -1,0 +1,18 @@
+{
+  "runtime": "realizr",
+  "format": "safetensors",
+  "mode": "cpu_fp32",
+  "max_tokens": 32,
+  "iterations": 5,
+  "tok_sec": {
+    "mean": 0.4,
+    "min": 0.4,
+    "max": 0.4,
+    "cold_start": 0.4
+  },
+  "wall_ms": {
+    "mean": 89586,
+    "min": 87690,
+    "max": 92438
+  }
+}
