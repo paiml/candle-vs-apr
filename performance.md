@@ -115,3 +115,76 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 | Streaming | stdout only | SSE streaming |
 | Failover | None | Circuit breakers |
 | Privacy tiers | None | Sovereign/Private/Standard |
+
+## Findings
+
+### Finding 1: Candle wins c=1 decode by 1.6x (F-SUMMARY-01, F-PARITY-01 FALSIFIED)
+
+**What:** Candle decodes at 227.4 tok/s vs realizr at 142.8 tok/s on the same GGUF Q4_K_M model, same RTX 4090.
+
+**Why (five-whys):**
+1. Why is realizr slower? → The 142.8 tok/s includes HTTP round-trip + tokenization + prefill, while Candle's 227.4 is decode-only.
+2. Why does the metric asymmetry matter? → Subtracting ~60ms prefill gives ~148 tok/s — still 35% slower.
+3. Why is realizr's raw decode slower? → realizr runs Q4K GEMV through CUDA with JIT-compiled PTX. Candle uses pre-compiled QMatMul kernels without a JIT step.
+4. Why doesn't the fused kernel help? → At c=1, the RTX 4090 is bandwidth-limited only for large matrices. For 1536-dim hidden state, compute is the bottleneck, and fused dequant saves ~0.1ms per layer — negligible vs the 7ms/token total.
+5. Why not? → The fused kernel architecture is designed for throughput at c>1 (batched GEMV shares weight loads across M requests). At c=1, M=1, there's no sharing benefit.
+
+**Implication:** The "fused-kernel advantage" is a batching advantage, not a single-request advantage. Marketing realizr on c=1 performance against Candle would be misleading.
+
+### Finding 2: No scaling demonstrated (F-SCALE-01 FALSIFIED)
+
+**What:** realizr throughput was flat at ~120-146 tok/s from c=1 to c=32. Predicted: 148 → 1,600 tok/s.
+
+**Why:** realizr started in `Mode: SINGLE-REQUEST` with `--openai-api`. The `--openai-api` flag enables the API format but does NOT activate the batch scheduler. Requests are queued and processed serially. The batch-and-step scheduler requires explicit configuration (environment variable or `--batch` flag).
+
+**Implication:** The scaling numbers from qwen-coder-deploy used a different server configuration. This benchmark did not test the batch scheduler path. Re-testing with batch mode enabled would address F-SCALE-01 properly.
+
+### Finding 3: realizr RSS 6.9x higher at c=1 (not a fair comparison)
+
+**What:** Candle: 449 MB. realizr: 3,082 MB.
+
+**Why:** realizr pre-allocates KV cache for `max_batch=32` slots at startup (`[PMAT-399] Auto-sized CUDA_MAX_BATCH=32`). Each slot uses ~0.2 GB for KV storage. 32 slots × 0.2 GB = 6.4 GB. The server also includes the tokio runtime, axum HTTP stack, and tokenizer. Candle is a CLI tool that exits after each run — no server overhead, no KV cache pool.
+
+**Implication:** RSS comparison is only meaningful at matched concurrency. At c=1, realizr over-provisions by 32x.
+
+### Finding 4: SafeTensors gap reveals GPU acceleration asymmetry
+
+**What:** Candle: 65.7 tok/s (GPU FP32). realizr: 0.4 tok/s (CPU FP32). Candle 164x faster.
+
+**Why:** Candle dispatches FP32 SafeTensors matmul to CUDA. realizr's GPU path only supports quantized formats (Q4K, Q6K via DP4A); SafeTensors FP32 falls back to CPU with no SIMD optimization beyond what the Rust compiler auto-vectorizes.
+
+**Implication:** realizr is a quantization-first engine. If a user needs FP32/FP16 inference, Candle is the correct tool. This is an architectural trade-off, not a bug.
+
+### Finding 5: Infrastructure blockers on Lambda Vector
+
+Two infrastructure issues required workarounds to run benchmarks:
+
+1. **curand device library missing** — Candle eagerly initializes curand at GPU device creation, but the Lambda Vector CUDA 13.0 install lacks `libcurand_device.a`. Fix: lazy-curand patch in Candle (defer init until first `rand_*` call).
+
+2. **CUDA 13.0 PTX incompatible with driver** — nvcc 13.0 generates PTX 9.0, but driver 570.207 only supports PTX 8.7. Fix: force CUDA 12.6 toolkit in forjar (temporarily disable nvcc 13.0 during build).
+
+Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
+
+### Upstream bugs discovered
+
+| Issue | Repo | Status | Contract candidate |
+|-------|------|--------|-------------------|
+| paiml/realizar#167 | GPU scheduler hardcodes HF tensor names | Fixed | `TENSOR_NAME_RESOLUTION_V1` |
+| paiml/realizar#168 | RMSNorm cache aliasing mismatch | Filed | `TENSOR_NAME_RESOLUTION_V1` |
+
+## Falsification Scorecard
+
+| ID | Prediction | Outcome |
+|----|-----------|---------|
+| F-SUMMARY-01 | realizr wins >=1 metric at c=1 | **FALSIFIED** |
+| F-PARITY-01 | realizr within +/-10% of Candle | **FALSIFIED** (0.63x) |
+| F-SCALE-01 | realizr c=32 >=1,280 tok/s | **FALSIFIED** (145.7) |
+| F-HW-01 | Variance <5% with locked clocks | **CONFIRMED** (CV <1%) |
+| F-MODEL-01 | Candle loads Q4_K_M GGUF | **CONFIRMED** |
+| F-COLD-01 | realizr cold-start slower | **CONFIRMED** |
+| F-SERVING-01 | Serving overhead <5ms | **WEAKENED** (HTTP 5ms, E2E 27ms) |
+| F-FORMAT-01 | APR v2 load 2-5x faster | **BLOCKED** (#168) |
+| F-RSS-01 | APR v2 RSS < GGUF RSS | **BLOCKED** (#168) |
+| F-KERNEL-01 | Fused Q4K lower mem traffic | UNTESTED |
+
+**Score: 3 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 2 BLOCKED, 1 UNTESTED**
