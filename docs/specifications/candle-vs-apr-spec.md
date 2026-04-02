@@ -472,10 +472,10 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 
 | ID | Candle Feature | `apr run` | Status |
 |----|---------------|----------|--------|
-| PMAT-381 | `--top-p <f64>` (nucleus sampling) | missing | TODO |
-| PMAT-382 | `--seed <u64>` (deterministic RNG, default 299792458) | missing | TODO |
-| PMAT-383 | `--repeat-penalty <f32>` (default 1.1) | missing | TODO |
-| PMAT-384 | `--repeat-last-n <usize>` (default 64) | missing | TODO |
+| PMAT-381 | `--top-p <f64>` (nucleus sampling) | **added** (9afd092b) | DONE (arg, wiring TODO) |
+| PMAT-382 | `--seed <u64>` (deterministic RNG) | **added** | DONE (arg, wiring TODO) |
+| PMAT-383 | `--repeat-penalty <f32>` | **added** | DONE (arg, wiring TODO) |
+| PMAT-384 | `--repeat-last-n <usize>` | **added** | DONE (arg, wiring TODO) |
 | PMAT-385 | `--split-prompt` (token-by-token prefill) | missing | TODO |
 | PMAT-386 | `--tracing` (chrome trace JSON) | `--trace` (different format) | PARTIAL |
 
