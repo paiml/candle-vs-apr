@@ -86,17 +86,9 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 **Fix:** `gh issue create` → fix upstream → `provable-contracts` binding → `apr trace`/`apr profile` verify → `make perf-gate` (probador ≥200 tok/s) → rebuild → re-run falsification. Prevention: `cuda-graph-safety-v1` contract.
 
-### Relationship to sister repos
+### Sister repos
 
-| Repo | Role | Focus |
-|------|------|-------|
-| **qwen-coder-deploy** | Benchmark | realizr vs llama.cpp vs vLLM vs ollama |
-| **qwen-train-canary** | Benchmark | apr vs unsloth vs pytorch vs cublas |
-| **candle-vs-apr** (this) | Benchmark | Candle vs realizr (Rust-vs-Rust) |
-| **aprender** | Tooling | `apr` CLI: import, profile (ComputeBrick), trace (layer), check (integrity), cbtop (monitor) |
-| **realizar** | Engine | Inference engine under test |
-| **trueno** | Kernel lib | SIMD/GPU kernel library (trueno-gpu for CUDA) |
-| **provable-contracts** | Quality | Compile-time contract enforcement for upstream fixes |
+qwen-coder-deploy (llama.cpp/vLLM/ollama) · qwen-train-canary (training) · aprender (apr CLI) · realizar (engine) · trueno (kernels) · provable-contracts (contracts) · **apr-model-qa-playbook** (95 models certified, 18 tests/model)
 
 ---
 
@@ -466,20 +458,23 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). Beats Candle (227.4) and llama.cpp (224.8).
 
-### Phase 7: CLI Parity — `apr run` vs Candle CLI (PMAT-380 block)
+### Phase 7: CLI + Example Parity — `apr run` vs Candle `cargo run --example` (PMAT-380 block)
 
-**Invariant:** `apr run` must do everything Candle's `quantized-qwen2-instruct` CLI can do. Source: `candle/candle-examples/examples/quantized-qwen2-instruct/main.rs`.
+**Invariant:** `apr run` must do everything each Candle quantized example can do. Source: `candle/candle-examples/examples/`. Cross-ref: `apr-model-qa-playbook` (95 models certified A+, 18 test combinations per model).
 
-| ID | Candle Feature | `apr run` | Status |
-|----|---------------|----------|--------|
-| PMAT-381 | `--top-p` (nucleus sampling) | **wired** (realizr f42fbceb) | DONE |
-| PMAT-382 | `--seed` (deterministic RNG) | **wired** | DONE |
-| PMAT-383 | `--repeat-penalty` | **wired** (sample_advanced) | DONE |
-| PMAT-384 | `--repeat-last-n` | **wired** | DONE |
-| PMAT-385 | `--split-prompt` (token-by-token prefill) | missing | TODO |
-| PMAT-386 | `--tracing` (chrome trace JSON) | `--trace` (different format) | PARTIAL |
+**Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired (realizr f42fbceb). Remaining: `--split-prompt` (TODO), `--tracing` (PARTIAL).
 
-Already at parity: `--temperature`, `--top-k`, `--chat`, `hf://` auto-download, `--gpu`/`--no-gpu`, `--max-tokens`. `apr run` extras Candle lacks: `--serve`, `--profile`, `--batch-jsonl`, `--offline`, `--backend`, multi-format.
+| Candle Example | Architecture | `apr run` | QA Playbook | Status |
+|---------------|-------------|----------|-------------|--------|
+| quantized-qwen2-instruct | Qwen2 | `apr run model.gguf "prompt"` | qwen2.5-coder-1.5b-mvp ✓ | **A+ (273.8 tok/s)** |
+| quantized (llama) | LLaMA | `apr run llama.gguf "prompt"` | llama-3.1-8b-mvp ✓ | Certified A+ |
+| quantized-phi | Phi-2/3 | `apr run phi.gguf "prompt"` | phi-3-mini-mvp ✓ | Certified A+ |
+| quantized-gemma | Gemma | `apr run gemma.gguf "prompt"` | gemma-2b-mvp ✓ | Certified A+ |
+| quantized-qwen3 | Qwen3 | `apr run qwen3.gguf "prompt"` | — | TODO |
+| quantized-t5 | T5 | `apr run t5.gguf "prompt"` | — | TODO (encoder-decoder) |
+| whisper | Whisper | `apr run whisper -i audio.wav` | — | TODO (ASR) |
+
+`apr run` extras Candle lacks: `--serve`, `--profile`, `--batch-jsonl`, `--offline`, `--backend`, multi-format (GGUF + SafeTensors + APR), `hf://` auto-download, 95-model QA certification matrix.
 
 ---
 
@@ -487,7 +482,7 @@ Already at parity: `--temperature`, `--top-k`, `--chat`, `hf://` auto-download, 
 
 ### Quality Gates
 
-Determinism (<5% CV, locked clocks) · Isolation (serial, forjar) · Reproducibility (JSON results) · Falsifiability (all claims have F-conditions) · Format parity (F-FMTPARITY-01) · Tool parity (F-TOOLPARITY-01) · **CLI parity** (F-CLIPARITY-01) · apr-cli gates (`apr profile`/`trace`/`check`) · Contracts (provable-contracts per fix) · probador (`probador llm load`, PMAT-306) · perf-gate (`make perf-gate` ≥200 tok/s, cuda-graph-safety-v1)
+Determinism · Isolation · Reproducibility · Falsifiability · Format/Tool/CLI parity · apr-cli gates · Contracts · probador · perf-gate · **QA playbook** (apr-model-qa-playbook, 95 models certified)
 
 ### Spec Maintenance — max 500 lines.
 
@@ -495,6 +490,5 @@ Determinism (<5% CV, locked clocks) · Isolation (serial, forjar) · Reproducibi
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0–3.0 | 2026-04-01..02 | Phases 1-6. probador. Graph fix: 273.8 tok/s. Beats Candle + llama.cpp. |
-| 3.1.0 | 2026-04-02 | Phase 7: CLI parity. 4/6 gaps wired (top-p, seed, repeat-penalty, repeat-last-n). |
-| 4.0.0 | 2026-04-02 | **SSE streaming FIXED.** Root cause: `..Default::default()` in Default impl (infinite recursion). TTFT 8.4ms, **A+ grade (99.0)**. F-SERVING-01 CONFIRMED. |
+| 1.0–3.1 | 2026-04-01..02 | Phases 1-7. probador. Graph fix: 273.8 tok/s. CLI parity (top-p, seed, repeat). |
+| 4.0.0 | 2026-04-02 | **SSE streaming FIXED** (`..Default::default()` recursion). TTFT 8.4ms, **A+ (99.0)**. Example parity: 95 models via QA playbook. |
