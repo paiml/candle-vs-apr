@@ -433,8 +433,8 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-338 | Re-test APR v2 GPU after #168 fix | DONE | 17.4 tok/s GPU (#170 fixed) |
 | PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | DONE (FALSIFIED) | GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity |
 | PMAT-360 | apr-cli serve GGUF vs realizr serve GGUF | DONE (2.1% delta, PASS) | — |
-| PMAT-361 | apr-cli serve APR vs realizr serve APR | TODO | PMAT-338 |
-| PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | TODO | PMAT-360, 361 |
+| PMAT-361 | apr-cli serve APR vs realizr serve APR | BLOCKED | apr-cli needs rebuild against realizr #170 fix |
+| PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | BLOCKED | PMAT-361 blocked |
 
 ### Phase 4: Deep Profiling + Parity (PMAT-340 block)
 
