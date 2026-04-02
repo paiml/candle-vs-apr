@@ -370,16 +370,16 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 |----|-----------|------------------------|--------|----------|
 | F-SUMMARY-01 | realizr wins on ≥1 of: decode, load, RSS at c=1 | Candle matches/beats all three | **FALSIFIED** | Candle: 227 tok/s, 449 MB RSS. realizr: 143 tok/s, 3082 MB RSS. Candle wins decode AND RSS. |
 | F-PARITY-01 | realizr c=1 decode within ±10% of Candle | realizr >20% slower | **FALSIFIED** | Ratio 0.63x — realizr 37% slower. Candle 227.4 tok/s (decode-only) vs realizr 142.8 tok/s (wall-clock incl. HTTP+prefill). |
-| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **BLOCKED** | Standard APR (F32) correct. Q4K APR garbage. Contract `tensor-name-resolution-v1` added (paiml/realizar#170). `pv coverage`: 12 contracts, 44 equations. Falsification tests scaffolded. |
+| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **FALSIFIED** | APR load ~60s (dequant+requant via from_apr) vs GGUF 0.49s. Zero-copy claim does not hold. #170 fixed but load is 120x slower. |
 | F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | **FALSIFIED** | c=32 agg: 145.7 tok/s (89% below target). Server started in SINGLE-REQUEST mode; no batch scheduling active. Throughput flat across c=1..32. |
 | F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | **CONFIRMED** | Candle CV=0.8% (temp=0, greedy). realizr CV=0.9%. Locked at 2520 MHz on RTX 4090. Note: temp=0.8 produces 13% CV (non-deterministic output lengths). |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF successfully | Candle errors on load | **CONFIRMED** | Loaded 339 tensors (1.11 GB) in 0.49s. Required lazy-curand patch (curand device library missing on Lambda Vector) and CUDA 12.6 toolkit (PTX 9.0 from CUDA 13.0 unsupported by 570.207 driver). |
 | F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | `apr profile` brick scores equal or worse | **WEAKENED** | nsys: realizr 22K launches vs Candle 41K (1.8x fewer). But total GPU time identical (105ms vs 106ms). Fused kernels reduce launches, not total compute at M=1. |
 | F-BRICKPARITY-01 | `apr profile` brick scores match `ncu` roofline within ±15% | Disagreement >15% on GFLOPS or BW | **FALSIFIED** | apr: 20% mem / 1% compute. ncu: 55% mem / 29% compute. Delta 35pp/28pp. paiml/aprender#567. |
-| F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR loads successfully but inference output is garbage. Blocked on paiml/realizar#168 resolution. |
+| F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **CONFIRMED** | APR 2,278 MB < GGUF 3,082 MB (26% less). Mmap paging reduces resident set. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
-| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | SafeTensors GPU: 21.2 tok/s (#169 FIXED, 3.1x slower than Candle 65.7). GGUF GPU: 142.8. APR: garbage (#170). 2/3 formats have GPU, but not at parity. |
+| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | All 3 have GPU paths (#169/#170 fixed). GGUF 142.8, SafeT 21.2 (-85%), APR 17.4 (-88%). Not at parity — SafeT/APR use dequant→F32→CUDA, not native Q4K. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **PARTIAL** | GGUF: 142.8 vs 139.8 tok/s = 2.1% delta — **PASS**. APR v2: BLOCKED (#168). |
 
 ---
@@ -426,12 +426,12 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-331 | Candle SafeTensors decode (non-quantized) | DONE | PMAT-302 |
 | PMAT-332 | realizr SafeTensors decode | DONE (BUG: CPU only, #169) | — |
 | PMAT-333 | realizr APR v2 Q4K decode | DONE | #170 FIXED — routed through OwnedQuantizedModelCuda. Benchmark pending. |
-| PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
-| PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
-| PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | BLOCKED | PMAT-334 |
+| PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | DONE | APR ~60s, GGUF 0.49s, SafeT ~1.5s |
+| PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | DONE | APR 2278, GGUF 3082, SafeT 3344 MB |
+| PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | DONE (FALSIFIED) | APR 120x SLOWER (dequant+requant) |
 | PMAT-337 | Re-test SafeTensors GPU after #169 fix | DONE | 21.2 tok/s GPU (was 0.4 CPU) |
-| PMAT-338 | Re-test APR v2 GPU after #168 fix | TODO | paiml/realizar#168 |
-| PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | TODO | PMAT-337, 338 |
+| PMAT-338 | Re-test APR v2 GPU after #168 fix | DONE | 17.4 tok/s GPU (#170 fixed) |
+| PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | DONE (FALSIFIED) | GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity |
 | PMAT-360 | apr-cli serve GGUF vs realizr serve GGUF | DONE (2.1% delta, PASS) | — |
 | PMAT-361 | apr-cli serve APR vs realizr serve APR | TODO | PMAT-338 |
 | PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | TODO | PMAT-360, 361 |
@@ -455,7 +455,7 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-351 | Fill performance.md results tables | DONE | All filled except APR v2 row (BLOCKED on #170) |
+| PMAT-351 | Fill performance.md results tables | DONE | All rows filled |
 | PMAT-352 | Write findings section with falsification outcomes | DONE | PMAT-351 |
 | PMAT-353 | Generate comparison charts (throughput, scaling) | DONE | — |
 | PMAT-354 | Cross-reference with qwen-coder-deploy spec | DONE | PMAT-352 |

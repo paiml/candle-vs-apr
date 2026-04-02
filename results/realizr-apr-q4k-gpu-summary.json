@@ -1,0 +1,7 @@
+{
+  "runtime": "realizr",
+  "format": "apr_q4k",
+  "gpu": true,
+  "tok_sec_mean": 17.4,
+  "tok_sec_cold": 17.0
+}

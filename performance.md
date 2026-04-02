@@ -82,10 +82,10 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 | GGUF Q4_K_M | realizr | amortized | 142.8 | 3,082 | Measured |
 | SafeTensors FP32 | Candle (GPU) | ~1,500 | 65.7 | 3,344 | Measured |
 | SafeTensors FP32 | realizr (GPU) | ~11,000 | 21.2 | — | **#169 FIXED** (was 0.4 CPU) |
-| APR v2 Q4K | realizr | — | — | — | **BLOCKED** (loads OK, inference garbage — paiml/realizar#168) |
+| APR v2 Q4K | realizr (GPU) | ~60,000 | 17.4 | 2,278 | **#170 FIXED** (via from_apr→GGUF CUDA) |
 
-**F-FORMAT-01: BLOCKED** — APR loads (paiml/realizar#167 fixed) but inference produces garbage output. GPU adapter weight name mapping incomplete (paiml/realizar#168).
-**F-RSS-01: BLOCKED** — Cannot compare APR vs GGUF RSS until APR inference is correct.
+**F-FORMAT-01: WEAKENED** — APR load is ~60s (vs GGUF 0.49s) due to dequant+requant roundtrip. Not faster; significantly slower. Zero-copy claim does not hold for the `from_apr` path.
+**F-RSS-01: CONFIRMED** — APR RSS 2,278 MB < GGUF RSS 3,082 MB (26% less, mmap paging).
 
 ## Comparison Charts
 
