@@ -47,18 +47,15 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 
 ### Phase 1: Single-Request Decode (c=1)
 
-| Metric | Candle | realizr | Ratio | Status |
-|--------|--------|---------|-------|--------|
-| Decode (tok/s, warm) | 227.4 | 142.8 | 0.63x | **F-PARITY-01: FALSIFIED** |
-| Decode (tok/s, cold) | 223.1 | 134.4 | 0.60x | |
-| Decode CV (%) | 0.8% | 0.9% | — | **F-HW-01: CONFIRMED** |
-| Wall time (ms, mean) | 2,456 | 1,804 | 0.73x | realizr wins wall-clock (no model load) |
-| Model load (ms) | 490 | amortized | — | |
-| Peak RSS (MB) | 449 | 3,082 | 6.9x | realizr 6.9x higher (server + KV cache) |
+> **v1 results below are SUPERSEDED.** v1 used ad-hoc curl scripts against a realizr build with CUDA graph context poisoning (22.7 tok/s). After fix (v3): **273.8 tok/s** — realizr 1.20x faster than Candle. See Findings 11-12 below.
 
-**Note on decode metric asymmetry:** Candle 227.4 tok/s is self-reported decode-only (excludes prompt processing). realizr 142.8 tok/s is wall-clock end-to-end (includes HTTP round-trip + tokenization + prefill + decode). A fairer realizr decode-only estimate: ~148 tok/s (subtracting ~60ms prefill).
+| Metric | Candle | realizr (v1) | realizr (v3, probador) | Status |
+|--------|--------|-------------|----------------------|--------|
+| Decode tok/s (warm) | 227.4 | 142.8 (v1, poisoned) | **273.8** | **v3: realizr 1.20x** |
+| ITL P50 | — | — | **3.7ms** | probador |
+| Peak RSS (MB) | **449** | 3,082 | 3,082 | Candle wins |
 
-**F-SUMMARY-01: FALSIFIED** — Candle beats realizr on both decode throughput (1.6x) and RSS (6.9x less). realizr only wins on amortized wall-clock (no model reload per request).
+**F-SUMMARY-01: REVISED** — v1 FALSIFIED (Candle 1.59x, context poisoned). **v3: realizr 1.20x faster** (273.8 vs 227.4).
 
 ### Phase 2: realizr Scaling (Candle: N/A)
 
@@ -79,7 +76,8 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 | Format | Runtime | Load (ms) | Decode (tok/s) | RSS (MB) | Status |
 |--------|---------|-----------|----------------|----------|--------|
 | GGUF Q4_K_M | Candle | 490 | 227.4 | 449 | Measured |
-| GGUF Q4_K_M | realizr | amortized | 142.8 | 3,082 | Measured |
+| GGUF Q4_K_M | realizr (v1) | amortized | 142.8 | 3,082 | v1 (poisoned ctx) |
+| GGUF Q4_K_M | realizr (v3) | amortized | **273.8** | ~3,082 | **v3 (graph fix)** |
 | SafeTensors FP32 | Candle (GPU) | ~1,500 | 65.7 | 3,344 | Measured |
 | SafeTensors FP32 | realizr (GPU) | ~11,000 | 21.2 | — | **#169 FIXED** (was 0.4 CPU) |
 | APR v2 Q4K | realizr (GPU) | ~60,000 | 17.4 | 2,278 | **#170 FIXED** (via from_apr→GGUF CUDA) |
@@ -153,18 +151,19 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 
 ## Findings
 
-### Finding 1: Candle wins c=1 decode by 1.6x (F-SUMMARY-01, F-PARITY-01 FALSIFIED)
+### Finding 1: ~~Candle wins c=1~~ → **REVISED: realizr wins after graph fix**
 
-**What:** Candle decodes at 227.4 tok/s vs realizr at 142.8 tok/s on the same GGUF Q4_K_M model, same RTX 4090.
+> **v1 (SUPERSEDED):** Candle 227.4 vs realizr 142.8 (1.59x). Root cause: CUDA graph capture poisoned context → all kernels degraded.
+> **v3 (CURRENT):** realizr **273.8 tok/s** vs Candle 227.4 (1.20x in realizr's favor). Fix: realizr 81c912d2 (default to eager, no graph capture).
 
-**Why (five-whys):**
-1. Why is realizr slower? → The 142.8 tok/s includes HTTP round-trip + tokenization + prefill, while Candle's 227.4 is decode-only.
-2. Why does the metric asymmetry matter? → Subtracting ~60ms prefill gives ~148 tok/s — still 35% slower.
-3. Why is realizr's raw decode slower? → realizr runs Q4K GEMV through CUDA with JIT-compiled PTX. Candle uses pre-compiled QMatMul kernels without a JIT step.
-4. Why doesn't the fused kernel help? → At c=1, the RTX 4090 is bandwidth-limited only for large matrices. For 1536-dim hidden state, compute is the bottleneck, and fused dequant saves ~0.1ms per layer — negligible vs the 7ms/token total.
-5. Why not? → The fused kernel architecture is designed for throughput at c>1 (batched GEMV shares weight loads across M requests). At c=1, M=1, there's no sharing benefit.
+**Five-whys (v3, corrected):**
+1. Why was realizr 142.8 in v1? → CUDA context poisoned by failed graph capture
+2. Why poisoned? → `forward_graphed_decode.rs` attempted capture by default (opt-out pattern)
+3. Why default? → Inconsistent `CUDA_GRAPH_DISABLE` vs `CUDA_GRAPH_ENABLE` across two code paths
+4. Why inconsistent? → No contract enforcing uniform env var polarity
+5. Root cause: **missing provable contract for CUDA graph safety** → now enforced by `cuda-graph-safety-v1`
 
-**Implication:** The "fused-kernel advantage" is a batching advantage, not a single-request advantage. Marketing realizr on c=1 performance against Candle would be misleading.
+**Implication:** The fused Q4K DP4A kernel IS faster than Candle's QMatMul at c=1 when CUDA context is healthy. The v1 conclusion was wrong — it was measuring a CUDA driver bug, not an architectural gap.
 
 ### Finding 2: No scaling demonstrated (F-SCALE-01 FALSIFIED)
 
@@ -297,19 +296,19 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 
 | ID | Prediction | Outcome |
 |----|-----------|---------|
-| F-SUMMARY-01 | realizr wins >=1 metric at c=1 | **FALSIFIED** |
-| F-PARITY-01 | realizr within +/-10% of Candle | **FALSIFIED** (0.63x) |
-| F-SCALE-01 | realizr c=32 >=1,280 tok/s | **FALSIFIED** (145.7) |
+| F-SUMMARY-01 | realizr wins >=1 metric at c=1 | **REVISED** (v1: FALSIFIED. v3: **realizr wins decode 1.20x**) |
+| F-PARITY-01 | realizr within +/-10% of Candle | **REVISED** (v1: 0.63x. v3: **1.20x in realizr's favor**) |
+| F-SCALE-01 | realizr c=32 >=1,280 tok/s | **FALSIFIED** (v1: 145.7, SINGLE-REQ mode) |
 | F-HW-01 | Variance <5% with locked clocks | **CONFIRMED** (CV <1%) |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | **CONFIRMED** |
 | F-COLD-01 | realizr cold-start slower | **CONFIRMED** |
 | F-SERVING-01 | Serving overhead <5ms | **WEAKENED** (HTTP 5ms, E2E 27ms) |
-| F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (60s vs 0.49s — 120x slower) |
-| F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (2,278 < 3,082 MB, 26% less) |
-| F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (1.8x fewer launches, same GPU time) |
-| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (all GPU now: GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity) |
-| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **WEAKENED** (GGUF 2.1% PASS, APR 25.6% FAIL — version skew) |
-| F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (20% vs 55% mem, aprender#567) |
-| F-PARITY-02 | realizr c=4 ≤1.5x llama.cpp | **TESTING** (107.7 vs 224.8, 2.1x gap) |
+| F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (120x slower) |
+| F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
+| F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** |
+| F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (GGUF 273.8, SafeT 21.2, APR 17.4) |
+| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **WEAKENED** |
+| F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** |
+| F-PARITY-02 | realizr c=4 ≤1.5x llama.cpp | **CONFIRMED** (274.5 tok/s, 1.22x FASTER) |
 
-**Score: 6 FALSIFIED, 4 CONFIRMED, 3 WEAKENED, 0 PARTIAL, 0 BLOCKED, 1 TESTING**
+**Score: 5 FALSIFIED, 5 CONFIRMED, 2 WEAKENED, 2 REVISED, 0 BLOCKED**
