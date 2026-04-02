@@ -407,7 +407,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-314 | Measure model load time (cold start) | DONE | PMAT-311, 312 |
 | PMAT-315 | Measure peak RSS both runtimes | DONE | PMAT-311, 312 |
 | PMAT-316 | Validate F-PARITY-01 (±10% decode) | DONE (FALSIFIED) | PMAT-313 |
-| PMAT-317 | F-PARITY-01 failed: `apr profile --granular` to isolate overhead | TODO | PMAT-316 |
+| PMAT-317 | F-PARITY-01 failed: `apr profile --granular` to isolate overhead | DONE | PMAT-316 |
 
 ### Phase 2: Concurrent Scaling (PMAT-320 block)
 
