@@ -354,7 +354,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | GGUF 273.8 (v3), SafeT 21.2 (-92%), APR 17.4 (-94%). Not at parity — SafeT/APR use dequant path. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
 | F-PARITY-02 | realizr c=4 GGUF ≤1.5x slower than llama.cpp (≥149.9 tok/s) | realizr <149.9 tok/s after fixes | **CONFIRMED** | **274.5 tok/s at c=4 (1.22x FASTER than llama.cpp 224.8).** Graph poison fix: 22.7→273.8 at c=1 (12.1x). |
-| F-CLIPARITY-01 | `apr run` supports all Candle CLI sampling/gen features | Any Candle feature missing from `apr run` | **WEAKENED** | 5/6 closed (top-p, seed, repeat-penalty, repeat-last-n, split-prompt). Remaining: chrome tracing format. |
+| F-CLIPARITY-01 | `apr run` supports all Candle CLI sampling/gen features | Any Candle feature missing from `apr run` | **CONFIRMED** | **6/6 closed.** top-p, seed, repeat-penalty, repeat-last-n, split-prompt, chrome tracing (--trace-level chrome). |
 
 ---
 
@@ -462,7 +462,7 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 
 **Invariant:** `apr run` must do everything each Candle quantized example can do. Source: `candle/candle-examples/examples/`. Cross-ref: `apr-model-qa-playbook` (95 models certified A+, 18 test combinations per model).
 
-**Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired. All 6 sampling/gen args added. `--tracing` chrome format: BLOCKED (aprender#574).
+**Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired. All 6 sampling/gen args + `--trace-level chrome` (aprender 042b391e). **6/6 CLI parity DONE.** Integrates with `--trace` + `--profile`.
 
 **`apr run --gpu` FIXED (aprender#573, realizr c3d9226a).** Was 0.7 tok/s (wgpu fallback), now **121.6 tok/s** (CUDA Q4K). Root cause: validation probe ran on cold model (PAR-114: positions_buf not initialized). Prevention: `gpu-inference-parity-v1` contract + `perf-gate-run.sh`.
 
