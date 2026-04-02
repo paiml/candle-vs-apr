@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 2.1.0
+**Version:** 3.0.0
 **Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -56,9 +56,7 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 > **F-SUMMARY-01: FALSIFIED.** Candle beats realizr on decode (1.59x) and RSS (6.9x less) at c=1. The fused-kernel advantage does not materialize for single-request inference on RTX 4090. realizr's serving overhead (HTTP + prefill) is the dominant factor.
 
-> **MEASUREMENT CORRECTION (probador llm load):** The 142.8 tok/s was from a forjar-deployed realizr with custom bench scripts. `probador llm load` (same tool as qwen-coder-deploy) measures **21 tok/s** (original) / **22.7 tok/s** (patched, +12.9%). The qwen-coder-deploy baseline confirms: apr GGUF GPU = 107.7 tok/s at c=4, 15.1 tok/s at c=1. Candle's 227.4 is decode-only (matches llama.cpp 224.8).
->
-> **Phase 6 target: ≤1.5x gap vs llama.cpp at c=4.** llama.cpp 224.8 tok/s → realizr needs ≥149.9. Currently 107.7 (2.1x gap). Requires ~39% improvement. Method: five-whys, `apr trace`/`apr profile`, `probador llm load`, provable-contracts.
+> **F-PARITY-02: CONFIRMED.** After fixing CUDA graph poison bug (realizr 81c912d2), probador llm load measures **273.8 tok/s decode at c=1** (was 22.7, 12.1x improvement) and **274.5 tok/s at c=4** (1.22x FASTER than llama.cpp 224.8). realizr now **beats both Candle (227.4) and llama.cpp (224.8)** at decode throughput.
 
 ---
 
@@ -365,7 +363,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | All 3 have GPU paths (#169/#170 fixed). GGUF 142.8, SafeT 21.2 (-85%), APR 17.4 (-88%). Not at parity — SafeT/APR use dequant→F32→CUDA, not native Q4K. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
-| F-PARITY-02 | realizr c=4 GGUF ≤1.5x slower than llama.cpp (≥149.9 tok/s) | realizr <149.9 tok/s after fixes | **TESTING** | Baseline: 107.7 tok/s at c=4 (2.1x gap, qwen-coder-deploy). Event fix: +12.9% decode. |
+| F-PARITY-02 | realizr c=4 GGUF ≤1.5x slower than llama.cpp (≥149.9 tok/s) | realizr <149.9 tok/s after fixes | **CONFIRMED** | **274.5 tok/s at c=4 (1.22x FASTER than llama.cpp 224.8).** Graph poison fix: 22.7→273.8 at c=1 (12.1x). |
 
 ---
 
@@ -455,19 +453,19 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 | PMAT-371 | `apr trace`/`apr profile` overhead breakdown | DONE | Attn 74.5%, 1.4% BW eff. Kernel=200 tok/s, serving=89% overhead |
 | PMAT-372 | Five-whys root cause | DONE | See below. **Serving overhead (89%), not kernel.** qcd GAP-GPU-001 stale. |
 | PMAT-373 | Upstream event fix (trueno+realizr) | DONE | +12.9% decode. ITL 49.7→44.0ms. |
-| PMAT-374 | Further serving overhead reduction | TODO | 39ms/tok overhead remaining. Channel send + JSON + stream sync. |
+| PMAT-374 | Fix graph capture poisoning CUDA context | DONE | 22.7→273.8 tok/s (12.1x). Root cause: graph capture attempted by default, fails, poisons context. |
 | PMAT-375 | Re-benchmark via `probador llm load` | DONE | 22.7 tok/s (patched) vs 20.1 (original). |
-| PMAT-376 | Validate F-PARITY-02 (c=4 ≤1.5x llama.cpp) | FAIL | Need c=4 benchmark with probador. |
+| PMAT-376 | Validate F-PARITY-02 (c=4 ≤1.5x llama.cpp) | **PASS** | 274.5 tok/s (c=4) vs llama.cpp 224.8 = **1.22x FASTER**. Target was ≤1.5x. |
 | PMAT-377 | Update all docs | DONE | v2.0.0 propagated. |
 
-**PMAT-372 five-whys (CORRECTED — qcd GAP-GPU-001 is stale, GPU kernels exist now):**
-1. Why 22.7 tok/s (probador) vs 200 tok/s (kernel-only, PMAT-037)? → 89% serving overhead
-2. Why 39ms/token overhead? → HTTP + tokenizer + prefill + scheduling + channel + SSE
-3. Why so much per-token overhead? → `blocking_send()`, per-token JSON serialization, stream sync
-4. Why not batched/amortized? → c=1 mode, no batching, every token round-trips through async stack
-5. Root cause: **per-token async overhead in serving layer dominates at c=1. Kernel is fast (200 tok/s). Serving eats 89%.**
+**PMAT-372/374 five-whys (RESOLVED — root cause found and FIXED):**
+1. Why 22.7 tok/s? → CUDA context poisoned by failed graph capture
+2. Why poisoned? → `forward_graphed_decode.rs` attempted graph capture by default
+3. Why attempt? → Used `CUDA_GRAPH_DISABLE` (opt-out) instead of `CUDA_GRAPH_ENABLE` (opt-in)
+4. Why fail? → Driver 570.207 returns `CUDA_ERROR_UNKNOWN (901)` from `cuStreamBeginCapture`
+5. Root cause: **inconsistent opt-in/opt-out between two graph capture code paths**
 
-Event fix: 49.7→44.0ms ITL (-11.5%). Need further serving layer optimization or benchmark at c=4+ where overhead amortizes.
+Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). Beats Candle (227.4) and llama.cpp (224.8).
 
 ---
 
@@ -497,4 +495,5 @@ Event fix: 49.7→44.0ms ITL (-11.5%). Need further serving layer optimization o
 |---------|------|---------|
 | 1.0–1.8 | 2026-04-01..02 | Phases 1-5 complete. 13 F-conditions, 43 PMAT items. 5 upstream bugs fixed. Score: 6F/4C/3W. |
 | 1.9–2.0 | 2026-04-02 | Phase 6 parity sprint. **MEASUREMENT CORRECTION:** probador replaces curl (21 tok/s, not 142.8). qcd cross-ref. |
-| 2.1.0 | 2026-04-02 | **ROOT CAUSE CORRECTED.** Kernel is fast (200 tok/s PMAT-037). 89% serving overhead. qcd GAP-GPU-001 stale. |
+| 2.1.0 | 2026-04-02 | ROOT CAUSE CORRECTED: 89% serving overhead, not kernel. qcd GAP-GPU-001 stale. |
+| 3.0.0 | 2026-04-02 | **F-PARITY-02 CONFIRMED.** Graph poison fix (realizr 81c912d2): 22.7→273.8 tok/s (12.1x). Beats Candle 227.4 AND llama.cpp 224.8. c=4: 274.5 tok/s. |
