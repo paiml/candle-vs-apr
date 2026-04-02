@@ -238,7 +238,7 @@ Demonstrates what Candle's architecture cannot provide.
 |--------|-------------|---------------|--------|---------|
 | GGUF Q4_K_M | 227.4 tok/s | 142.8 tok/s | **Measured** | — |
 | SafeTensors FP32 | 65.7 tok/s (GPU) | 21.2 tok/s (GPU) | **#169 FIXED** | 3.1x gap remains |
-| APR v2 Q4K | N/A | GPU working | **#170 FIXED** | benchmark pending |
+| APR v2 Q4K | N/A | 17.4 tok/s (GPU) | **#170 FIXED** | 8.2x gap vs GGUF |
 
 #### 3b. Tool parity: `apr` CLI vs `realizr` (F-TOOLPARITY-01)
 
@@ -380,7 +380,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | All 3 have GPU paths (#169/#170 fixed). GGUF 142.8, SafeT 21.2 (-85%), APR 17.4 (-88%). Not at parity — SafeT/APR use dequant→F32→CUDA, not native Q4K. |
-| F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **PARTIAL** | GGUF: 142.8 vs 139.8 tok/s = 2.1% delta — **PASS**. APR v2: BLOCKED (#168). |
+| F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **PARTIAL** | GGUF: 142.8 vs 139.8 tok/s = 2.1% delta — **PASS**. APR v2: testing (PMAT-361). |
 
 ---
 
@@ -395,7 +395,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-303 | Create forjar templates (candle, realizr, teardown) | DONE | — |
 | PMAT-304 | Create benchmark scripts (candle, realizr, compare) | DONE | — |
 | PMAT-305 | Lock GPU clocks, verify <5% variance | DONE | PMAT-301 |
-| PMAT-306 | Validate probador scoring against qwen-coder-deploy | BLOCKED | probador has no `llm` subcommand |
+| PMAT-306 | Validate probador scoring against qwen-coder-deploy | WONTFIX | probador is WASM-only — no LLM scoring capability |
 
 ### Phase 1: Single-Request Head-to-Head (PMAT-310 block)
 
@@ -417,15 +417,15 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-322 | Cross-reference against qwen-coder-deploy baselines | DONE (all miss) | PMAT-321 |
 | PMAT-323 | Validate F-SCALE-01 (≥80% of deploy baseline) | DONE (FALSIFIED) | PMAT-322 |
 | PMAT-324 | Generate scaling efficiency table | DONE | PMAT-321 |
-| PMAT-325 | Quality scorecards (probador llm score) | BLOCKED | probador has no `llm` command |
+| PMAT-325 | Quality scorecards (probador llm score) | WONTFIX | probador is WASM-only — no LLM scoring capability |
 
 ### Phase 3: Format + Tool Parity (PMAT-330 block)
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
 | PMAT-331 | Candle SafeTensors decode (non-quantized) | DONE | PMAT-302 |
-| PMAT-332 | realizr SafeTensors decode | DONE (BUG: CPU only, #169) | — |
-| PMAT-333 | realizr APR v2 Q4K decode | DONE | #170 FIXED — routed through OwnedQuantizedModelCuda. Benchmark pending. |
+| PMAT-332 | realizr SafeTensors decode | DONE (GPU 21.2 tok/s, #169 FIXED) | — |
+| PMAT-333 | realizr APR v2 Q4K decode | DONE | #170 FIXED — 17.4 tok/s GPU via OwnedQuantizedModelCuda |
 | PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | DONE | APR ~60s, GGUF 0.49s, SafeT ~1.5s |
 | PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | DONE | APR 2278, GGUF 3082, SafeT 3344 MB |
 | PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | DONE (FALSIFIED) | APR 120x SLOWER (dequant+requant) |
