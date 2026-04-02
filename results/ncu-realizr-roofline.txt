@@ -1,0 +1,218 @@
+==PROF== Connected to process 708603 (/mnt/nvme-raid0/targets/realizar/release/realizar)
+[GpuProfile] sm_89: q4k=HwDp4a, q6k=HwDp4a, warps=3, batched_prefill=true, hgemm_decode=false, fused_gate_up=true, fp8_prefill=true, fp8_decode=true, w4a16_il=false, sms=128
+==PROF== Profiling "q4k_dequant_to_f32" - 0 (1/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "absmax_reduce" - 1 (2/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "f32_to_e4m3_scaled" - 2 (3/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "q4k_dequant_to_f32" - 3 (4/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "absmax_reduce" - 4 (5/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "f32_to_e4m3_scaled" - 5 (6/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "q6k_dequant_to_f32" - 6 (7/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "absmax_reduce" - 7 (8/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "f32_to_e4m3_scaled" - 8 (9/10): 0%....50%....100% - 17 passes
+==PROF== Profiling "q4k_dequant_to_f32" - 9 (10/10): 0%....50%....100% - 17 passes
+Hello
+==PROF== Disconnected from process 708603
+[708603] realizar@127.0.0.1
+  absmax_reduce (256, 1, 1)x(256, 1, 1), Device 0, CC 8.9, Invocations 3
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- --------- --------- ---------
+    Metric Name             Metric Unit   Minimum   Maximum   Average
+    ----------------------- ----------- --------- --------- ---------
+    DRAM Frequency                  Ghz     10.33     10.44     10.38
+    SM Frequency                    Ghz      2.20      2.22      2.21
+    Elapsed Cycles                cycle 10,597.00 37,234.00 19,517.33
+    Memory Throughput                 %     33.72     63.79     44.82
+    DRAM Throughput                   %     33.72     63.79     44.82
+    Duration                         us      4.80     16.74      8.80
+    L1/TEX Cache Throughput           %      8.22     11.99     10.55
+    L2 Cache Throughput               %     14.43     24.85     17.96
+    SM Active Cycles              cycle  6,439.51 28,049.01 13,743.00
+    Compute (SM) Throughput           %      5.24      7.45      6.46
+    ----------------------- ----------- --------- --------- ---------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------ ------------- ------------
+    Metric Name                Metric Unit      Minimum       Maximum      Average
+    -------------------------- ----------- ------------ ------------- ------------
+    Average DRAM Active Cycles       cycle    16,777.33    111,476.00    48,942.67
+    Total DRAM Elapsed Cycles        cycle   596,992.00  2,097,152.00 1,099,093.33
+    Average L1 Active Cycles         cycle     6,439.51     28,049.01    13,743.00
+    Total L1 Elapsed Cycles          cycle 1,326,608.00  4,234,544.00 2,345,100.00
+    Average L2 Active Cycles         cycle     3,997.81     24,099.47    10,870.06
+    Total L2 Elapsed Cycles          cycle   337,572.00  1,187,136.00   622,008.00
+    Average SM Active Cycles         cycle     6,439.51     28,049.01    13,743.00
+    Total SM Elapsed Cycles          cycle 1,326,608.00  4,234,544.00 2,345,100.00
+    Average SMSP Active Cycles       cycle     6,232.56     27,821.12    13,525.15
+    Total SMSP Elapsed Cycles        cycle 5,306,432.00 16,938,176.00 9,380,400.00
+    -------------------------- ----------- ------------ ------------- ------------
+
+  f32_to_e4m3_scaled (1536, 1, 1)x(256, 1, 1), Device 0, CC 8.9, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- -------- -------- --------
+    Metric Name             Metric Unit  Minimum  Maximum  Average
+    ----------------------- ----------- -------- -------- --------
+    DRAM Frequency                  Ghz    10.33    10.37    10.35
+    SM Frequency                    Ghz     2.19     2.20     2.20
+    Elapsed Cycles                cycle 9,498.00 9,536.00 9,517.00
+    Memory Throughput                 %    46.17    47.87    47.02
+    DRAM Throughput                   %    46.17    47.87    47.02
+    Duration                         us     4.32     4.32     4.32
+    L1/TEX Cache Throughput           %     9.63    11.82    10.72
+    L2 Cache Throughput               %    16.21    16.27    16.24
+    SM Active Cycles              cycle 4,873.67 5,982.24 5,427.96
+    Compute (SM) Throughput           %    13.34    14.10    13.72
+    ----------------------- ----------- -------- -------- --------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------ ------------ ------------
+    Metric Name                Metric Unit      Minimum      Maximum      Average
+    -------------------------- ----------- ------------ ------------ ------------
+    Average DRAM Active Cycles       cycle    20,604.00    21,446.67    21,025.33
+    Total DRAM Elapsed Cycles        cycle   535,552.00   537,600.00   536,576.00
+    Average L1 Active Cycles         cycle     4,873.67     5,982.24     5,427.96
+    Total L1 Elapsed Cycles          cycle 1,149,610.00 1,270,062.00 1,209,836.00
+    Average L2 Active Cycles         cycle     4,025.17     4,094.64     4,059.90
+    Total L2 Elapsed Cycles          cycle   302,796.00   303,984.00   303,390.00
+    Average SM Active Cycles         cycle     4,873.67     5,982.24     5,427.96
+    Total SM Elapsed Cycles          cycle 1,149,610.00 1,270,062.00 1,209,836.00
+    Average SMSP Active Cycles       cycle     4,808.27     5,856.26     5,332.26
+    Total SMSP Elapsed Cycles        cycle 4,598,440.00 5,080,248.00 4,839,344.00
+    -------------------------- ----------- ------------ ------------ ------------
+
+  f32_to_e4m3_scaled (9216, 1, 1)x(256, 1, 1), Device 0, CC 8.9, Invocations 1
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- --------- --------- ---------
+    Metric Name             Metric Unit   Minimum   Maximum   Average
+    ----------------------- ----------- --------- --------- ---------
+    DRAM Frequency                  Ghz     10.45     10.45     10.45
+    SM Frequency                    Ghz      2.21      2.21      2.21
+    Elapsed Cycles                cycle 31,747.00 31,747.00 31,747.00
+    Memory Throughput                 %     79.66     79.66     79.66
+    DRAM Throughput                   %     79.66     79.66     79.66
+    Duration                         us     14.30     14.30     14.30
+    L1/TEX Cache Throughput           %     15.30     15.30     15.30
+    L2 Cache Throughput               %     30.22     30.22     30.22
+    SM Active Cycles              cycle 22,584.39 22,584.39 22,584.39
+    Compute (SM) Throughput           %     22.98     22.98     22.98
+    ----------------------- ----------- --------- --------- ---------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------- ------------- -------------
+    Metric Name                Metric Unit       Minimum       Maximum       Average
+    -------------------------- ----------- ------------- ------------- -------------
+    Average DRAM Active Cycles       cycle    119,094.67    119,094.67    119,094.67
+    Total DRAM Elapsed Cycles        cycle  1,794,048.00  1,794,048.00  1,794,048.00
+    Average L1 Active Cycles         cycle     22,584.39     22,584.39     22,584.39
+    Total L1 Elapsed Cycles          cycle  4,226,420.00  4,226,420.00  4,226,420.00
+    Average L2 Active Cycles         cycle     24,110.33     24,110.33     24,110.33
+    Total L2 Elapsed Cycles          cycle  1,012,284.00  1,012,284.00  1,012,284.00
+    Average SM Active Cycles         cycle     22,584.39     22,584.39     22,584.39
+    Total SM Elapsed Cycles          cycle  4,226,420.00  4,226,420.00  4,226,420.00
+    Average SMSP Active Cycles       cycle     22,516.87     22,516.87     22,516.87
+    Total SMSP Elapsed Cycles        cycle 16,905,680.00 16,905,680.00 16,905,680.00
+    -------------------------- ----------- ------------- ------------- -------------
+
+  q4k_dequant_to_f32 (256, 6, 1)x(32, 1, 1), Device 0, CC 8.9, Invocations 1
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- -------- -------- --------
+    Metric Name             Metric Unit  Minimum  Maximum  Average
+    ----------------------- ----------- -------- -------- --------
+    DRAM Frequency                  Ghz    10.41    10.41    10.41
+    SM Frequency                    Ghz     2.20     2.20     2.20
+    Elapsed Cycles                cycle 8,903.00 8,903.00 8,903.00
+    Memory Throughput                 %    21.25    21.25    21.25
+    DRAM Throughput                   %     8.04     8.04     8.04
+    Duration                         us     4.03     4.03     4.03
+    L1/TEX Cache Throughput           %    13.58    13.58    13.58
+    L2 Cache Throughput               %    21.25    21.25    21.25
+    SM Active Cycles              cycle 5,479.56 5,479.56 5,479.56
+    Compute (SM) Throughput           %    13.91    13.91    13.91
+    ----------------------- ----------- -------- -------- --------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------ ------------ ------------
+    Metric Name                Metric Unit      Minimum      Maximum      Average
+    -------------------------- ----------- ------------ ------------ ------------
+    Average DRAM Active Cycles       cycle     3,377.33     3,377.33     3,377.33
+    Total DRAM Elapsed Cycles        cycle   503,808.00   503,808.00   503,808.00
+    Average L1 Active Cycles         cycle     5,479.56     5,479.56     5,479.56
+    Total L1 Elapsed Cycles          cycle 1,143,836.00 1,143,836.00 1,143,836.00
+    Average L2 Active Cycles         cycle     4,381.08     4,381.08     4,381.08
+    Total L2 Elapsed Cycles          cycle   283,932.00   283,932.00   283,932.00
+    Average SM Active Cycles         cycle     5,479.56     5,479.56     5,479.56
+    Total SM Elapsed Cycles          cycle 1,143,836.00 1,143,836.00 1,143,836.00
+    Average SMSP Active Cycles       cycle     4,709.68     4,709.68     4,709.68
+    Total SMSP Elapsed Cycles        cycle 4,575,344.00 4,575,344.00 4,575,344.00
+    -------------------------- ----------- ------------ ------------ ------------
+
+  q4k_dequant_to_f32 (1536, 6, 1)x(32, 1, 1), Device 0, CC 8.9, Invocations 2
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- --------- --------- ---------
+    Metric Name             Metric Unit   Minimum   Maximum   Average
+    ----------------------- ----------- --------- --------- ---------
+    DRAM Frequency                  Ghz     10.45     10.48     10.46
+    SM Frequency                    Ghz      2.20      2.21      2.20
+    Elapsed Cycles                cycle 25,540.00 26,683.00 26,111.50
+    Memory Throughput                 %     51.47     52.22     51.84
+    DRAM Throughput                   %     51.47     52.22     51.84
+    Duration                         us     11.58     12.06     11.82
+    L1/TEX Cache Throughput           %     26.36     27.81     27.08
+    L2 Cache Throughput               %     40.33     42.15     41.24
+    SM Active Cycles              cycle 16,053.73 16,937.87 16,495.80
+    Compute (SM) Throughput           %     27.20     28.63     27.92
+    ----------------------- ----------- --------- --------- ---------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------- ------------- -------------
+    Metric Name                Metric Unit       Minimum       Maximum       Average
+    -------------------------- ----------- ------------- ------------- -------------
+    Average DRAM Active Cycles       cycle     63,228.00     65,044.00     64,136.00
+    Total DRAM Elapsed Cycles        cycle  1,453,056.00  1,516,544.00  1,484,800.00
+    Average L1 Active Cycles         cycle     16,053.73     16,937.87     16,495.80
+    Total L1 Elapsed Cycles          cycle  3,317,974.00  3,493,016.00  3,405,495.00
+    Average L2 Active Cycles         cycle     13,962.78     16,023.31     14,993.04
+    Total L2 Elapsed Cycles          cycle    816,048.00    852,372.00    834,210.00
+    Average SM Active Cycles         cycle     16,053.73     16,937.87     16,495.80
+    Total SM Elapsed Cycles          cycle  3,317,974.00  3,493,016.00  3,405,495.00
+    Average SMSP Active Cycles       cycle     15,515.89     16,385.87     15,950.88
+    Total SMSP Elapsed Cycles        cycle 13,271,896.00 13,972,064.00 13,621,980.00
+    -------------------------- ----------- ------------- ------------- -------------
+
+  q6k_dequant_to_f32 (256, 6, 1)x(32, 1, 1), Device 0, CC 8.9, Invocations 1
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- -------- -------- --------
+    Metric Name             Metric Unit  Minimum  Maximum  Average
+    ----------------------- ----------- -------- -------- --------
+    DRAM Frequency                  Ghz    10.32    10.32    10.32
+    SM Frequency                    Ghz     2.19     2.19     2.19
+    Elapsed Cycles                cycle 8,233.00 8,233.00 8,233.00
+    Memory Throughput                 %    23.02    23.02    23.02
+    DRAM Throughput                   %    13.51    13.51    13.51
+    Duration                         us     3.74     3.74     3.74
+    L1/TEX Cache Throughput           %    20.61    20.61    20.61
+    L2 Cache Throughput               %    23.02    23.02    23.02
+    SM Active Cycles              cycle 4,890.41 4,890.41 4,890.41
+    Compute (SM) Throughput           %    12.40    12.40    12.40
+    ----------------------- ----------- -------- -------- --------
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- ------------ ------------ ------------
+    Metric Name                Metric Unit      Minimum      Maximum      Average
+    -------------------------- ----------- ------------ ------------ ------------
+    Average DRAM Active Cycles       cycle     5,222.67     5,222.67     5,222.67
+    Total DRAM Elapsed Cycles        cycle   463,872.00   463,872.00   463,872.00
+    Average L1 Active Cycles         cycle     4,890.41     4,890.41     4,890.41
+    Total L1 Elapsed Cycles          cycle 1,040,754.00 1,040,754.00 1,040,754.00
+    Average L2 Active Cycles         cycle     3,828.06     3,828.06     3,828.06
+    Total L2 Elapsed Cycles          cycle   262,368.00   262,368.00   262,368.00
+    Average SM Active Cycles         cycle     4,890.41     4,890.41     4,890.41
+    Total SM Elapsed Cycles          cycle 1,040,754.00 1,040,754.00 1,040,754.00
+    Average SMSP Active Cycles       cycle     4,249.87     4,249.87     4,249.87
+    Total SMSP Elapsed Cycles        cycle 4,163,016.00 4,163,016.00 4,163,016.00
+    -------------------------- ----------- ------------ ------------ ------------
+
+  metrics for each individual kernel launch.                                                                         
+  If aggregating across varying launch configurations (like shared memory, cache config settings), the arithmetic    
+  mean can be misleading and looking at the individual results is recommended instead.                               
+  This output mode is backwards compatible to the per-kernel summary output of nvprof                                
+
