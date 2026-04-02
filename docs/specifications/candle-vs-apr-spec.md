@@ -452,13 +452,15 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-371 | `apr trace` + `apr profile` serving overhead breakdown | TODO | — |
-| PMAT-372 | Five-whys: isolate dominant overhead source (HTTP? tokenizer? prefill? scheduling?) | TODO | PMAT-371 |
-| PMAT-373 | `gh issue create` upstream ticket with trace data | TODO | PMAT-372 |
-| PMAT-374 | Fix root cause in `../realizar` + provable contract | TODO | PMAT-373 |
-| PMAT-375 | Rebuild realizr, re-benchmark c=1 (10 iter, temp=0, locked clocks) | TODO | PMAT-374 |
-| PMAT-376 | Validate F-PARITY-02 (≥151.6 tok/s = ≤1.5x) | TODO | PMAT-375 |
-| PMAT-377 | Update spec, perf.md, README with new numbers | TODO | PMAT-376 |
+| PMAT-371 | `apr trace` + `apr profile` serving overhead breakdown | DONE | 0 anomalies. Attn 74.5% of decode. 1.4% BW efficiency. |
+| PMAT-372 | Five-whys: isolate dominant overhead source | DONE | See below. Root cause: VRAM residency (realizar#97, qcd GAP-GPU-001). |
+| PMAT-373 | `gh issue create` upstream ticket with trace data | DONE | realizar#97 (from qcd). Event fix: trueno 5dfe852d + realizr ed318dd7. |
+| PMAT-374 | Fix root cause in `../realizar` + provable contract | PARTIAL | Event fix +12.9%. VRAM residency is the remaining 2.1x gap. |
+| PMAT-375 | Rebuild + re-benchmark via `probador llm load` | DONE | 22.7 tok/s (patched) vs 20.1 (original). |
+| PMAT-376 | Validate F-PARITY-02 (≥149.9 tok/s at c=4 = ≤1.5x) | FAIL | 107.7 tok/s at c=4. Need +39%. VRAM residency is the blocker. |
+| PMAT-377 | Update spec, perf.md, README with new numbers | DONE | v2.0.0 measurement correction propagated. |
+
+**PMAT-372 five-whys:** 2.1x gap → 1.4% BW efficiency → VRAM residency (realizar#97, qcd GAP-GPU-001) → CPU↔GPU PCIe transfers per matmul → **fused Q4K matmul on CPU SIMD, not GPU cuBLAS**. Event fix saves 12.9% (sync overhead). VRAM residency = multi-week effort per qcd.
 
 ---
 
