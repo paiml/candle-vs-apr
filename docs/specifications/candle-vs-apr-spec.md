@@ -477,7 +477,7 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 | quantized-gemma | Gemma | `apr run gemma.gguf "prompt"` | gemma-2b-mvp ✓ | Certified A+ |
 | quantized-qwen3 | Qwen3 | `apr run qwen3.gguf --chat` | **Works** (CPU 2.7 tok/s, Q8_0) | GPU needs Q4_K_M |
 | quantized-t5 | T5 (enc-dec) | tensors found (6 realizr commits) | encoder-decoder-v1 contract | BLOCKED (needs T5-specific model type) |
-| whisper | Whisper (ASR) | `apr run --input audio.wav` | flags exist | BLOCKED (realizr#173 + GH-516) |
+| whisper | Whisper (ASR) | `apr run whisper.apr -i audio.wav` | **whisper.apr repo exists** (full impl) | BLOCKED (GH-516: wire apr run → whisper-apr crate) |
 
 `apr run` extras Candle lacks: `--serve`, `--profile`, `--batch-jsonl`, `--offline`, `--backend`, multi-format (GGUF + SafeTensors + APR), `hf://` auto-download, 95-model QA certification matrix.
 
