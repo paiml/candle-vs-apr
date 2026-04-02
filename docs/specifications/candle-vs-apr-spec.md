@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 2.0.0
+**Version:** 2.1.0
 **Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -452,15 +452,22 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-371 | `apr trace` + `apr profile` serving overhead breakdown | DONE | 0 anomalies. Attn 74.5% of decode. 1.4% BW efficiency. |
-| PMAT-372 | Five-whys: isolate dominant overhead source | DONE | See below. Root cause: VRAM residency (realizar#97, qcd GAP-GPU-001). |
-| PMAT-373 | `gh issue create` upstream ticket with trace data | DONE | realizar#97 (from qcd). Event fix: trueno 5dfe852d + realizr ed318dd7. |
-| PMAT-374 | Fix root cause in `../realizar` + provable contract | PARTIAL | Event fix +12.9%. VRAM residency is the remaining 2.1x gap. |
-| PMAT-375 | Rebuild + re-benchmark via `probador llm load` | DONE | 22.7 tok/s (patched) vs 20.1 (original). |
-| PMAT-376 | Validate F-PARITY-02 (≥149.9 tok/s at c=4 = ≤1.5x) | FAIL | 107.7 tok/s at c=4. Need +39%. VRAM residency is the blocker. |
-| PMAT-377 | Update spec, perf.md, README with new numbers | DONE | v2.0.0 measurement correction propagated. |
+| PMAT-371 | `apr trace`/`apr profile` overhead breakdown | DONE | Attn 74.5%, 1.4% BW eff. Kernel=200 tok/s, serving=89% overhead |
+| PMAT-372 | Five-whys root cause | DONE | See below. **Serving overhead (89%), not kernel.** qcd GAP-GPU-001 stale. |
+| PMAT-373 | Upstream event fix (trueno+realizr) | DONE | +12.9% decode. ITL 49.7→44.0ms. |
+| PMAT-374 | Further serving overhead reduction | TODO | 39ms/tok overhead remaining. Channel send + JSON + stream sync. |
+| PMAT-375 | Re-benchmark via `probador llm load` | DONE | 22.7 tok/s (patched) vs 20.1 (original). |
+| PMAT-376 | Validate F-PARITY-02 (c=4 ≤1.5x llama.cpp) | FAIL | Need c=4 benchmark with probador. |
+| PMAT-377 | Update all docs | DONE | v2.0.0 propagated. |
 
-**PMAT-372 five-whys:** 2.1x gap → 1.4% BW efficiency → VRAM residency (realizar#97, qcd GAP-GPU-001) → CPU↔GPU PCIe transfers per matmul → **fused Q4K matmul on CPU SIMD, not GPU cuBLAS**. Event fix saves 12.9% (sync overhead). VRAM residency = multi-week effort per qcd.
+**PMAT-372 five-whys (CORRECTED — qcd GAP-GPU-001 is stale, GPU kernels exist now):**
+1. Why 22.7 tok/s (probador) vs 200 tok/s (kernel-only, PMAT-037)? → 89% serving overhead
+2. Why 39ms/token overhead? → HTTP + tokenizer + prefill + scheduling + channel + SSE
+3. Why so much per-token overhead? → `blocking_send()`, per-token JSON serialization, stream sync
+4. Why not batched/amortized? → c=1 mode, no batching, every token round-trips through async stack
+5. Root cause: **per-token async overhead in serving layer dominates at c=1. Kernel is fast (200 tok/s). Serving eats 89%.**
+
+Event fix: 49.7→44.0ms ITL (-11.5%). Need further serving layer optimization or benchmark at c=4+ where overhead amortizes.
 
 ---
 
@@ -477,22 +484,17 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 | Cross-validation | Results match sister repos | F-SCALE-01 vs qwen-coder-deploy |
 | **Format parity** | All 3 formats (GGUF, SafeTensors, APR v2) tested on GPU | F-FMTPARITY-01 |
 | **Tool parity** | `apr` CLI and raw `realizr` produce equivalent inference | F-TOOLPARITY-01 |
-| **Brick profiling** | `apr profile --granular` before and after every fix | Measure-and-Fix Policy |
-| **Layer tracing** | `apr trace --verbose` for every correctness investigation | Measure-and-Fix Policy |
+| **apr-cli gates** | `apr profile`/`apr trace`/`apr check` before and after every fix | Measure-and-Fix Policy |
 | **Contracts** | Every upstream fix adds a `provable-contracts` binding | Measure-and-Fix Policy |
 | **probador** | All benchmarks via `probador llm load` (matches qwen-coder-deploy) | PMAT-306 |
 | **NVIDIA parity** | `apr profile` brick scores match `ncu` roofline ±15% | F-BRICKPARITY-01 |
 
-### Spec Maintenance
-
-Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 block.
+### Spec Maintenance — max 500 lines. Version bump on structural changes.
 
 ## 12. Revision History
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0–1.3 | 2026-04-01 | Initial spec → Phase 1+2 results. Candle 1.59x faster. F-SCALE-01 FALSIFIED (SINGLE-REQUEST). 5 upstream bugs filed. |
-| 1.4–1.7 | 2026-04-02 | Format/tool parity enforced. SafeTensors GPU (#169), APR GPU (#170) fixed. Measure-and-Fix policy. All 13 F-conditions tested. |
-| 1.8.0 | 2026-04-02 | All 43 PMAT items resolved. F-TOOLPARITY-01 WEAKENED (APR 25.6% version skew). Score: 6F/4C/3W. |
-| 1.9.0 | 2026-04-02 | Phase 6 parity sprint added. Event-based sync fix (trueno + realizr). |
-| 2.0.0 | 2026-04-02 | **MEASUREMENT CORRECTION.** `probador llm load` replaces curl loops (matches qwen-coder-deploy). realizr = 21 tok/s (not 142.8 — that was forjar-deployed build). Parity target revised: ≤1.5x vs llama.cpp at c=4 (149.9 tok/s, currently 107.7). Cross-referenced qwen-coder-deploy inference-showdown-v1.yaml baselines. |
+| 1.0–1.8 | 2026-04-01..02 | Phases 1-5 complete. 13 F-conditions, 43 PMAT items. 5 upstream bugs fixed. Score: 6F/4C/3W. |
+| 1.9–2.0 | 2026-04-02 | Phase 6 parity sprint. **MEASUREMENT CORRECTION:** probador replaces curl (21 tok/s, not 142.8). qcd cross-ref. |
+| 2.1.0 | 2026-04-02 | **ROOT CAUSE CORRECTED.** Kernel is fast (200 tok/s PMAT-037). 89% serving overhead. qcd GAP-GPU-001 stale. |
