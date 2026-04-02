@@ -237,7 +237,7 @@ Demonstrates what Candle's architecture cannot provide.
 | Format | Candle (GPU) | realizr (GPU) | Status | Blocker |
 |--------|-------------|---------------|--------|---------|
 | GGUF Q4_K_M | 227.4 tok/s | 142.8 tok/s | **Measured** | — |
-| SafeTensors FP32 | 65.7 tok/s | 0.4 tok/s (CPU!) | **BUG** | paiml/realizar#169 |
+| SafeTensors FP32 | 65.7 tok/s (GPU) | 21.2 tok/s (GPU) | **#169 FIXED** | 3.1x gap remains |
 | APR v2 Q4K | N/A | garbage output | **BUG** | paiml/realizar#168 |
 
 #### 3b. Tool parity: `apr` CLI vs `realizr` (F-TOOLPARITY-01)
@@ -379,7 +379,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR loads successfully but inference output is garbage. Blocked on paiml/realizar#168 resolution. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
-| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | SafeTensors GPU serve path added (#169, WIP — loads, routing TODO). APR v2 inference garbage (#170). GGUF is only fully working GPU format. |
+| F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | SafeTensors GPU: 21.2 tok/s (#169 FIXED, 3.1x slower than Candle 65.7). GGUF GPU: 142.8. APR: garbage (#170). 2/3 formats have GPU, but not at parity. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **PARTIAL** | GGUF: 142.8 vs 139.8 tok/s = 2.1% delta — **PASS**. APR v2: BLOCKED (#168). |
 
 ---
@@ -429,7 +429,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | BLOCKED | PMAT-334 |
-| PMAT-337 | Re-test SafeTensors GPU after #169 fix | TODO | paiml/realizar#169 |
+| PMAT-337 | Re-test SafeTensors GPU after #169 fix | DONE | 21.2 tok/s GPU (was 0.4 CPU) |
 | PMAT-338 | Re-test APR v2 GPU after #168 fix | TODO | paiml/realizar#168 |
 | PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | TODO | PMAT-337, 338 |
 | PMAT-360 | apr-cli serve GGUF vs realizr serve GGUF | DONE (2.1% delta, PASS) | — |

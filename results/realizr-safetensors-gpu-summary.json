@@ -1,0 +1,7 @@
+{
+  "runtime": "realizr",
+  "format": "safetensors",
+  "gpu": true,
+  "tok_sec_mean": 21.2,
+  "tok_sec_cold": 24.9
+}
