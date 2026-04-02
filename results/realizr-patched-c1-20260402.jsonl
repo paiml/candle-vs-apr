@@ -1,0 +1,10 @@
+{"iteration": 1, "tokens": 256, "wall_ms": 11188, "tok_sec": 22.88}
+{"iteration": 2, "tokens": 251, "wall_ms": 10937, "tok_sec": 22.95}
+{"iteration": 3, "tokens": 256, "wall_ms": 14097, "tok_sec": 18.16}
+{"iteration": 4, "tokens": 241, "wall_ms": 10226, "tok_sec": 23.57}
+{"iteration": 5, "tokens": 235, "wall_ms": 10168, "tok_sec": 23.11}
+{"iteration": 6, "tokens": 232, "wall_ms": 12300, "tok_sec": 18.86}
+{"iteration": 7, "tokens": 253, "wall_ms": 10899, "tok_sec": 23.21}
+{"iteration": 8, "tokens": 217, "wall_ms": 9184, "tok_sec": 23.63}
+{"iteration": 9, "tokens": 256, "wall_ms": 14278, "tok_sec": 17.93}
+{"iteration": 10, "tokens": 178, "wall_ms": 7107, "tok_sec": 25.05}
