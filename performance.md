@@ -272,6 +272,27 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 
 `pv coverage` (realizr): 12 contracts, 44 equations, 100% obligation coverage.
 
+### Finding 11: MEASUREMENT CORRECTION — v1 numbers superseded by probador (v2.0.0)
+
+**What:** v1 (curl scripts, forjar-deployed realizr) showed 142.8 tok/s. `probador llm load` (v2, same tool as qwen-coder-deploy) shows **22.7 tok/s** (patched) / **20.1 tok/s** (original). The 142.8 was from a different realizr build.
+
+**Why (five-whys):**
+1. Why 22.7 vs 142.8? → Different realizr builds (forjar vs apr-cli embedded)
+2. Why not caught? → Never used probador (the sister repo standard tool)
+3. Why not use probador? → Wrongly dismissed as WASM-only (stale 1.0.3 installed)
+4. Why stale? → `llm` subcommand added later, not reinstalled
+5. Root cause: **stale tooling + ad-hoc scripts instead of standard benchmark tool**
+
+**Kernel is fast (246 tok/s on first pass, CUDA graph replay). 89% of wall time is serving overhead** (HTTP + tokenizer + per-token sync + logits download). Cross-reference: qwen-coder-deploy inference-showdown-v1.yaml confirms apr GGUF GPU = 15.1 tok/s at c=1, 107.7 at c=4.
+
+**Parity target:** ≤1.5x vs llama.cpp at c=4 (224.8 tok/s) → realizr needs ≥149.9 tok/s (currently 107.7, 39% gap).
+
+### Finding 12: Event-based sync fix — +12.9% decode improvement
+
+**What:** Replaced `compute_stream.synchronize()` with `cuStreamWaitEvent` in phase_attention.rs. probador confirms: ITL P50 49.7→44.0ms (-11.5%), decode 20.1→22.7 tok/s (+12.9%).
+
+**Upstream commits:** trueno 5dfe852d (`CudaStream::wait_event()`), realizr ed318dd7 (event-based ordering).
+
 ## Falsification Scorecard
 
 | ID | Prediction | Outcome |
@@ -289,5 +310,6 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 | F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (all GPU now: GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity) |
 | F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **WEAKENED** (GGUF 2.1% PASS, APR 25.6% FAIL — version skew) |
 | F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (20% vs 55% mem, aprender#567) |
+| F-PARITY-02 | realizr c=4 ≤1.5x llama.cpp | **TESTING** (107.7 vs 224.8, 2.1x gap) |
 
-**Score: 6 FALSIFIED, 4 CONFIRMED, 3 WEAKENED, 0 PARTIAL, 0 BLOCKED, 0 UNTESTED**
+**Score: 6 FALSIFIED, 4 CONFIRMED, 3 WEAKENED, 0 PARTIAL, 0 BLOCKED, 1 TESTING**
