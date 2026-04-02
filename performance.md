@@ -303,7 +303,9 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 4. Why? → Violated our own Measure-and-Fix policy
 5. Root cause: **fixed symptoms without proving root cause**
 
-**Resolution:** Reverted 5 speculative commits. Added `streaming-safety-v1` contract with diagnosis protocol: measure Future size → isolate with minimal features → cargo-expand → targeted fix. The contract requires measurement BEFORE any code change. (realizr#172)
+**Resolution:** Root cause was `..Default::default()` inside `impl Default for QuantizedGenerateConfig` — infinite recursion. One line removal (realizr cf10c0f7) fixed everything. Grade: F→A+ (99.0). TTFT: N/A→8.4ms.
+
+**Prevention:** `lint-self-referential-default.sh` deployed to ALL 4 repos (realizr, aprender, trueno, probar). Detects `..Default::default()` inside `impl Default` at pre-commit. This pattern compiles without warning but is always infinite recursion.
 
 ## Falsification Scorecard
 
