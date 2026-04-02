@@ -10,18 +10,17 @@ Both are pure Rust. Both load GGUF Q4_K_M. The question: **does the Sovereign AI
 
 ### probador llm load (v2 methodology, aligned with [qwen-coder-deploy](https://github.com/paiml/qwen-coder-deploy))
 
-| Metric | Candle | realizr (original) | realizr (patched) | llama.cpp (qcd ref) |
-|--------|--------|-------------------|-------------------|---------------------|
-| Decode tok/s (c=1) | **227.4** (decode-only) | 20.1 | **22.7** (+12.9%) | — |
-| ITL P50 (c=1) | — | 49.7ms | **44.0ms** | — |
-| µs/layer (c=1) | — | 1773 | **1571** | — |
-| Decode tok/s (c=4) | N/A | — | — | **224.8** (qcd baseline) |
-| Decode tok/s (c=4, apr) | N/A | 107.7 (qcd baseline) | — | — |
-| Peak RSS (MB) | **449** | 3,082 | — | — |
+| Metric | Candle | realizr (fixed) | llama.cpp (qcd ref) | Winner |
+|--------|--------|----------------|---------------------|--------|
+| Decode tok/s (c=1) | 227.4 (decode-only) | **273.8** | — | **realizr (1.20x)** |
+| Decode tok/s (c=4) | N/A | **274.5** | 224.8 | **realizr (1.22x)** |
+| ITL P50 (c=1) | — | **3.7ms** | — | — |
+| µs/layer (c=1) | — | **130.4** | — | — |
+| Peak RSS (MB) | **449** | 3,082 | — | Candle |
 
-> **MEASUREMENT CORRECTION (v2.0.0):** Prior results (142.8 tok/s) were from a forjar-deployed realizr build measured with ad-hoc curl scripts. `probador llm load` — the same tool used in qwen-coder-deploy — measures **20.1 tok/s** (original) / **22.7 tok/s** (event-fix patched). The qwen-coder-deploy c=4 baseline confirms: apr GGUF GPU = 107.7 tok/s vs llama.cpp 224.8 tok/s (2.1x gap). Candle's 227.4 decode-only is consistent with llama.cpp.
+> **F-PARITY-02: CONFIRMED (v3.0.0).** realizr beats Candle (1.20x) and llama.cpp (1.22x) at decode throughput after fixing CUDA graph context poisoning (realizr 81c912d2). Root cause: `forward_graphed_decode.rs` attempted graph capture by default, failed on driver 570.207, poisoned context → 12.1x degradation. Prevention: `cuda-graph-safety-v1` contract + `make perf-gate` CI gate.
 
-**Parity target: ≤1.5x vs llama.cpp at c=4** → realizr needs ≥149.9 tok/s (currently 107.7, 39% gap). Event-based sync fix provides 12.9% improvement. See [docs/specifications/candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md) for Phase 6 sprint.
+See [docs/specifications/candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md) for full falsification register (14 F-conditions, 7 FALSIFIED, 5 CONFIRMED, 2 WEAKENED).
 
 ## The Two Runtimes
 

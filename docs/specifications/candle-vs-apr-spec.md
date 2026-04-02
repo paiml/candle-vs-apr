@@ -83,7 +83,7 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 **Measure:** `apr check` (integrity) → `apr profile --granular --perf-grade` (roofline) → `apr trace --verbose` (layer trace) → `apr cbtop --headless` (monitor). NVIDIA `nsys`/`ncu` as parity validation (F-BRICKPARITY-01).
 
-**Fix:** `gh issue create` with trace data → fix upstream (never local workaround) → add `provable-contracts` binding → verify with `apr trace`/`apr profile` before/after → rebuild via forjar → re-run falsification.
+**Fix:** `gh issue create` → fix upstream → `provable-contracts` binding → `apr trace`/`apr profile` verify → `make perf-gate` (probador ≥200 tok/s) → rebuild → re-run falsification. Prevention: `cuda-graph-safety-v1` contract.
 
 ### Relationship to sister repos
 
