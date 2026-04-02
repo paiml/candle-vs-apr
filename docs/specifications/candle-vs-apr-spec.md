@@ -238,7 +238,7 @@ Demonstrates what Candle's architecture cannot provide.
 |--------|-------------|---------------|--------|---------|
 | GGUF Q4_K_M | 227.4 tok/s | 142.8 tok/s | **Measured** | — |
 | SafeTensors FP32 | 65.7 tok/s (GPU) | 21.2 tok/s (GPU) | **#169 FIXED** | 3.1x gap remains |
-| APR v2 Q4K | N/A | garbage output | **BUG** | paiml/realizar#168 |
+| APR v2 Q4K | N/A | GPU working | **#170 FIXED** | benchmark pending |
 
 #### 3b. Tool parity: `apr` CLI vs `realizr` (F-TOOLPARITY-01)
 
@@ -246,8 +246,8 @@ Demonstrates what Candle's architecture cannot provide.
 |--------|------|---------|--------|
 | GGUF Q4_K_M | `realizr serve --gpu` | direct GGUF serving | 142.8 tok/s |
 | GGUF Q4_K_M | `apr serve run --gpu` | apr-cli GGUF serving | 139.8 tok/s (**2.1% delta — PASS**) |
-| APR v2 Q4K | `realizr serve --gpu` | raw APR serving | BLOCKED (#168) |
-| APR v2 Q4K | `apr serve run --gpu` | apr-cli APR serving | BLOCKED (#168) |
+| APR v2 Q4K | `realizr serve --gpu` | APR → GGUF CUDA | **#170 FIXED** |
+| APR v2 Q4K | `apr serve run --gpu` | apr-cli APR serving | TODO (test) |
 
 Both tools loading the same model in the same format must produce tok/s within ±5%. GGUF parity **confirmed** (2.1% delta).
 
@@ -425,7 +425,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 |----|------|--------|---------|
 | PMAT-331 | Candle SafeTensors decode (non-quantized) | DONE | PMAT-302 |
 | PMAT-332 | realizr SafeTensors decode | DONE (BUG: CPU only, #169) | — |
-| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | Contract added. FALSIFY-TNR-001..004 scaffolded. Needs binding + impl. |
+| PMAT-333 | realizr APR v2 Q4K decode | DONE | #170 FIXED — routed through OwnedQuantizedModelCuda. Benchmark pending. |
 | PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | BLOCKED | PMAT-334 |
