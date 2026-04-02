@@ -207,6 +207,19 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 
 **Implication:** F-KERNEL-01 is **weakened**, not falsified. The fused kernels DO reduce launches (1.8x) as predicted, but the total GPU time benefit is <1% at M=1. The advantage would be more meaningful at higher concurrency where launch overhead becomes a larger fraction of total time, but we couldn't test this (SINGLE-REQUEST mode).
 
+### Finding 10: apr profile disagrees with ncu roofline (F-BRICKPARITY-01 FALSIFIED)
+
+**What:** `apr profile` reports 20% memory efficiency, 1% compute efficiency. `ncu --set roofline` on the dominant Q4K kernel: 55% memory throughput, 29% compute throughput. Delta: 35pp memory, 28pp compute.
+
+**Why (five-whys):**
+1. Why disagree? → apr profile measures end-to-end pipeline, ncu measures individual kernels
+2. Why does end-to-end differ from per-kernel? → 83.8% of decode time is kernel launch overhead (idle GPU)
+3. Why include idle in "efficiency"? → apr profile divides achieved FLOPS by peak, counting gaps
+4. Why label it "roofline"? → The UI says "Roofline Analysis" but computes pipeline throughput
+5. Root cause: **apr profile conflates pipeline efficiency with per-kernel roofline**
+
+**Implication:** The "Grade C, 20% efficiency" report is misleading. Individual Q4K kernels achieve 55% memory BW — respectable for a memory-bound workload. The actual bottleneck is launch overhead between kernels, not kernel efficiency. Filed paiml/aprender#567.
+
 ### Upstream bugs discovered
 
 | Issue | Repo | Status | Contract |
@@ -215,8 +228,9 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 | paiml/realizar#168 | RMSNorm cache aliasing mismatch | Filed | `tensor-name-resolution-v1` (FALSIFY-TNR-001) |
 | paiml/realizar#169 | SafeTensors GPU inference missing | Filed | `tensor-name-resolution-v1` (format_parity eq) |
 | paiml/realizar#170 | 0 contracts on tensor name resolution | **CONTRACT ADDED** | `tensor-name-resolution-v1.yaml` — 3 eq, 4 ob, 4 ft, 2 kani |
+| paiml/aprender#567 | apr profile conflates pipeline/kernel roofline | Filed | Needs `PROFILING_ACCURACY_V1` contract |
 
-`pv coverage`: 12 contracts, 44 equations, 100% obligation coverage (realizr).
+`pv coverage` (realizr): 12 contracts, 44 equations, 100% obligation coverage.
 
 ## Falsification Scorecard
 
@@ -234,6 +248,6 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (1.8x fewer launches, same GPU time) |
 | F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (SafeTensors CPU, APR garbage) |
 | F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **PARTIAL** (GGUF 2.1% PASS, APR BLOCKED) |
-| F-BRICKPARITY-01 | apr profile vs ncu ±15% | UNTESTED (ncu roofline not yet run) |
+| F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (20% vs 55% mem, aprender#567) |
 
-**Score: 4 FALSIFIED, 3 CONFIRMED, 2 WEAKENED, 1 PARTIAL, 2 BLOCKED, 1 UNTESTED**
+**Score: 5 FALSIFIED, 3 CONFIRMED, 2 WEAKENED, 1 PARTIAL, 2 BLOCKED, 0 UNTESTED**
