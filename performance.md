@@ -292,6 +292,19 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 
 **Upstream commits:** trueno 5dfe852d (`CudaStream::wait_event()`), realizr ed318dd7 (event-based ordering).
 
+### Finding 13: Streaming stack overflow — 7 speculative fixes failed, provable contract required
+
+**What:** SSE streaming (`stream:true`) causes stack overflow on tokio-rt-worker. Non-streaming (273.8 tok/s) unaffected. 7 speculative fixes (stack size, Box::pin, skip backends, sync wrapper) all failed — even 64MB stacks overflow.
+
+**Five-whys on investigation failure:**
+1. Why 7 failures? → Guessed at fix locations instead of measuring
+2. Why guessing? → No contract defining what streaming MUST satisfy
+3. Why no contract? → Jumped to code changes before provable diagnosis
+4. Why? → Violated our own Measure-and-Fix policy
+5. Root cause: **fixed symptoms without proving root cause**
+
+**Resolution:** Reverted 5 speculative commits. Added `streaming-safety-v1` contract with diagnosis protocol: measure Future size → isolate with minimal features → cargo-expand → targeted fix. The contract requires measurement BEFORE any code change. (realizr#172)
+
 ## Falsification Scorecard
 
 | ID | Prediction | Outcome |
