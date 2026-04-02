@@ -97,6 +97,7 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
   apr-cli GGUF Q4K (GPU)       ████████████████████████ 139.8
   Candle SafeT FP32 (GPU)      ███████████ 65.7
   realizr SafeT FP32 (GPU)     ████ 21.2
+  apr-cli APR Q4K (GPU)        ████ 21.9
   realizr APR Q4K (GPU)        ███ 17.4
 ```
 
@@ -208,7 +209,7 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
 **Why:** Both tools embed the same realizr inference engine. apr-cli adds a thin wrapper for model import/profiling but uses the same GPU kernels and serving stack. The 2.1% delta is within measurement noise.
 
-**Implication:** GGUF tool parity confirmed. APR v2 tool parity blocked on apr-cli rebuild against realizr #170 fix (PMAT-361).
+**Implication:** GGUF tool parity confirmed. APR v2 tool parity **FAIL** — apr-cli 21.9 vs realizr 17.4 tok/s (25.6% delta). Root cause: version skew — apr-cli embeds realizr with FP8 weight cache (1472 MB), which the earlier realizr standalone build lacked.
 
 ### Finding 7: 83.8% kernel launch overhead (apr profile, PMAT-341)
 
@@ -284,7 +285,7 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (2,278 < 3,082 MB, 26% less) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (1.8x fewer launches, same GPU time) |
 | F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (all GPU now: GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity) |
-| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **PARTIAL** (GGUF 2.1% PASS, APR BLOCKED) |
+| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **WEAKENED** (GGUF 2.1% PASS, APR 25.6% FAIL — version skew) |
 | F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (20% vs 55% mem, aprender#567) |
 
-**Score: 6 FALSIFIED, 4 CONFIRMED, 2 WEAKENED, 1 PARTIAL, 0 BLOCKED, 0 UNTESTED**
+**Score: 6 FALSIFIED, 4 CONFIRMED, 3 WEAKENED, 0 PARTIAL, 0 BLOCKED, 0 UNTESTED**

@@ -1,0 +1,103 @@
+
+[1;36m=== apr profile (Real Per-Operation Telemetry) ===[0m
+
+  [1;37mModel[0m: /home/noah/models/qwen2.5-coder-1.5b-instruct-q4k.apr
+  [1;37mFormat[0m: apr
+
+[2mLoading apr model for GPU generation profiling...[0m
+[2mGPU warmup: 3 passes x 32 tokens...[0m
+[2mGPU measurement: 10 passes x 32 tokens...[0m
+[2m  Pass 0: 32 tokens in 108.1ms (prefill: 5.3ms, decode: 102.7ms = 311.5 tok/s)[0m
+[2mPer-operation profiling pass (no CUDA graph)...[0m
+╭──────────────┬────────────────────────────────────────────────╮
+│ Architecture │ qwen2 (28 layers, hidden=1,536, vocab=151,936) │
+├──────────────┼────────────────────────────────────────────────┤
+│      Backend │ CUDA                                           │
+│       Warmup │ 3 passes                                       │
+│      Measure │ 10 passes                                      │
+╰──────────────┴────────────────────────────────────────────────╯
+
+  [1;32m✓[0m [1;32mREAL PER-OPERATION TELEMETRY[0m
+
+
+  [2m───[0m [36mPer-Operation Hotspots[0m
+
+╭────┬──────────────────┬─────────┬───────┬───────┬────────────┬────────────────────────┬───────────────────────────────────────────────────────────╮
+│ #  │ Operation        │ Time    │ %     │ Calls │ Bottleneck │ Bar                    │ Detail                                                    │
+├────┼──────────────────┼─────────┼───────┼───────┼────────────┼────────────────────────┼───────────────────────────────────────────────────────────┤
+│ #1 │ AttentionScore   │ 34264µs │ 77.3% │ 420   │ MEMORY     │ [███████████████░░░░░] │ avg=81.6µs, min=12.8µs, max=3157.4µs, bw=0.3GB/s, eff=0%  │
+│ #2 │ QkvProjection    │ 2398µs  │ 5.4%  │ 420   │ MEMORY     │ [█░░░░░░░░░░░░░░░░░░░] │ avg=5.7µs, min=4.8µs, max=12.7µs                          │
+│ #3 │ LmHead           │ 1561µs  │ 3.5%  │ 15    │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=104.1µs, min=59.8µs, max=159.9µs                      │
+│ #4 │ RmsNorm          │ 1435µs  │ 3.2%  │ 855   │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=1.7µs, min=1.2µs, max=20.7µs, bw=11.0GB/s, eff=1%     │
+│ #5 │ DownProjection   │ 1194µs  │ 2.7%  │ 420   │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=2.8µs, min=2.4µs, max=11.9µs                          │
+│ #6 │ RopeEmbedding    │ 1172µs  │ 2.6%  │ 420   │ COMPUTE    │ [░░░░░░░░░░░░░░░░░░░░] │ avg=2.8µs, min=2.4µs, max=6.9µs, bw=4.4GB/s, eff=0%       │
+│ #7 │ OutputProjection │ 1162µs  │ 2.6%  │ 420   │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=2.8µs, min=2.4µs, max=6.8µs, bw=47667.0GB/s, eff=100% │
+│ #8 │ Residual2        │ 560µs   │ 1.3%  │ 420   │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=1.3µs, min=1.1µs, max=6.4µs                           │
+│ #9 │ Residual1        │ 553µs   │ 1.2%  │ 420   │ MEMORY     │ [░░░░░░░░░░░░░░░░░░░░] │ avg=1.3µs, min=1.1µs, max=3.2µs                           │
+╰────┴──────────────────┴─────────┴───────┴───────┴────────────┴────────────────────────┴───────────────────────────────────────────────────────────╯
+
+
+  [2m───[0m [36mCategory Summary[0m
+
+  Attention:  88.0%  [36m███████████████████████████████████[0m
+  FFN:         6.2%  [32m██[0m
+  Norm:        3.2%  [33m█[0m
+  Other:       2.5%  [2m█[0m
+
+
+  [2m───[0m [36mKernel Launch Overhead (F-PROFILE-009)[0m
+
+  Overhead: 1444169µs (97.0% of decode time)
+  [31mWARNING: >20% overhead — consider kernel fusion[0m
+
+
+  [2m───[0m [36mRoofline Analysis[0m
+
+  Hardware:       NVIDIA GeForce RTX 4090 (peak 82580.0 GFLOPS, 1008.0 GB/s)
+  Achieved:       55.5 GFLOPS, 13.9 GB/s
+  Compute eff:    0.1%
+  Memory eff:     1.4%
+  Arithmetic int: 4.00 (threshold=82.0)
+  [34mℹ[0m [34mMEMORY BOUND[0m
+
+[34m[INFO][0m Decode is memory-bandwidth limited. Matmul operations transfer
+[34m[INFO][0m more bytes than FLOPs computed. Focus on memory access patterns.
+
+
+  [2m───[0m [36mPerformance Grade[0m
+
+  Grade: [1mF[0m  —  Critical — likely using wrong backend or naive implementation
+  Efficiency: 1.4%
+
+
+  [2m───[0m [36mGeneration Performance[0m
+
+╭────────────────────┬─────────────╮
+│  Decode throughput │ 21.5 tok/s  │
+├────────────────────┼─────────────┤
+│ Prefill throughput │ 479.9 tok/s │
+│   Tokens generated │ 320         │
+╰────────────────────┴─────────────╯
+
+
+  [2m───[0m [36mLatency Distribution (decode pass)[0m
+
+╭──────────────┬───────────╮
+│ p50 (median) │ 1667.2 ms │
+├──────────────┼───────────┤
+│          p95 │ 1731.1 ms │
+│          p99 │ 1731.1 ms │
+│          min │ 102.7 ms  │
+│          max │ 1760.6 ms │
+╰──────────────┴───────────╯
+
+
+  [2m───[0m [36mSummary[0m
+
+  [2mAvg forward pass[0m: [1;37m1509304.8µs (1509.30ms)[0m
+  [2mThroughput[0m: [1;37m21.50[0m [2mtok/s[0m
+  [2mTokens per pass[0m: [1;37m32[0m
+  [2mOperations profiled[0m: [1;37m9[0m
+
+
+[2mProfile completed in 23.53s[0m

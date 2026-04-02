@@ -147,5 +147,5 @@ forjar apply -f forjar-teardown.yaml
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (fewer launches, same GPU time) |
 | F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (GGUF 142.8, SafeT 21.2, APR 17.4) |
-| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **PARTIAL** (GGUF 2.1% PASS, APR blocked) |
+| F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **WEAKENED** (GGUF 2.1% PASS, APR 25.6% FAIL) |
 | F-BRICKPARITY-01 | apr profile vs ncu ±15% | **FALSIFIED** (35pp/28pp delta, aprender#567) |

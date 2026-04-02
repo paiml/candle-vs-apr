@@ -246,8 +246,8 @@ Demonstrates what Candle's architecture cannot provide.
 |--------|------|---------|--------|
 | GGUF Q4_K_M | `realizr serve --gpu` | direct GGUF serving | 142.8 tok/s |
 | GGUF Q4_K_M | `apr serve run --gpu` | apr-cli GGUF serving | 139.8 tok/s (**2.1% delta — PASS**) |
-| APR v2 Q4K | `realizr serve --gpu` | APR → GGUF CUDA | **#170 FIXED** |
-| APR v2 Q4K | `apr serve run --gpu` | apr-cli APR serving | TODO (test) |
+| APR v2 Q4K | `realizr serve --gpu` | APR → GGUF CUDA | 17.4 tok/s (#170 FIXED) |
+| APR v2 Q4K | `apr serve run --gpu` | apr-cli APR serving | 21.9 tok/s (**25.6% delta — FAIL**) |
 
 Both tools loading the same model in the same format must produce tok/s within ±5%. GGUF parity **confirmed** (2.1% delta).
 
@@ -380,7 +380,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | All 3 have GPU paths (#169/#170 fixed). GGUF 142.8, SafeT 21.2 (-85%), APR 17.4 (-88%). Not at parity — SafeT/APR use dequant→F32→CUDA, not native Q4K. |
-| F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **PARTIAL** | GGUF: 142.8 vs 139.8 tok/s = 2.1% delta — **PASS**. APR v2: testing (PMAT-361). |
+| F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
 
 ---
 
@@ -433,8 +433,8 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-338 | Re-test APR v2 GPU after #168 fix | DONE | 17.4 tok/s GPU (#170 fixed) |
 | PMAT-339 | Validate F-FMTPARITY-01 (all 3 formats GPU ±10%) | DONE (FALSIFIED) | GGUF 142.8, SafeT 21.2, APR 17.4 — not at parity |
 | PMAT-360 | apr-cli serve GGUF vs realizr serve GGUF | DONE (2.1% delta, PASS) | — |
-| PMAT-361 | apr-cli serve APR vs realizr serve APR | BLOCKED | apr-cli needs rebuild against realizr #170 fix |
-| PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | BLOCKED | PMAT-361 blocked |
+| PMAT-361 | apr-cli serve APR vs realizr serve APR | DONE | apr-cli 21.9 vs realizr 17.4 tok/s (25.6% delta — FAIL) |
+| PMAT-362 | Validate F-TOOLPARITY-01 (apr vs realizr ±5%) | DONE (FAIL) | GGUF 2.1% PASS. APR 25.6% FAIL (version skew). |
 
 ### Phase 4: Deep Profiling + Parity (PMAT-340 block)
 
