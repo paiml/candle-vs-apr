@@ -370,7 +370,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 |----|-----------|------------------------|--------|----------|
 | F-SUMMARY-01 | realizr wins on ≥1 of: decode, load, RSS at c=1 | Candle matches/beats all three | **FALSIFIED** | Candle: 227 tok/s, 449 MB RSS. realizr: 143 tok/s, 3082 MB RSS. Candle wins decode AND RSS. |
 | F-PARITY-01 | realizr c=1 decode within ±10% of Candle | realizr >20% slower | **FALSIFIED** | Ratio 0.63x — realizr 37% slower. Candle 227.4 tok/s (decode-only) vs realizr 142.8 tok/s (wall-clock incl. HTTP+prefill). |
-| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **BLOCKED** | Standard APR (F32) correct. Q4K APR garbage. Fix: add `TENSOR_NAME_RESOLUTION_V1` provable-contract (paiml/realizar#170). 0 contracts exist today. |
+| F-FORMAT-01 | APR v2 load 2-5x faster than GGUF | APR v2 load <1.5x faster | **BLOCKED** | Standard APR (F32) correct. Q4K APR garbage. Contract `tensor-name-resolution-v1` added (paiml/realizar#170). `pv coverage`: 12 contracts, 44 equations. Falsification tests scaffolded. |
 | F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | **FALSIFIED** | c=32 agg: 145.7 tok/s (89% below target). Server started in SINGLE-REQUEST mode; no batch scheduling active. Throughput flat across c=1..32. |
 | F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | **CONFIRMED** | Candle CV=0.8% (temp=0, greedy). realizr CV=0.9%. Locked at 2520 MHz on RTX 4090. Note: temp=0.8 produces 13% CV (non-deterministic output lengths). |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF successfully | Candle errors on load | **CONFIRMED** | Loaded 339 tensors (1.11 GB) in 0.49s. Required lazy-curand patch (curand device library missing on Lambda Vector) and CUDA 12.6 toolkit (PTX 9.0 from CUDA 13.0 unsupported by 570.207 driver). |
@@ -425,7 +425,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 |----|------|--------|---------|
 | PMAT-331 | Candle SafeTensors decode (non-quantized) | DONE | PMAT-302 |
 | PMAT-332 | realizr SafeTensors decode | DONE (BUG: CPU only, #169) | — |
-| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | Standard APR F32 correct. Q4K garbage. Needs `TENSOR_NAME_RESOLUTION_V1` contract (#170). |
+| PMAT-333 | realizr APR v2 Q4K decode | BLOCKED | Contract added. FALSIFY-TNR-001..004 scaffolded. Needs binding + impl. |
 | PMAT-334 | Measure load time: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-335 | Measure RSS: GGUF vs SafeTensors vs APR v2 | BLOCKED | PMAT-333 |
 | PMAT-336 | Validate F-FORMAT-01 (APR v2 load 2-5x faster) | BLOCKED | PMAT-334 |

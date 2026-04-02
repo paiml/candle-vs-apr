@@ -209,11 +209,14 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 
 ### Upstream bugs discovered
 
-| Issue | Repo | Status | Contract candidate |
-|-------|------|--------|-------------------|
-| paiml/realizar#167 | GPU scheduler hardcodes HF tensor names | Fixed | `TENSOR_NAME_RESOLUTION_V1` |
-| paiml/realizar#168 | RMSNorm cache aliasing mismatch | Filed | `TENSOR_NAME_RESOLUTION_V1` |
-| paiml/realizar#169 | SafeTensors GPU inference missing | Filed | `FORMAT_PARITY_V1` |
+| Issue | Repo | Status | Contract |
+|-------|------|--------|----------|
+| paiml/realizar#167 | GPU scheduler hardcodes HF tensor names | Fixed | `tensor-name-resolution-v1` (FALSIFY-TNR-004) |
+| paiml/realizar#168 | RMSNorm cache aliasing mismatch | Filed | `tensor-name-resolution-v1` (FALSIFY-TNR-001) |
+| paiml/realizar#169 | SafeTensors GPU inference missing | Filed | `tensor-name-resolution-v1` (format_parity eq) |
+| paiml/realizar#170 | 0 contracts on tensor name resolution | **CONTRACT ADDED** | `tensor-name-resolution-v1.yaml` — 3 eq, 4 ob, 4 ft, 2 kani |
+
+`pv coverage`: 12 contracts, 44 equations, 100% obligation coverage (realizr).
 
 ## Falsification Scorecard
 
