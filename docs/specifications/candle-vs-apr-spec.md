@@ -476,7 +476,7 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 | quantized-phi | Phi-2/3 | `apr run phi.gguf "prompt"` | phi-3-mini-mvp ✓ | Certified A+ |
 | quantized-gemma | Gemma | `apr run gemma.gguf "prompt"` | gemma-2b-mvp ✓ | Certified A+ |
 | quantized-qwen3 | Qwen3 | `apr run qwen3.gguf --chat` | **Works** (CPU 2.7 tok/s, Q8_0) | GPU needs Q4_K_M |
-| quantized-t5 | T5 (enc-dec) | arch + tokenizer done (realizr 47b0d31a) | encoder-decoder-v1 contract | IN PROGRESS (config + forward pass) |
+| quantized-t5 | T5 (enc-dec) | arch+tok+config done (realizr 08d7367c) | encoder-decoder-v1 contract | IN PROGRESS (tensor names + forward) |
 | whisper | Whisper (ASR) | `apr run --input audio.wav` | flags exist | BLOCKED (realizr#173 + GH-516) |
 
 `apr run` extras Candle lacks: `--serve`, `--profile`, `--batch-jsonl`, `--offline`, `--backend`, multi-format (GGUF + SafeTensors + APR), `hf://` auto-download, 95-model QA certification matrix.
