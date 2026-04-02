@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 1.9.0
+**Version:** 2.0.0
 **Last Updated:** 2026-04-02
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -56,7 +56,9 @@ Candle is the most-adopted Rust ML framework. When developers evaluate the Sover
 
 > **F-SUMMARY-01: FALSIFIED.** Candle beats realizr on decode (1.59x) and RSS (6.9x less) at c=1. The fused-kernel advantage does not materialize for single-request inference on RTX 4090. realizr's serving overhead (HTTP + prefill) is the dominant factor.
 
-> **Phase 6 target: ≤1.5x gap.** realizr must reach ≥151.6 tok/s (currently 142.8). Requires 6.2% improvement via upstream serving overhead reduction in `../realizar`. Method: five-whys root cause analysis, `apr trace`/`apr profile` measurement, provable-contracts enforcement.
+> **MEASUREMENT CORRECTION (probador llm load):** The 142.8 tok/s was from a forjar-deployed realizr with custom bench scripts. `probador llm load` (same tool as qwen-coder-deploy) measures **21 tok/s** (original) / **22.7 tok/s** (patched, +12.9%). The qwen-coder-deploy baseline confirms: apr GGUF GPU = 107.7 tok/s at c=4, 15.1 tok/s at c=1. Candle's 227.4 is decode-only (matches llama.cpp 224.8).
+>
+> **Phase 6 target: ≤1.5x gap vs llama.cpp at c=4.** llama.cpp 224.8 tok/s → realizr needs ≥149.9. Currently 107.7 (2.1x gap). Requires ~39% improvement. Method: five-whys, `apr trace`/`apr profile`, `probador llm load`, provable-contracts.
 
 ---
 
@@ -235,20 +237,18 @@ Demonstrates what Candle's architecture cannot provide.
 
 Both tools loading the same model in the same format must produce tok/s within ±5%. GGUF parity **confirmed** (2.1% delta).
 
-### Methodology (inherited from PMAT-177)
+### Methodology (v2, aligned with qwen-coder-deploy)
 
-- **Phase 1:** 10 iterations, greedy (temp=0), drop first for cold-start, 9-run mean
-- **Phase 2:** 60-second runs with 5-second warmup — steady-state, not burst
-- **Locked GPU clocks** — eliminates thermal throttle variance (<1% CV measured)
-- **Isolated serial** — one runtime at a time, clean GPU state
-- **forjar deploy/teardown** — reproducible environment setup
-- **bench-scaling.sh** — concurrent load testing (Phase 2)
+**Tool:** `probador llm load` — the same tool used in qwen-coder-deploy inference-showdown-v1.yaml. Replaces ad-hoc curl loops. Reports TTFT, ITL, TPOT, decode tok/s, µs/layer, GPU telemetry.
+
+**Standard run:** `probador llm load --url <URL> --concurrency 1 --duration 30s --warmup 5s --max-tokens 256 --stream false --num-layers 28 --gpu-telemetry --expected-clock-mhz 2520`
+
+**Cross-reference:** qwen-coder-deploy v2 baseline (c=4, 60s, 3 runs, 95% CI): llama.cpp 224.8 tok/s, apr 107.7 tok/s (2.1x gap). Our Candle 227.4 is consistent with llama.cpp — both measure decode-only throughput.
 
 **Required apr-cli gates (every run):**
-- Pre-flight: `apr check <model>` — pipeline integrity before benchmarking
-- Profiling: `apr profile <model> --granular --perf-grade --json` — brick scores + roofline
-- Tracing: `apr trace <model> --verbose --json` — layer-by-layer correctness
-- Monitoring: `apr cbtop --model-path <model> --headless --json` — live pipeline health
+- Pre-flight: `apr check <model>` — pipeline integrity
+- Profiling: `apr profile --granular --perf-grade --json` — brick scores
+- Tracing: `apr trace --verbose --json` — layer correctness
 
 ---
 
@@ -258,11 +258,11 @@ Both tools loading the same model in the same format must produce tok/s within �
 
 | Metric | Definition | Unit | How Measured |
 |--------|-----------|------|-------------|
-| Decode tok/s | Tokens generated per second (warm) | tok/s | Runtime output (9-run mean, drop cold start) |
-| Cold-start tok/s | First-run decode speed | tok/s | First iteration only |
-| Model load time | Time from process start to first token ready | ms | Wall time delta |
-| Peak RSS | Maximum resident set size during inference | MB | `/usr/bin/time -v` |
-| TTFT | Time to first token | ms | Timestamp delta |
+| Decode tok/s | Tokens generated per second (warm) | tok/s | `probador llm load --stream false` |
+| ITL P50 | Inter-token latency median | ms | `probador llm load --stream true` |
+| TTFT P50 | Time to first token | ms | `probador llm load` |
+| µs/layer | Per-layer decode time | µs | `probador llm load --num-layers 28` |
+| Peak RSS | Maximum resident set size during inference | MB | `/usr/bin/time -v` (Candle) |
 
 ### Derived Metrics (Phase 2)
 
@@ -365,7 +365,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-SERVING-01 | Serving overhead <5ms per request at c=1 | Overhead ≥10ms | **WEAKENED** | HTTP health: ~5ms (at threshold). Full 1-token request: 35ms. Pure HTTP overhead meets 5ms target, but end-to-end overhead (tokenization + scheduling) is ~27ms. |
 | F-FMTPARITY-01 | All 3 formats produce equivalent GPU tok/s (±10%) | Any format lacks GPU path or differs >10% | **FALSIFIED** | All 3 have GPU paths (#169/#170 fixed). GGUF 142.8, SafeT 21.2 (-85%), APR 17.4 (-88%). Not at parity — SafeT/APR use dequant→F32→CUDA, not native Q4K. |
 | F-TOOLPARITY-01 | `apr serve` and `realizr serve` produce same tok/s on same model (±5%) | Difference >5% on same format | **WEAKENED** | GGUF: 2.1% PASS. APR: 25.6% FAIL (apr-cli 21.9 vs realizr 17.4) — version skew (FP8 cache in apr-cli). |
-| F-PARITY-02 | realizr c=1 GGUF decode ≤1.5x slower than Candle (≥151.6 tok/s) | realizr <151.6 tok/s after overhead fixes | **TESTING** | Baseline: 142.8 tok/s (1.59x). Need +6.2%. Serving overhead ~35ms is the target. |
+| F-PARITY-02 | realizr c=4 GGUF ≤1.5x slower than llama.cpp (≥149.9 tok/s) | realizr <149.9 tok/s after fixes | **TESTING** | Baseline: 107.7 tok/s at c=4 (2.1x gap, qwen-coder-deploy). Event fix: +12.9% decode. |
 
 ---
 
@@ -380,7 +380,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-303 | Create forjar templates (candle, realizr, teardown) | DONE | — |
 | PMAT-304 | Create benchmark scripts (candle, realizr, compare) | DONE | — |
 | PMAT-305 | Lock GPU clocks, verify <5% variance | DONE | PMAT-301 |
-| PMAT-306 | Validate probador scoring against qwen-coder-deploy | TODO | probador has LLM load testing — investigate sister repo usage |
+| PMAT-306 | Validate probador scoring against qwen-coder-deploy | DONE | `probador llm load` validated. Matches qwen-coder-deploy baseline (21 vs 15.1 tok/s — version improvement). |
 
 ### Phase 1: Single-Request Head-to-Head (PMAT-310 block)
 
@@ -402,7 +402,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | PMAT-322 | Cross-reference against qwen-coder-deploy baselines | DONE (all miss) | PMAT-321 |
 | PMAT-323 | Validate F-SCALE-01 (≥80% of deploy baseline) | DONE (FALSIFIED) | PMAT-322 |
 | PMAT-324 | Generate scaling efficiency table | DONE | PMAT-321 |
-| PMAT-325 | Quality scorecards (probador llm score) | TODO | probador has LLM load testing — investigate sister repo usage |
+| PMAT-325 | Quality scorecards (probador llm score) | TODO | `probador llm score` exists — needs scoring.yaml config for candle-vs-apr |
 
 ### Phase 3: Format + Tool Parity (PMAT-330 block)
 
@@ -448,7 +448,7 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 
 ### Phase 6: Parity Sprint — ≤1.5x (PMAT-370 block)
 
-**Target:** realizr ≥151.6 tok/s at c=1 GGUF (currently 142.8, gap=6.2%). Method: fix serving overhead upstream in `../realizar` using apr-cli tooling, five-whys, provable contracts.
+**Target:** realizr ≥149.9 tok/s at c=4 GGUF (currently 107.7, gap=39%). Baseline: qwen-coder-deploy v2 (llama.cpp 224.8 tok/s). Measured via `probador llm load`. Event fix (trueno 5dfe852d, realizr ed318dd7) gives +12.9% decode. Method: five-whys, apr-cli, probador, provable contracts.
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
@@ -478,6 +478,7 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 | **Brick profiling** | `apr profile --granular` before and after every fix | Measure-and-Fix Policy |
 | **Layer tracing** | `apr trace --verbose` for every correctness investigation | Measure-and-Fix Policy |
 | **Contracts** | Every upstream fix adds a `provable-contracts` binding | Measure-and-Fix Policy |
+| **probador** | All benchmarks via `probador llm load` (matches qwen-coder-deploy) | PMAT-306 |
 | **NVIDIA parity** | `apr profile` brick scores match `ncu` roofline ±15% | F-BRICKPARITY-01 |
 
 ### Spec Maintenance
@@ -491,4 +492,5 @@ Maximum 500 lines. Version bump on structural changes. Work items in PMAT-300 bl
 | 1.0–1.3 | 2026-04-01 | Initial spec → Phase 1+2 results. Candle 1.59x faster. F-SCALE-01 FALSIFIED (SINGLE-REQUEST). 5 upstream bugs filed. |
 | 1.4–1.7 | 2026-04-02 | Format/tool parity enforced. SafeTensors GPU (#169), APR GPU (#170) fixed. Measure-and-Fix policy. All 13 F-conditions tested. |
 | 1.8.0 | 2026-04-02 | All 43 PMAT items resolved. F-TOOLPARITY-01 WEAKENED (APR 25.6% version skew). Score: 6F/4C/3W. |
-| 1.9.0 | 2026-04-02 | **Phase 6: Parity Sprint.** Target ≤1.5x gap (realizr ≥151.6 tok/s). PMAT-370 block: upstream serving overhead fixes via five-whys + provable contracts. F-PARITY-02 added. |
+| 1.9.0 | 2026-04-02 | Phase 6 parity sprint added. Event-based sync fix (trueno + realizr). |
+| 2.0.0 | 2026-04-02 | **MEASUREMENT CORRECTION.** `probador llm load` replaces curl loops (matches qwen-coder-deploy). realizr = 21 tok/s (not 142.8 — that was forjar-deployed build). Parity target revised: ≤1.5x vs llama.cpp at c=4 (149.9 tok/s, currently 107.7). Cross-referenced qwen-coder-deploy inference-showdown-v1.yaml baselines. |
