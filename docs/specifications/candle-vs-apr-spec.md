@@ -462,7 +462,7 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 
 **Invariant:** `apr run` must do everything each Candle quantized example can do. Source: `candle/candle-examples/examples/`. Cross-ref: `apr-model-qa-playbook` (95 models certified A+, 18 test combinations per model).
 
-**Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired. Remaining: `--split-prompt` (DONE, arg added aprender 7ac01272), `--tracing` (PARTIAL).
+**Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired. All 6 sampling/gen args added. `--tracing` chrome format: BLOCKED (aprender#574).
 
 **`apr run --gpu` FIXED (aprender#573, realizr c3d9226a).** Was 0.7 tok/s (wgpu fallback), now **121.6 tok/s** (CUDA Q4K). Root cause: validation probe ran on cold model (PAR-114: positions_buf not initialized). Prevention: `gpu-inference-parity-v1` contract + `perf-gate-run.sh`.
 
@@ -473,8 +473,8 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 | quantized-phi | Phi-2/3 | `apr run phi.gguf "prompt"` | phi-3-mini-mvp ✓ | Certified A+ |
 | quantized-gemma | Gemma | `apr run gemma.gguf "prompt"` | gemma-2b-mvp ✓ | Certified A+ |
 | quantized-qwen3 | Qwen3 | `apr run qwen3.gguf --chat` | **Works** (CPU 2.7 tok/s, Q8_0) | GPU needs Q4_K_M |
-| quantized-t5 | T5 (enc-dec) | not supported | — | OUT OF SCOPE |
-| whisper | Whisper (ASR) | `apr run --input audio.wav` | arch exists | BLOCKED (GH-516) |
+| quantized-t5 | T5 (enc-dec) | not supported | — | BLOCKED (realizr#173: encoder-decoder arch) |
+| whisper | Whisper (ASR) | `apr run --input audio.wav` | flags exist | BLOCKED (realizr#173 + GH-516) |
 
 `apr run` extras Candle lacks: `--serve`, `--profile`, `--batch-jsonl`, `--offline`, `--backend`, multi-format (GGUF + SafeTensors + APR), `hf://` auto-download, 95-model QA certification matrix.
 
