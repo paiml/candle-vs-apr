@@ -196,6 +196,17 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 
 c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a regression.
 
+### Finding 9: Fused kernels reduce launches, not total GPU time (F-KERNEL-01 WEAKENED)
+
+**What:** nsys profiles (32 tokens, RTX 4090):
+- Candle: 40,513 kernel launches, 106.0ms total GPU time
+- realizr: 22,360 kernel launches, 105.1ms total GPU time
+- realizr launches 1.8x fewer kernels but total GPU time is identical.
+
+**Why:** Candle's QMatMul does dequant + matmul in two separate kernel launches per projection. realizr fuses them into one Q4K GEMV launch. This halves the launch count. But at M=1, each kernel does so little work that the compute saved by fusion is negligible — the memory traffic (reading 1 MB of weights per projection) dominates regardless of whether it's 1 or 2 launches.
+
+**Implication:** F-KERNEL-01 is **weakened**, not falsified. The fused kernels DO reduce launches (1.8x) as predicted, but the total GPU time benefit is <1% at M=1. The advantage would be more meaningful at higher concurrency where launch overhead becomes a larger fraction of total time, but we couldn't test this (SINGLE-REQUEST mode).
+
 ### Upstream bugs discovered
 
 | Issue | Repo | Status | Contract candidate |
@@ -217,8 +228,9 @@ c=1 match (3.9% delta) validates methodology. Scaling gap = server mode, not a r
 | F-SERVING-01 | Serving overhead <5ms | **WEAKENED** (HTTP 5ms, E2E 27ms) |
 | F-FORMAT-01 | APR v2 load 2-5x faster | **BLOCKED** (#168) |
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **BLOCKED** (#168) |
-| F-KERNEL-01 | Fused Q4K lower mem traffic | UNTESTED |
+| F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (1.8x fewer launches, same GPU time) |
 | F-FMTPARITY-01 | All 3 formats GPU ±10% | **FALSIFIED** (SafeTensors CPU, APR garbage) |
 | F-TOOLPARITY-01 | apr-cli vs realizr ±5% | **PARTIAL** (GGUF 2.1% PASS, APR BLOCKED) |
+| F-BRICKPARITY-01 | apr profile vs ncu ±15% | UNTESTED (ncu roofline not yet run) |
 
-**Score: 4 FALSIFIED, 3 CONFIRMED, 1 WEAKENED, 1 PARTIAL, 2 BLOCKED, 1 UNTESTED**
+**Score: 4 FALSIFIED, 3 CONFIRMED, 2 WEAKENED, 1 PARTIAL, 2 BLOCKED, 1 UNTESTED**

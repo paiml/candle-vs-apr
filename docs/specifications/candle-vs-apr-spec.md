@@ -374,7 +374,7 @@ Pre-registered predictions with explicit falsification criteria. Each prediction
 | F-SCALE-01 | realizr c=32 ≥1,280 tok/s (80% of deploy baseline) | realizr c=32 <1,280 tok/s | **FALSIFIED** | c=32 agg: 145.7 tok/s (89% below target). Server started in SINGLE-REQUEST mode; no batch scheduling active. Throughput flat across c=1..32. |
 | F-HW-01 | Run-to-run variance <5% with locked clocks | Variance ≥5% | **CONFIRMED** | Candle CV=0.8% (temp=0, greedy). realizr CV=0.9%. Locked at 2520 MHz on RTX 4090. Note: temp=0.8 produces 13% CV (non-deterministic output lengths). |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF successfully | Candle errors on load | **CONFIRMED** | Loaded 339 tensors (1.11 GB) in 0.49s. Required lazy-curand patch (curand device library missing on Lambda Vector) and CUDA 12.6 toolkit (PTX 9.0 from CUDA 13.0 unsupported by 570.207 driver). |
-| F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | `apr profile` brick scores equal or worse | UNTESTED | Requires `apr profile --granular` + `ncu --set roofline` (Phase 4). |
+| F-KERNEL-01 | Fused Q4K DP4A has lower memory traffic than QMatMul | `apr profile` brick scores equal or worse | **WEAKENED** | nsys: realizr 22K launches vs Candle 41K (1.8x fewer). But total GPU time identical (105ms vs 106ms). Fused kernels reduce launches, not total compute at M=1. |
 | F-BRICKPARITY-01 | `apr profile` brick scores match `ncu` roofline within ±15% | Disagreement >15% on GFLOPS or BW | UNTESTED | Phase 4: PMAT-345. Disagreement → file bug in aprender. |
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap paging) | APR v2 RSS ≥ GGUF RSS | **BLOCKED** | APR loads successfully but inference output is garbage. Blocked on paiml/realizar#168 resolution. |
 | F-COLD-01 | realizr cold-start slower (HTTP + server init) | realizr cold-start faster | **CONFIRMED** | Candle cold: 223.1 tok/s (includes 0.49s model load). realizr cold: 134.4 tok/s (server warm, first-request GPU kernel compilation). realizr per-request cold start is slower as predicted. |
@@ -444,12 +444,12 @@ apr-cli is the primary profiling tool. NVIDIA nsys/ncu are the parity reference 
 |----|------|--------|---------|
 | PMAT-341 | `apr profile --granular` realizr GGUF (brick scores + roofline) | DONE | PMAT-312 |
 | PMAT-342 | `apr trace --verbose` realizr c=1 decode (layer timing) | DONE | PMAT-312 |
-| PMAT-343 | `nsys profile` realizr c=1 decode (NVIDIA ground truth) | TODO | PMAT-312 |
+| PMAT-343 | `nsys profile` realizr c=1 decode (NVIDIA ground truth) | DONE | PMAT-312 |
 | PMAT-344 | `ncu --set roofline` realizr fused Q4K DP4A kernel | TODO | PMAT-343 |
 | PMAT-345 | Parity check: `apr profile` brick scores vs `ncu` roofline | TODO | PMAT-341, 344 |
-| PMAT-346 | `nsys profile` Candle c=1 decode (NVIDIA ground truth) | TODO | PMAT-311 |
-| PMAT-347 | Compare: Candle kernel launches vs realizr (nsys + apr trace) | TODO | PMAT-343, 346 |
-| PMAT-348 | Validate F-KERNEL-01 (fused kernel lower BW) | TODO | PMAT-345, 347 |
+| PMAT-346 | `nsys profile` Candle c=1 decode (NVIDIA ground truth) | DONE | PMAT-311 |
+| PMAT-347 | Compare: Candle kernel launches vs realizr (nsys + apr trace) | DONE | PMAT-343, 346 |
+| PMAT-348 | Validate F-KERNEL-01 (fused kernel lower BW) | DONE (WEAKENED) | PMAT-345, 347 |
 
 ### Phase 5: Publication (PMAT-350 block)
 
