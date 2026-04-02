@@ -147,13 +147,13 @@ Before running benchmarks, we register falsifiable predictions per Popperian met
 
 **Implication:** RSS comparison is only meaningful at matched concurrency. At c=1, realizr over-provisions by 32x.
 
-### Finding 4: SafeTensors gap reveals GPU acceleration asymmetry
+### Finding 4: SafeTensors GPU path missing (paiml/realizar#169)
 
 **What:** Candle: 65.7 tok/s (GPU FP32). realizr: 0.4 tok/s (CPU FP32). Candle 164x faster.
 
 **Why:** Candle dispatches FP32 SafeTensors matmul to CUDA. realizr's GPU path only supports quantized formats (Q4K, Q6K via DP4A); SafeTensors FP32 falls back to CPU with no SIMD optimization beyond what the Rust compiler auto-vectorizes.
 
-**Implication:** realizr is a quantization-first engine. If a user needs FP32/FP16 inference, Candle is the correct tool. This is an architectural trade-off, not a bug.
+**Implication:** This is a format parity bug, not a trade-off. All three formats (GGUF, SafeTensors, APR v2) must have GPU inference paths. SafeTensors FP16 should dispatch to HGEMM via tensor cores; FP32 to SGEMM or auto-quantize on load. Filed as paiml/realizar#169.
 
 ### Finding 5: Infrastructure blockers on Lambda Vector
 
@@ -171,6 +171,7 @@ Both fixes are encoded in `forjar-candle.yaml` for reproducibility.
 |-------|------|--------|-------------------|
 | paiml/realizar#167 | GPU scheduler hardcodes HF tensor names | Fixed | `TENSOR_NAME_RESOLUTION_V1` |
 | paiml/realizar#168 | RMSNorm cache aliasing mismatch | Filed | `TENSOR_NAME_RESOLUTION_V1` |
+| paiml/realizar#169 | SafeTensors GPU inference missing | Filed | `FORMAT_PARITY_V1` |
 
 ## Falsification Scorecard
 

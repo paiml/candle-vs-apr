@@ -222,7 +222,7 @@ APR v2 model prepared via `apr import --preserve-q4k` (preferred). Raw realizr G
 | Format | Candle | realizr | Prepared by | Metrics |
 |--------|--------|---------|-------------|---------|
 | GGUF Q4_K_M | 227.4 tok/s (GPU) | 142.8 tok/s (GPU) | upstream HF | **Measured** |
-| SafeTensors FP32 | 65.7 tok/s (GPU) | 0.4 tok/s (CPU only) | upstream HF | **Measured** |
+| SafeTensors FP32 | 65.7 tok/s (GPU) | 0.4 tok/s (CPU only) | upstream HF | **BUG** paiml/realizar#169 |
 | APR v2 Q4K | N/A | BLOCKED | `apr import --preserve-q4k` | paiml/realizar#168 |
 
 ### Methodology (inherited from PMAT-177)
