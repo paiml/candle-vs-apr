@@ -464,7 +464,7 @@ Fix (realizr 81c912d2): default to eager path. Result: **273.8 tok/s** (12.1x). 
 
 **Sampling parity (PMAT-381..384 DONE):** `--top-p`, `--seed`, `--repeat-penalty`, `--repeat-last-n` wired. Remaining: `--split-prompt` (TODO), `--tracing` (PARTIAL).
 
-**CRITICAL: `apr run --gpu` = 0.7 tok/s (paiml/aprender#573).** GPU validates then falls back to wgpu→F32 dequant. `apr serve run --gpu` = 273.8 tok/s. Same model. `validate_gpu_first_token` returns false despite successful CUDA init. Fix blocked on realizr validation debugging.
+**`apr run --gpu` FIXED (aprender#573, realizr c3d9226a).** Was 0.7 tok/s (wgpu fallback), now **121.6 tok/s** (CUDA Q4K). Root cause: validation probe ran on cold model (PAR-114: positions_buf not initialized). Prevention: `gpu-inference-parity-v1` contract + `perf-gate-run.sh`.
 
 | Candle Example | Architecture | `apr run` | QA Playbook | Status |
 |---------------|-------------|----------|-------------|--------|
