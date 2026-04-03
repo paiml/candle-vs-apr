@@ -722,10 +722,12 @@ contract + `perf-gate-run.sh`.
 | quantized-gemma | Gemma | `apr run g.gguf` | gemma-2b MVP | Certified A+ |
 | quantized-qwen3 | Qwen3 | `apr run q3.gguf` | CPU 2.7 tok/s | GPU needs Q4_K_M |
 | quantized-t5 | T5 | tensors found | enc-dec-v1 | BLOCKED [17] |
-| whisper | Whisper | `apr run w.apr` | WIRED [18] | NEEDS TEST |
+| whisper | Whisper | `apr run w.apr -i a.wav` | TESTED [18] | BLOCKED [30] |
 
 [17]: Needs encoder forward + cross-attention (realizr#177).
-[18]: aprender 5a6f7bbf. Needs model + test (aprender#575).
+[18]: Routing WORKS (audio detected, whisper-apr invoked).
+[30]: Garbage output — tensor name mapping missing for
+Whisper enc-dec architecture (aprender#577).
 
 `apr run` extras Candle lacks: `--serve`, `--profile`,
 `--batch-jsonl`, `--offline`, `--backend`, multi-format
@@ -744,7 +746,7 @@ falsified/weakened F-condition.
 | PMAT-393 | Tool parity investigation | **REVISED** | realizr#176 [23] |
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
 | PMAT-395 | T5 arch constraints + config | **DONE** | realizr#177 [26] |
-| PMAT-396 | Whisper integration test | **UNBLOCKED** | aprender#575 [27] |
+| PMAT-396 | Whisper integration test | **TESTED** | aprender#575 [27] |
 | PMAT-397 | c=32 batch mode re-test | BLOCKED | [20] |
 
 [19]: aprender c0953fd7. Subtracts launch overhead from
@@ -759,9 +761,10 @@ Also fixed ..Default::default() in runtime.rs.
 [26]: Steps 1-2 of 5 done: ArchConstraints (realizr 26ec4f14)
 + is_encoder_decoder() method (620f81de) + provable-contracts
 (4191ad3). Steps 3-5 (encoder forward, cross-attn, API) remain.
-[27]: Model downloaded (231MB). Blocker (a) aprender#576
-FIXED (3ce6576c): --arch whisper no longer overridden.
-Blocker (b): apr rebuilt with --features whisper.
+[27]: Routing WORKS: audio detected, whisper-apr invoked,
+184.7s audio processed. Output garbage — tensor name
+mapping missing (aprender#577). Blocker (a) #576 FIXED,
+(b) apr rebuilt, (c) #577 tensor mapping NEW BLOCKER.
 [23]: Feature flag hypothesis FALSIFIED — FP8 cache is
 runtime-detected (gpu_profile.rs:232), not compile-time.
 25.6% delta needs probador benchmark to isolate.
