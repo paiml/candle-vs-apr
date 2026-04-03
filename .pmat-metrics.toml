@@ -1,0 +1,26 @@
+# O(1) Quality Gate Metric Thresholds for candle-vs-apr
+# Pattern: Toyota Way - Jidoka (benchmark project, no compiled artifacts)
+
+[thresholds]
+# Benchmark project — no compiled artifacts, focus on config/spec quality
+lint_max_ms = 10_000
+test_tier1_max_ms = 5_000
+binary_max_bytes = 0              # No binary output
+
+[staleness]
+max_age_days = 14
+
+[enforcement]
+fail_on_stale_metrics = false
+fail_on_missing_metrics = false
+fail_on_threshold_violation = true
+
+[trend_analysis]
+enabled = true
+retention_days = 90
+alert_on_regression = true
+regression_threshold_pct = 10.0
+
+[quality_gates]
+min_tdg_grade = "A"
+max_cyclomatic_complexity = 10

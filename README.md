@@ -1,5 +1,9 @@
 # candle-vs-apr
 
+<p align="center">
+  <img src="assets/hero.svg" alt="Candle vs realizr benchmark results" width="960"/>
+</p>
+
 ## What This Is
 
 A head-to-head benchmark of **Candle** (HuggingFace's Rust ML framework) vs **realizr** (Sovereign AI Stack inference engine) on the same model, same hardware, same methodology.

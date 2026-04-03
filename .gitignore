@@ -15,3 +15,8 @@ target/
 /tmp/
 state/
 .pmat/
+
+# Profiling reports (may contain environment secrets)
+*.nsys-rep
+*.sqlite
+results/nsys/

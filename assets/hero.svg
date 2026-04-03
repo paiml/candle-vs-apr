@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="bar-realizr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="bar-candle" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="bar-llama" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="320" rx="12" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="480" y="42" text-anchor="middle" fill="#f8fafc"
+        font-family="system-ui,-apple-system,sans-serif" font-size="22" font-weight="700">
+    Candle vs realizr — Inference Benchmark (RTX 4090)
+  </text>
+  <text x="480" y="64" text-anchor="middle" fill="#94a3b8"
+        font-family="system-ui,-apple-system,sans-serif" font-size="13">
+    Qwen2.5-Coder-1.5B Q4_K_M | probador llm load v2 | GPU clocks locked 2520 MHz
+  </text>
+
+  <!-- Decode tok/s (c=1) -->
+  <text x="40" y="105" fill="#cbd5e1"
+        font-family="system-ui,sans-serif" font-size="12" font-weight="600">
+    Decode tok/s (c=1)
+  </text>
+  <!-- realizr: 263.8 -->
+  <rect x="190" y="88" width="440" height="22" rx="4" fill="url(#bar-realizr)" opacity="0.9"/>
+  <text x="196" y="104" fill="#0f172a"
+        font-family="ui-monospace,monospace" font-size="12" font-weight="700">
+    realizr  263.8 tok/s
+  </text>
+  <!-- candle: 227.4 -->
+  <rect x="190" y="114" width="379" height="22" rx="4" fill="url(#bar-candle)" opacity="0.9"/>
+  <text x="196" y="130" fill="#0f172a"
+        font-family="ui-monospace,monospace" font-size="12" font-weight="700">
+    Candle   227.4 tok/s
+  </text>
+
+  <!-- Decode tok/s (c=4) -->
+  <text x="40" y="170" fill="#cbd5e1"
+        font-family="system-ui,sans-serif" font-size="12" font-weight="600">
+    Decode tok/s (c=4)
+  </text>
+  <!-- realizr: 274.5 -->
+  <rect x="190" y="153" width="458" height="22" rx="4" fill="url(#bar-realizr)" opacity="0.9"/>
+  <text x="196" y="169" fill="#0f172a"
+        font-family="ui-monospace,monospace" font-size="12" font-weight="700">
+    realizr  274.5 tok/s (1.22x llama.cpp)
+  </text>
+  <!-- llama.cpp: 224.8 -->
+  <rect x="190" y="179" width="375" height="22" rx="4" fill="url(#bar-llama)" opacity="0.9"/>
+  <text x="196" y="195" fill="#0f172a"
+        font-family="ui-monospace,monospace" font-size="12" font-weight="700">
+    llama.cpp 224.8 tok/s
+  </text>
+
+  <!-- TTFT -->
+  <text x="40" y="235" fill="#cbd5e1"
+        font-family="system-ui,sans-serif" font-size="12" font-weight="600">
+    TTFT P50
+  </text>
+  <rect x="190" y="218" width="56" height="22" rx="4" fill="url(#bar-realizr)" opacity="0.9"/>
+  <text x="196" y="234" fill="#0f172a"
+        font-family="ui-monospace,monospace" font-size="11" font-weight="700">8.4ms</text>
+  <text x="252" y="234" fill="#67e8f9"
+        font-family="ui-monospace,monospace" font-size="11">realizr</text>
+
+  <!-- ITL -->
+  <text x="40" y="261" fill="#cbd5e1"
+        font-family="system-ui,sans-serif" font-size="12" font-weight="600">
+    ITL P50
+  </text>
+  <rect x="190" y="244" width="25" height="22" rx="4" fill="url(#bar-realizr)" opacity="0.9"/>
+  <text x="220" y="260" fill="#67e8f9"
+        font-family="ui-monospace,monospace" font-size="11">3.8ms realizr</text>
+
+  <!-- Grade badge -->
+  <rect x="730" y="88" width="190" height="80" rx="8" fill="#065f46" opacity="0.6"/>
+  <text x="825" y="118" text-anchor="middle" fill="#6ee7b7"
+        font-family="ui-monospace,monospace" font-size="14" font-weight="700">
+    probador Grade
+  </text>
+  <text x="825" y="155" text-anchor="middle" fill="#34d399"
+        font-family="ui-monospace,monospace" font-size="36" font-weight="800">
+    A+ (99.0)
+  </text>
+
+  <!-- Winner badge -->
+  <rect x="730" y="185" width="190" height="48" rx="8" fill="#164e63" opacity="0.6"/>
+  <text x="825" y="208" text-anchor="middle" fill="#22d3ee"
+        font-family="ui-monospace,monospace" font-size="12" font-weight="600">
+    realizr wins: 1.16x c=1
+  </text>
+  <text x="825" y="225" text-anchor="middle" fill="#22d3ee"
+        font-family="ui-monospace,monospace" font-size="12" font-weight="600">
+    1.22x c=4 vs llama.cpp
+  </text>
+
+  <!-- Footer -->
+  <text x="480" y="300" text-anchor="middle" fill="#475569"
+        font-family="system-ui,sans-serif" font-size="11">
+    Pure Rust | GGUF Q4_K_M | Popperian falsification methodology | 15 F-conditions tested
+  </text>
+</svg>
