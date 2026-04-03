@@ -726,8 +726,9 @@ contract + `perf-gate-run.sh`.
 
 [17]: Needs encoder forward + cross-attention (realizr#177).
 [18]: Routing WORKS (audio detected, whisper-apr invoked).
-[30]: Garbage output — tensor name mapping missing for
-Whisper enc-dec architecture (aprender#577).
+[30]: Garbage output — whisper-apr crate's load_from_apr()
+needs HF→internal tensor name mapping (aprender#577).
+Import tensor names are correct (HF preserved).
 
 `apr run` extras Candle lacks: `--serve`, `--profile`,
 `--batch-jsonl`, `--offline`, `--backend`, multi-format
