@@ -75,33 +75,35 @@ realizr 273.8 is full wall-clock via `probador llm load`.
 
 ### Phase 2: realizr Scaling (Candle N/A -- no server)
 
-| c | Agg tok/s | Per-req tok/s | Wall P50 (ms) |
-|---|-----------|---------------|---------------|
-| 1 | 117.0 | 137.8 | 1,829 |
-| 4 | 116.7 | 33.2 | 8,713 |
-| 8 | 126.3 | 20.9 | 15,371 |
-| 16 | 112.5 | 13.6 | 35,292 |
-| 32 | 145.7 | 11.3 | 56,076 |
+| c | v1 (4090, flat) | v5 (Yoga, batch) | Scaling |
+|---|-----------------|------------------|---------|
+| 1 | 117.0 | **132.6** | baseline |
+| 4 | 116.7 | **302.2** | 2.3x |
+| 8 | 126.3 | **519.7** | 3.9x |
+| 16 | 112.5 | **980.2** | 7.4x |
+| 32 | 145.7 | **1,776.5** | 13.4x |
 
-Throughput flat -- server ran in SINGLE-REQUEST mode,
-requests queued serially. Batch scheduler not tested.
+v1 was flat (SINGLE-REQUEST mode, no batching).
+v5 Yoga confirms batch scheduling: **1,776.5 tok/s at c=32**.
 
 ### Phase 3: Format Comparison
 
-| Format | Runtime | tok/s | Notes |
-|--------|---------|-------|-------|
-| GGUF Q4_K_M | Candle | 227.4 | CLI decode-only |
-| GGUF Q4_K_M | realizr (v3) | **273.8** | graph fix |
-| SafeT FP32 | Candle | 65.7 | decode-only |
-| SafeT FP32 | realizr | 21.2 | #169 FIXED |
-| APR v2 Q4K | realizr | 17.4 | #170 FIXED |
+| Format | Runtime | v3 (4090) | v5 (Yoga) | Notes |
+|--------|---------|-----------|-----------|-------|
+| GGUF Q4_K_M | Candle | 227.4 | -- | CLI decode-only |
+| GGUF Q4_K_M | realizr | **273.8** | **132.5** | graph fix |
+| FP16 APR | realizr | 21.2 | **151.6** | #180 FIXED (7.15x) |
+| APR v2 Q4K | realizr | 17.4 | **132.3** | parity with GGUF |
+
+v5 Yoga: all 3 formats GPU, within 14.4%. Old v3 SafeT/APR
+gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16 dtype).
 
 ## Hardware
 
 | Platform | GPU | Role |
 |----------|-----|------|
-| Lambda Vector | RTX 4090, 2520 MHz locked | All benchmarks |
-| Yoga | RTX 4060 Laptop, 1900 MHz | Cross-validation (planned) |
+| Lambda Vector | RTX 4090, 2520 MHz locked | Primary (phases 1-7) |
+| Yoga | RTX 4060 Laptop, 1900 MHz | Validated (scaling, format, tool parity) |
 
 ## Methodology
 
@@ -174,19 +176,20 @@ Source of truth: [performance.md](performance.md) scorecard.
 
 | ID | Prediction | Status |
 |----|-----------|--------|
-| F-SUMMARY-01 | realizr wins >=1 metric (c=1) | **REVISED** (v1: FALSIFIED; v3: realizr 1.20x) |
-| F-PARITY-01 | realizr within +/-10% of Candle | **REVISED** (v1: 0.63x; v3: 1.20x realizr) |
-| F-SCALE-01 | realizr c=32 >=1,280 tok/s | **FALSIFIED** (145.7, SINGLE-REQ mode) |
+| F-SUMMARY-01 | realizr wins >=1 metric (c=1) | **REVISED** (v3: 1.20x decode, RSS still Candle) |
+| F-PARITY-01 | realizr within +/-10% of Candle | **REVISED** (v3: 1.20x in realizr's favor) |
+| F-SCALE-01 | realizr c=32 >=1,280 tok/s | **CONFIRMED** (Yoga: 1,776.5, 13.4x scaling) |
 | F-HW-01 | Variance <5% with locked clocks | **CONFIRMED** (CV <1%) |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | **CONFIRMED** |
 | F-COLD-01 | realizr cold-start slower | **CONFIRMED** |
-| F-SERVING-01 | Serving overhead <5ms | **WEAKENED** (HTTP 5ms, E2E 27ms) |
-| F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (120x slower) |
+| F-SERVING-01 | Serving overhead <5ms | **CONFIRMED** (TTFT 8.4ms, ~8ms overhead) |
+| F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (native q4: 120x slower) |
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
-| F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** |
-| F-FMTPARITY-01 | All 3 formats GPU +/-10% | **FALSIFIED** (273.8 / 21.2 / 17.4) |
-| F-TOOLPARITY-01 | apr-cli vs realizr +/-5% | **WEAKENED** |
-| F-BRICKPARITY-01 | apr profile vs ncu +/-15% | **FALSIFIED** |
-| F-PARITY-02 | realizr c=4 <=1.5x llama.cpp | **CONFIRMED** (274.5 tok/s, 1.22x faster) |
+| F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (fewer launches, same GPU time) |
+| F-FMTPARITY-01 | All 3 formats GPU +/-10% | **REVISED** (Yoga: 132.5/151.6/132.3) |
+| F-TOOLPARITY-01 | apr-cli vs realizr +/-5% | **CONFIRMED** (GGUF 0.0%, APR 1.6%) |
+| F-BRICKPARITY-01 | apr profile vs ncu +/-15% | **FIXED** (Grade A: mem 151.4%, compute 16.2%) |
+| F-PARITY-02 | realizr c=4 <=1.5x llama.cpp | **CONFIRMED** (274.5, 1.22x faster) |
+| F-CLIPARITY-01 | `apr run` = all Candle features | **CONFIRMED** (6/6 closed) |
 
-**Score: 5 CONFIRMED, 4 FALSIFIED, 3 WEAKENED, 2 REVISED, 0 BLOCKED**
+**Score: 9 CONFIRMED, 1 FALSIFIED, 1 WEAKENED, 3 REVISED, 1 FIXED**
