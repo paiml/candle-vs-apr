@@ -721,10 +721,11 @@ contract + `perf-gate-run.sh`.
 | quantized-phi | Phi-2/3 | `apr run phi.gguf` | phi-3 MVP | Certified A+ |
 | quantized-gemma | Gemma | `apr run g.gguf` | gemma-2b MVP | Certified A+ |
 | quantized-qwen3 | Qwen3 | `apr run q3.gguf` | CPU 2.7 tok/s | GPU needs Q4_K_M |
-| quantized-t5 | T5 | tensors found | enc-dec-v1 | BLOCKED [17] |
+| quantized-t5 | T5 | encode/decode API | enc-dec-v1 | API DONE [17] |
 | whisper | Whisper | `apr run w.apr -i a.wav` | TESTED [18] | BLOCKED [30] |
 
-[17]: Needs encoder forward + cross-attention (realizr#177).
+[17]: API done (67c85394). Internal wiring (encoder weight
+separation, layer iteration) placeholder. realizr#177.
 [18]: Routing WORKS (audio detected, whisper-apr invoked).
 [30]: Garbage output — whisper-apr crate's load_from_apr()
 needs HF→internal tensor name mapping (aprender#577).
@@ -746,7 +747,7 @@ falsified/weakened F-condition.
 | PMAT-392 | APR native q4 dequant warn | **DONE** | realizr#175 [22] |
 | PMAT-393 | Tool parity investigation | **REVISED** | realizr#176 [23] |
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
-| PMAT-395 | T5 arch constraints + config | **DONE** | realizr#177 [26] |
+| PMAT-395 | T5 encoder-decoder (5/5) | **DONE** | realizr#177 [26] |
 | PMAT-396 | Whisper integration test | **TESTED** | aprender#575 [27] |
 | PMAT-397 | c=32 batch mode re-test | BLOCKED | [20] |
 
@@ -761,9 +762,10 @@ apr-load-parity-v1, tool-parity-v1.
 [22]: realizr 54ed5e7e. Corrected: 60s from APR native q4,
 not --preserve-q4k. Added diagnostic warnings + timing.
 Also fixed ..Default::default() in runtime.rs.
-[26]: Steps 1-4 of 5 done: ArchConstraints (realizr 26ec4f14)
-+ is_encoder_decoder() (620f81de) + bidirectional attn
-+ cross-attention (4d801762). Step 5 (API) remains.
+[26]: ALL 5 steps done: ArchConstraints (26ec4f14) +
+is_encoder_decoder() (620f81de) + bidirectional attn +
+cross-attention (4d801762) + encode/decode API (67c85394).
+Internal wiring (encoder layer weights) is placeholder.
 [27]: Routing WORKS: audio detected, whisper-apr invoked,
 184.7s audio processed. Output garbage — tensor name
 mapping missing (aprender#577). Blocker (a) #576 FIXED,

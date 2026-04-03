@@ -442,9 +442,10 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 not --preserve-q4k. --preserve-q4k already passes Q4_K raw.
 [25]: Feature flag hypothesis FALSIFIED. FP8 cache is runtime
 (gpu_profile.rs:232). Needs probador benchmark to isolate.
-[28]: Steps 1-4 of 5: ArchConstraints + is_encoder_decoder()
-+ bidirectional attention + cross-attention (4d801762).
-Step 5 (public encode/decode API) remains.
+[28]: ALL 5/5 steps done: ArchConstraints (26ec4f14) +
+is_encoder_decoder (620f81de) + bidirectional + cross attn
+(4d801762) + encode/decode API (67c85394). Internal wiring
+(encoder weights, layer iteration) is placeholder.
 [29]: Routing WORKS: audio detected, whisper-apr invoked,
 184.7s processed in 28s. Output garbage — tensor names
 mapped as decoder-only (aprender#577). #576 FIXED, apr
