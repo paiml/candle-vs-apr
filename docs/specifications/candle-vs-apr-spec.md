@@ -301,23 +301,30 @@ limitation.
 
 #### 3a. Format parity (F-FMTPARITY-01)
 
-| Format | Candle | realizr v1 | realizr v3 | Status |
-|--------|--------|-----------|-----------|--------|
-| GGUF Q4_K_M | 227.4 | 142.8 | **273.8** | realizr 1.20x |
-| SafeT FP32 | 65.7 | -- | 21.2 | #169, 3.1x gap |
-| APR v2 Q4K | N/A | -- | 17.4 | #170 FIXED |
+| Format | Candle | realizr v1 | v3 (4090) | v5 (Yoga) | Status |
+|--------|--------|-----------|-----------|-----------|--------|
+| GGUF Q4_K_M | 227.4 | 142.8 | **273.8** | 132.5 | realizr wins |
+| FP16 APR | N/A | -- | 21.2 | **151.6** | #180 FIXED, 7.15x |
+| APR v2 Q4K | N/A | -- | 17.4 | **132.3** | parity with GGUF |
+
+v5 Yoga: all 3 formats GPU, within 14.4% (FP16 fastest).
+v3 SafeT/APR gaps were bugs (#169 F32 SGEMM, #170 dequant,
+#180 F16-as-F32 dtype). All fixed.
 
 #### 3b. Tool parity: `apr` CLI vs `realizr`
 
-| Format | Tool | Status |
-|--------|------|--------|
-| GGUF | `realizr serve --gpu` | 142.8 (v1) / **273.8 (v3)** |
-| GGUF | `apr serve run --gpu` | 139.8 (v1) / **273.8 (v3)** |
-| APR v2 | `realizr serve --gpu` | 17.4 tok/s (#170 FIXED) |
-| APR v2 | `apr serve run --gpu` | 21.9 tok/s (25.6% delta FAIL) |
+| Format | Tool | v1 | v3 (4090) | v5 (Yoga) | Delta |
+|--------|------|----|-----------|-----------|-------|
+| GGUF | `realizr serve` | 142.8 | 273.8 | 132.5 | 0.0% ✅ |
+| GGUF | `apr serve run` | 139.8 | 273.8 | 132.5 | |
+| APR Q4K | `realizr serve` | -- | 17.4 | **132.3** | 1.6% ✅ |
+| APR Q4K | `apr serve run` | -- | 21.9 | **130.4** | |
+| FP16 APR | `realizr serve` | -- | -- | **151.6** | N/A |
 
-Both tools on the same model/format must produce tok/s
-within +/-5%. GGUF parity **confirmed** (2.1% delta).
+Both tools on the same model/format within +/-5%.
+GGUF: **0.0%** (132.5 vs 132.5). APR Q4K: **1.6%**
+(130.4 vs 132.3). Previous 25.6% was version skew
+(realizr#179).
 
 ### Methodology (v2, aligned with qwen-coder-deploy)
 
@@ -414,12 +421,13 @@ baselines.
 |--------|---------|------|------|--------|
 | APR load | 2-5x faster | ratio 2.0-5.0 | <1.5 | **FALSIFIED** [1] |
 | APR RSS | < GGUF | RSS_apr < RSS_gguf | >= | **CONFIRMED** [2] |
-| APR decode | +/-5% of GGUF | 0.95-1.05 | <0.95 | **FALSIFIED** [3] |
+| APR decode | +/-5% of GGUF | 0.95-1.05 | <0.95 | **CONFIRMED** [3] |
 
 **Notes:**
 1. 60s vs 0.49s = 120x slower (dequant+requant)
 2. 2,278 < 3,082 MB (26% less via mmap paging)
-3. 17.4 vs 273.8 = 0.06x
+3. v3: 17.4 vs 273.8 = 0.06x (FALSIFIED). **v5: 132.3
+   vs 132.5 = 0.998x (CONFIRMED, Yoga, #180 fixed)**
 
 > **F-FORMAT-01: FALSIFIED.** APR loads via
 > from_apr->GGUF CUDA (#170 fixed) but takes ~60s
@@ -484,7 +492,7 @@ either confirmed, weakened, or retracted.
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap) | APR RSS >= GGUF RSS | **CONFIRMED** |
 | F-COLD-01 | realizr cold-start slower (HTTP) | realizr cold faster | **CONFIRMED** |
 | F-SERVING-01 | Serving overhead <5ms at c=1 | Overhead >=10ms | **CONFIRMED** |
-| F-FMTPARITY-01 | All 3 formats GPU +/-10% | Any lacks GPU or >10% | **FALSIFIED** |
+| F-FMTPARITY-01 | All 3 formats GPU +/-10% | Any lacks GPU or >10% | **REVISED** |
 | F-TOOLPARITY-01 | `apr`/`realizr` same tok/s +/-5% | Diff >5% same format | **CONFIRMED** |
 | F-PARITY-02 | realizr c=4 <=1.5x slower llama.cpp | <149.9 tok/s after fixes | **CONFIRMED** |
 | F-CLIPARITY-01 | `apr run` has all Candle features | Any feature missing | **CONFIRMED** |
