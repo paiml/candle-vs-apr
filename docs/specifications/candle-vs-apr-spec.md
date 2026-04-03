@@ -1,8 +1,8 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 4.0.0
-**Last Updated:** 2026-04-02
+**Version:** 5.2.0
+**Last Updated:** 2026-04-03
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
 **Primary Target:** Lambda Vector (RTX 4090, 24 GB VRAM, sm_89)
@@ -808,6 +808,45 @@ runtime-detected (gpu_profile.rs:232), not compile-time.
 5. Root cause: **conflated pipeline with per-kernel**
    Fix: aprender c0953fd7.
 
+### Phase 9: Validation Sprint (PMAT-400 block)
+
+Triggered by probador-realizr-c1-v3.json 100% failure:
+tool reliability + measurement validation.
+
+| ID | Task | Status | Ticket |
+|----|------|--------|--------|
+| PMAT-401 | probador health-gate pre-flight | **DONE** | probar#37 [28] |
+| PMAT-402 | apr profile stack overflow fix | **DONE** | aprender#578 [29] |
+| PMAT-403 | Re-measure SafeT FP16 HGEMM | PENDING | realizr#174 |
+| PMAT-404 | Tool parity probador benchmark | PENDING | realizr#176 |
+| PMAT-405 | entrenar cfg guard fix | **DONE** | [30] |
+
+[28]: probar 328c22f. Hard health-gate: GET /health with
+5s timeout, fail-fast with clear error. --skip-health-check
+to bypass. Prevents 1.1M wasted requests.
+[29]: aprender a558ee91. Spawn profile_gpu_generation on
+16MB stack thread. Deep call chain (forward_all_layers →
+transformer_layer_workspace_inner) overflows 8MB default
+on RTX 4060 after FP8 cache warmup.
+[30]: entrenar e4d6754a. cfg(feature = "cuda") guards for
+lora_fused_clip field + constructors. Unblocked aprender build.
+
+**PMAT-401 five-whys (probador 100% failure):**
+1. Why 100% failure? → realizr not responding
+2. Why not responding? → process not running
+3. Why not running? → GPU occupied by apr-train
+4. Why no early exit? → probador has no health check
+5. Root cause: **probador lacks health-gate pre-flight**
+   Fix: probar 328c22f. Contract: health-gate-v1.
+
+**PMAT-402 five-whys (apr profile stack overflow):**
+1. Why overflow? → Deep call chain, large stack frames
+2. Why deep? → workspace_inner extracts ~20 ptrs/layer
+3. Why only 4060? → Constrained ulimit or compilation
+4. Why not caught? → No stack size config for profiling
+5. Root cause: **GPU profiling on default 8MB stack**
+   Fix: aprender a558ee91. Contract: profile-stack-v1.
+
 ---
 
 ## 11. PMAT Compliance
@@ -835,3 +874,4 @@ certified)
 | 4.5.0 | 2026-04-03 | Whisper UNBLOCKED: aprender#576 fixed (3ce6576c). Phase 8: 6/7. |
 | 5.0.0 | 2026-04-03 | Phase 8 COMPLETE: T5 5/5, VRAM gate, evidence synced. |
 | 5.1.0 | 2026-04-03 | F-SCALE-01 CONFIRMED: Yoga c=32 1,776 tok/s (13.4x). All 7/7 DONE. |
+| 5.2.0 | 2026-04-03 | Phase 9: probador health-gate (probar#37), apr profile 16MB stack (aprender#578). |
