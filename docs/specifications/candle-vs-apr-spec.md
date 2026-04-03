@@ -724,13 +724,56 @@ contract + `perf-gate-run.sh`.
 | quantized-t5 | T5 | tensors found | enc-dec-v1 | BLOCKED [17] |
 | whisper | Whisper | `apr run w.apr` | WIRED [18] | NEEDS TEST |
 
-[17]: Needs T5-specific model type (6 realizr commits).
-[18]: aprender 5a6f7bbf. Needs `--features whisper`.
+[17]: Needs encoder forward + cross-attention (realizr#177).
+[18]: aprender 5a6f7bbf. Needs model + test (aprender#575).
 
 `apr run` extras Candle lacks: `--serve`, `--profile`,
 `--batch-jsonl`, `--offline`, `--backend`, multi-format
 (GGUF+SafeT+APR), `hf://` auto-download, 95-model QA
 certification matrix.
+
+### Phase 8: Upstream Fixes (PMAT-390 block)
+
+Five-whys + gh ticket + provable contract for each
+falsified/weakened F-condition.
+
+| ID | Task | Status | Ticket |
+|----|------|--------|--------|
+| PMAT-391 | SafeT FP32 SGEMM → FP16/Q4K | FILED | realizr#174 |
+| PMAT-392 | APR eager CPU dequant → lazy GPU | FILED | realizr#175 |
+| PMAT-393 | Tool parity feature flag skew | FILED | realizr#176 |
+| PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
+| PMAT-395 | T5 encoder forward + cross-attn | FILED | realizr#177 |
+| PMAT-396 | Whisper integration test | FILED | aprender#575 |
+| PMAT-397 | c=32 batch mode re-test | BLOCKED | [20] |
+
+[19]: aprender c0953fd7. Subtracts launch overhead from
+roofline. Expected: 20%→55% mem, 1%→29% compute.
+[20]: Needs probador llm rebuild + realizr batch mode.
+
+**PMAT-391 five-whys (SafeTensors 92% gap):**
+1. Why 21.2 vs 273.8? → FP32 SGEMM (GemmTiled)
+2. Why FP32? → gemm_b_cached() hardcodes GemmTiled
+3. Why no FP16? → Weights converted to F32 on upload
+4. Why F32 upload? → get_tensor_auto() returns F32
+5. Root cause: **no format-adaptive kernel dispatch
+   — 7.11x bandwidth penalty**
+
+**PMAT-392 five-whys (APR load 120x):**
+1. Why 60s? → from_apr_bytes() CPU dequants all Q4K
+2. Why CPU dequant? → build_apr_layers() calls get_f32()
+3. Why get_f32? → dequant_by_dtype() in mod_dequant
+4. Why not GPU? → upload_single_weight() receives F32
+5. Root cause: **eager CPU dequant — Q4K never
+   reaches GPU**
+
+**PMAT-394 five-whys (roofline 35pp delta):**
+1. Why 20% mem / 1% compute? → divides by pipeline time
+2. Why pipeline? → 1/decode_tok_s includes idle
+3. Why idle? → 83.8% kernel launch overhead at M=1
+4. Why not excluded? → compute_roofline() ignored it
+5. Root cause: **conflated pipeline with per-kernel**
+   Fix: aprender c0953fd7.
 
 ---
 
@@ -752,3 +795,4 @@ certified)
 |---------|------|---------|
 | 1.0-3.1 | 2026-04-01..02 | Phases 1-7. probador. Graph fix: 273.8. CLI parity. |
 | 4.0.0 | 2026-04-02 | SSE streaming FIXED. TTFT 8.4ms, A+ (99.0). 95 models. |
+| 4.1.0 | 2026-04-03 | Phase 8: upstream fixes. apr profile roofline FIXED (c0953fd7). |

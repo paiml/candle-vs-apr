@@ -340,23 +340,27 @@ launch overhead is a larger fraction of total time.
 
 ---
 
-### F10: apr profile disagrees with ncu roofline
+### F10: apr profile disagrees with ncu roofline — FIXED
 
-**What:** `apr profile` reports 20% memory efficiency, 1%
+**What:** `apr profile` reported 20% memory efficiency, 1%
 compute efficiency. `ncu --set roofline` on the dominant Q4K
 kernel: 55% memory throughput, 29% compute throughput.
 Delta: 35pp memory, 28pp compute.
 
-**Why:** apr profile measures end-to-end pipeline (including
-83.8% idle time between launches). ncu measures individual
-kernels. apr profile divides achieved FLOPS by peak, counting
-gaps as inefficiency. The UI says "Roofline Analysis" but
-computes pipeline throughput.
+**Why (five-whys):**
+1. Why 20% / 1%? → Divides achieved throughput by pipeline time
+2. Why pipeline? → `1/decode_tok_s` includes idle between launches
+3. Why idle? → 83.8% kernel launch overhead at M=1 decode
+4. Why not excluded? → `compute_roofline()` ignored overhead data
+5. Root cause: **conflated pipeline efficiency with per-kernel**
 
-**So what:** The "Grade C, 20% efficiency" is misleading.
-Individual Q4K kernels achieve 55% memory BW — respectable
-for a memory-bound workload. The bottleneck is launch
-overhead, not kernel efficiency. Filed paiml/aprender#567.
+**Fix:** aprender c0953fd7 — `compute_roofline()` now subtracts
+`kernel_launch_overhead_pct` from inference time. Output labels
+values as "per-kernel, excl launch overhead".
+
+**So what:** apr profile should now report ~55% memory / ~29%
+compute, matching ncu. F-BRICKPARITY-01 targeted for
+**REVISED** after re-verification with `apr profile --granular`.
 
 ---
 
@@ -423,8 +427,13 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 | paiml/realizar#167  | GPU scheduler hardcodes HF names   | Fixed        | `tensor-name-resolution-v1`    |
 | paiml/realizar#168  | RMSNorm cache aliasing mismatch    | Fixed (#170) | `tensor-name-resolution-v1`    |
 | paiml/realizar#169  | SafeTensors GPU inference missing  | Fixed        | `tensor-name-resolution-v1`    |
-| paiml/realizar#170  | 0 contracts on tensor name res.    | Contract added | `tensor-name-resolution-v1.yaml` |
-| paiml/aprender#567  | apr profile conflates roofline     | Filed        | Needs `PROFILING_ACCURACY_V1`  |
+| paiml/realizar#170  | 0 contracts on tensor name res.    | Added        | `tensor-name-resolution-v1`    |
+| paiml/aprender#567  | apr profile conflates roofline     | **FIXED**    | aprender c0953fd7              |
+| paiml/realizar#174  | SafeT FP32 SGEMM 7.11x BW penalty | Filed        | Needs `safetensors-gpu-parity` |
+| paiml/realizar#175  | APR eager CPU dequant (120x load)  | Filed        | Needs `apr-load-parity-v1`     |
+| paiml/realizar#176  | Tool parity FP8 feature skew       | Filed        | Needs `tool-parity-v1`         |
+| paiml/realizar#177  | T5 encoder forward + cross-attn    | Filed        | `encoder-decoder-v1`           |
+| paiml/aprender#575  | Whisper integration test           | Filed        | --                             |
 
 `pv coverage` (realizr): 12 contracts, 44 equations,
 100% obligation coverage.
