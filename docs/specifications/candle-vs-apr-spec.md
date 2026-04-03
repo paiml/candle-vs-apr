@@ -752,9 +752,9 @@ falsified/weakened F-condition.
 
 [19]: aprender c0953fd7. Subtracts launch overhead from
 roofline. Expected: 20%→55% mem, 1%→29% compute.
-[20]: probador llm REBUILT (1.0.3 + llm feature). Blocked
-by GPU resource conflict: apr-train uses 12.7GB, realizr
-OOMs on startup (realizr#178). Needs exclusive GPU access.
+[20]: probador llm REBUILT. realizr#178 VRAM gate FIXED
+(95b4e932): reserve 3.5GB for prefill cache + workspace.
+Still needs exclusive GPU access (apr-train uses 12.7GB).
 [21]: realizr 4f54b8a3. FP16 weight cache + cuBLAS HGEMM
 dispatch. 3 provable contracts: safetensors-gpu-parity-v1,
 apr-load-parity-v1, tool-parity-v1.
