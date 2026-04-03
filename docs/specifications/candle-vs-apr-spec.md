@@ -485,7 +485,7 @@ either confirmed, weakened, or retracted.
 | F-COLD-01 | realizr cold-start slower (HTTP) | realizr cold faster | **CONFIRMED** |
 | F-SERVING-01 | Serving overhead <5ms at c=1 | Overhead >=10ms | **CONFIRMED** |
 | F-FMTPARITY-01 | All 3 formats GPU +/-10% | Any lacks GPU or >10% | **FALSIFIED** |
-| F-TOOLPARITY-01 | `apr`/`realizr` same tok/s +/-5% | Diff >5% same format | **CONFIRMED** (GGUF) |
+| F-TOOLPARITY-01 | `apr`/`realizr` same tok/s +/-5% | Diff >5% same format | **CONFIRMED** |
 | F-PARITY-02 | realizr c=4 <=1.5x slower llama.cpp | <149.9 tok/s after fixes | **CONFIRMED** |
 | F-CLIPARITY-01 | `apr run` has all Candle features | Any feature missing | **CONFIRMED** |
 
@@ -549,9 +549,9 @@ threshold.
 (realizr 4f54b8a3) — pending re-measurement with
 exclusive GPU to validate SafeT improvement.
 
-**F-TOOLPARITY-01:** GGUF: **0.0% PASS** (Yoga, both
-0.8.3). Previous 13.1% gap was version skew (0.8.1 FP16
-vs 0.8.3 FP8). APR format: 25.6% still open (PMAT-393).
+**F-TOOLPARITY-01:** **ALL PASS** (Yoga, both 0.8.3).
+GGUF: 0.0% (132.5 vs 132.5). APR Q4K: 1.6% (130.4 vs
+132.3). Previous 25.6% was version skew. realizr#179.
 
 **F-PARITY-02:** **274.5 tok/s at c=4 (1.22x FASTER
 than llama.cpp 224.8).** Graph poison fix:
@@ -753,7 +753,7 @@ falsified/weakened F-condition.
 |----|------|--------|--------|
 | PMAT-391 | SafeT FP16 HGEMM path | **DONE** | realizr#174 [21] |
 | PMAT-392 | APR native q4 dequant warn | **DONE** | realizr#175 [22] |
-| PMAT-393 | Tool parity investigation | **REVISED** | realizr#176 [23] |
+| PMAT-393 | Tool parity investigation | **DONE** | realizr#176,#179 [23] |
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
 | PMAT-395 | T5 encoder-decoder (5/5) | **DONE** | realizr#177 [26] |
 | PMAT-396 | Whisper integration test | **TESTED** | aprender#575 [27] |
@@ -887,4 +887,4 @@ certified)
 | 5.0.0 | 2026-04-03 | Phase 8 COMPLETE: T5 5/5, VRAM gate, evidence synced. |
 | 5.1.0 | 2026-04-03 | F-SCALE-01 CONFIRMED: Yoga c=32 1,776 tok/s (13.4x). All 7/7 DONE. |
 | 5.2.0 | 2026-04-03 | Phase 9: probador health-gate (probar#37), apr profile 16MB stack (aprender#578). |
-| 5.3.0 | 2026-04-03 | F-TOOLPARITY-01 CONFIRMED (GGUF 0.0%). Version skew was root cause. realizr#179. |
+| 5.3.0 | 2026-04-03 | F-TOOLPARITY-01 CONFIRMED: GGUF 0.0%, APR 1.6%. Both PASS. Version skew root cause. |
