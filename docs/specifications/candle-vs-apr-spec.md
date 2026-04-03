@@ -897,7 +897,7 @@ Whisper unblocked, Qwen3 GPU ready, entrenar build fixed.
 | PMAT-411 | Whisper tensor name mapping fix | **DONE** | aprender#577 [35] |
 | PMAT-412 | entrenar cuda_init cfg gate fix | **DONE** | entrenar 60f63847 [36] |
 | PMAT-413 | Qwen3 GPU Q4_K_M model + check | **DONE** | realizr GH-280 [34] |
-| PMAT-414 | Qwen3 GPU benchmark (remote) | PENDING | needs SSH to test box |
+| PMAT-414 | Qwen3 GPU benchmark (remote) | BLOCKED | Yoga apr needs GH-280 |
 | PMAT-415 | Whisper re-import + end-to-end | PENDING | re-import after #577 fix |
 | PMAT-416 | T5 internal wiring (encoder fwd) | **DONE** | realizr#177 [37] |
 
