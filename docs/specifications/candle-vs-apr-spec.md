@@ -740,8 +740,8 @@ falsified/weakened F-condition.
 | ID | Task | Status | Ticket |
 |----|------|--------|--------|
 | PMAT-391 | SafeT FP16 HGEMM path | **DONE** | realizr#174 [21] |
-| PMAT-392 | APR lazy dequant → GPU | FILED | realizr#175 |
-| PMAT-393 | Tool parity feature flags | FILED | realizr#176 |
+| PMAT-392 | APR native q4 dequant warn | **DONE** | realizr#175 [22] |
+| PMAT-393 | Tool parity investigation | **REVISED** | realizr#176 [23] |
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
 | PMAT-395 | T5 encoder forward + cross-attn | FILED | realizr#177 |
 | PMAT-396 | Whisper integration test | FILED | aprender#575 |
@@ -753,6 +753,12 @@ roofline. Expected: 20%→55% mem, 1%→29% compute.
 [21]: realizr 4f54b8a3. FP16 weight cache + cuBLAS HGEMM
 dispatch. 3 provable contracts: safetensors-gpu-parity-v1,
 apr-load-parity-v1, tool-parity-v1.
+[22]: realizr 54ed5e7e. Corrected: 60s from APR native q4,
+not --preserve-q4k. Added diagnostic warnings + timing.
+Also fixed ..Default::default() in runtime.rs.
+[23]: Feature flag hypothesis FALSIFIED — FP8 cache is
+runtime-detected (gpu_profile.rs:232), not compile-time.
+25.6% delta needs probador benchmark to isolate.
 
 **PMAT-391 five-whys (SafeTensors 92% gap):**
 1. Why 21.2 vs 273.8? → FP32 SGEMM (GemmTiled)
@@ -762,13 +768,14 @@ apr-load-parity-v1, tool-parity-v1.
 5. Root cause: **no format-adaptive kernel dispatch
    — 7.11x bandwidth penalty**
 
-**PMAT-392 five-whys (APR load 120x):**
-1. Why 60s? → from_apr_bytes() CPU dequants all Q4K
-2. Why CPU dequant? → build_apr_layers() calls get_f32()
-3. Why get_f32? → dequant_by_dtype() in mod_dequant
-4. Why not GPU? → upload_single_weight() receives F32
-5. Root cause: **eager CPU dequant — Q4K never
-   reaches GPU**
+**PMAT-392 five-whys (APR load 120x — CORRECTED):**
+1. Why 60s? → APR native q4 format CPU dequant
+2. Why CPU? → apr_load_quantized_tensor() dequants q4→F32
+3. Why not Q4_K passthrough? → APR native q4 != GGML Q4_K
+4. Why not re-quantize? → No native-to-GGML path exists
+5. Root cause: **APR native q4 is not GPU-optimal;
+   --preserve-q4k already works (raw Q4_K passthrough)**
+   Fix: realizr 54ed5e7e — diagnostic + guidance.
 
 **PMAT-394 five-whys (roofline 35pp delta):**
 1. Why 20% mem / 1% compute? → divides by pipeline time
@@ -800,3 +807,4 @@ certified)
 | 4.0.0 | 2026-04-02 | SSE streaming FIXED. TTFT 8.4ms, A+ (99.0). 95 models. |
 | 4.1.0 | 2026-04-03 | Phase 8: upstream fixes. apr profile roofline FIXED (c0953fd7). |
 | 4.2.0 | 2026-04-03 | SafeT FP16 HGEMM (realizr 4f54b8a3). 3 provable contracts. |
+| 4.3.0 | 2026-04-03 | APR q4 dequant warn (54ed5e7e). Tool parity REVISED (runtime). |

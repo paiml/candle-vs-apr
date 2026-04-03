@@ -430,10 +430,15 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 | paiml/realizar#170  | 0 contracts on tensor name res.    | Added        | `tensor-name-resolution-v1`    |
 | paiml/aprender#567  | apr profile conflates roofline     | **FIXED**    | aprender c0953fd7              |
 | paiml/realizar#174  | SafeT FP32 SGEMM 7.11x BW penalty | **FIXED**    | `safetensors-gpu-parity-v1`    |
-| paiml/realizar#175  | APR eager CPU dequant (120x load)  | Filed        | Needs `apr-load-parity-v1`     |
-| paiml/realizar#176  | Tool parity FP8 feature skew       | Filed        | Needs `tool-parity-v1`         |
+| paiml/realizar#175  | APR native q4 dequant warn         | **DONE**     | `apr-load-parity-v1` [24]      |
+| paiml/realizar#176  | Tool parity (runtime, not flags)   | **REVISED**  | `tool-parity-v1` [25]          |
 | paiml/realizar#177  | T5 encoder forward + cross-attn    | Filed        | `encoder-decoder-v1`           |
 | paiml/aprender#575  | Whisper integration test           | Filed        | --                             |
+
+[24]: realizr 54ed5e7e. Corrected: 60s from APR native q4,
+not --preserve-q4k. --preserve-q4k already passes Q4_K raw.
+[25]: Feature flag hypothesis FALSIFIED. FP8 cache is runtime
+(gpu_profile.rs:232). Needs probador benchmark to isolate.
 
 `pv coverage` (realizr): 12 contracts, 44 equations,
 100% obligation coverage.
