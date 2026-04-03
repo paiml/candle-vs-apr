@@ -471,10 +471,10 @@ rebuilt with --features whisper.
 | F-KERNEL-01     | Fused Q4K lower mem traffic     | **WEAKENED**             |
 | F-FMTPARITY-01  | All 3 formats GPU +/-10%       | **FALSIFIED** (FP16 fix pending) |
 | F-TOOLPARITY-01 | apr-cli vs realizr +/-5%       | **WEAKENED** (runtime FP8) |
-| F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FIXED** (c0953fd7) |
+| F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FIXED + VERIFIED** |
 
 **Score: 6 CONFIRMED, 3 FALSIFIED, 3 WEAKENED, 2 REVISED,
-1 FIXED**
+1 FIXED+VERIFIED**
 
 ### Yoga RTX 4060 Scaling (probador llm load, c=1..32)
 

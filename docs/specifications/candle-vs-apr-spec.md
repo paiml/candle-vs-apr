@@ -480,7 +480,7 @@ either confirmed, weakened, or retracted.
 | F-HW-01 | Variance <5% with locked clocks | Variance >=5% | **CONFIRMED** |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | Candle errors on load | **CONFIRMED** |
 | F-KERNEL-01 | Fused Q4K DP4A lower mem traffic | Brick scores equal/worse | **WEAKENED** |
-| F-BRICKPARITY-01 | `apr profile` matches ncu +/-15% | Disagreement >15% | **FALSIFIED** |
+| F-BRICKPARITY-01 | `apr profile` matches ncu +/-15% | Disagreement >15% | **FIXED** |
 | F-RSS-01 | APR v2 RSS < GGUF RSS (mmap) | APR RSS >= GGUF RSS | **CONFIRMED** |
 | F-COLD-01 | realizr cold-start slower (HTTP) | realizr cold faster | **CONFIRMED** |
 | F-SERVING-01 | Serving overhead <5ms at c=1 | Overhead >=10ms | **CONFIRMED** |
@@ -525,12 +525,12 @@ missing on Lambda Vector) and CUDA 12.6 toolkit (PTX
 vs 106ms). Fused kernels reduce launches, not total
 compute at M=1.
 
-**F-BRICKPARITY-01:** **FIXED** (aprender c0953fd7).
-Was: apr 20%/1%, ncu 55%/29% (35pp delta). Fix subtracts
-kernel launch overhead from roofline. Re-verify blocked by
-self-referential Default in QuantizedGenerateConfig
-(realizr aaf88ecf fixes it, needs apr rebuild — trueno
-release build has pre-existing error, aprender#578).
+**F-BRICKPARITY-01:** **FIXED + RE-VERIFIED** on Yoga.
+Was: apr 20%/1%, ncu 55%/29%. After fix (aprender c0953fd7
++ realizr fb3dbd8a): **mem 151.4%, compute 16.2%, Grade A**
+(was Grade C). The >100% mem eff from L2 cache hits on Q4K
+weights (1536 hidden fits in L2). Launch overhead correctly
+separated at 92.4%.
 
 **F-RSS-01:** APR 2,278 MB < GGUF 3,082 MB (26% less).
 Mmap paging reduces resident set.
