@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 5.2.0
+**Version:** 5.4.0
 **Last Updated:** 2026-04-03
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -544,10 +544,10 @@ per-request cold start is slower as predicted.
 Serving overhead = TTFT - prefill ~ 8ms. Within
 threshold.
 
-**F-FMTPARITY-01:** GGUF 273.8 (v3), SafeT 21.2
-(-92%), APR 17.4 (-94%). FP16 HGEMM path shipped
-(realizr 4f54b8a3) — pending re-measurement with
-exclusive GPU to validate SafeT improvement.
+**F-FMTPARITY-01:** GGUF 132.5 (Yoga), FP16 APR
+**151.6** (Yoga, GH-180 fixed), APR Q4K 132.3 (Yoga).
+FP16 APR now FASTER than GGUF (no dequant overhead).
+Old 21.2 was F32 SGEMM; old 17.4 was APR dequant path.
 
 **F-TOOLPARITY-01:** **ALL PASS** (Yoga, both 0.8.3).
 GGUF: 0.0% (132.5 vs 132.5). APR Q4K: 1.6% (130.4 vs
@@ -816,7 +816,7 @@ tool reliability + measurement validation.
 |----|------|--------|--------|
 | PMAT-401 | probador health-gate pre-flight | **DONE** | probar#37 [28] |
 | PMAT-402 | apr profile stack overflow fix | **DONE** | aprender#578 [29] |
-| PMAT-403 | Re-measure SafeT FP16 HGEMM | PENDING | realizr#174 |
+| PMAT-403 | Re-measure SafeT FP16 HGEMM | **DONE** | realizr#180 [32] |
 | PMAT-404 | Tool parity probador benchmark | **DONE** | realizr#179 [31] |
 | PMAT-405 | entrenar cfg guard fix | **DONE** | [30] |
 
@@ -838,6 +838,10 @@ lora_fused_clip field + constructors. Unblocked aprender build.
 5. Root cause: **probador lacks health-gate pre-flight**
    Fix: probar 328c22f. Contract: health-gate-v1.
 
+[32]: FP16 APR: **151.6 tok/s** (was 21.2, 7.15x improvement).
+Panicked on serve (GH-180): apr_try_load_f32() read F16 as F32
+(chunks_exact(4) on 2-byte data). Fix: dtype dispatch. Also
+faster than GGUF Q4K (132.5) — no dequant overhead.
 [31]: GGUF 0.0% delta (PASS) with matched versions (both
 0.8.3). Previous 13.1% was version skew: 0.8.1 used FP16
 HGEMM (149.8), 0.8.3 FP8 E4M3 (132.5). FP8 trades 13%
@@ -888,3 +892,4 @@ certified)
 | 5.1.0 | 2026-04-03 | F-SCALE-01 CONFIRMED: Yoga c=32 1,776 tok/s (13.4x). All 7/7 DONE. |
 | 5.2.0 | 2026-04-03 | Phase 9: probador health-gate (probar#37), apr profile 16MB stack (aprender#578). |
 | 5.3.0 | 2026-04-03 | F-TOOLPARITY-01 CONFIRMED: GGUF 0.0%, APR 1.6%. Both PASS. Version skew root cause. |
+| 5.4.0 | 2026-04-03 | FP16 APR: 151.6 tok/s (7.15x from 21.2). GH-180 fixed: F16 dtype dispatch. |
