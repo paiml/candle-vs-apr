@@ -815,3 +815,4 @@ certified)
 | 4.2.0 | 2026-04-03 | SafeT FP16 HGEMM (realizr 4f54b8a3). 3 provable contracts. |
 | 4.3.0 | 2026-04-03 | APR q4 dequant warn (54ed5e7e). Tool parity REVISED (runtime). |
 | 4.4.0 | 2026-04-03 | T5 ArchConstraints + config (26ec4f14, 620f81de). Whisper BLOCKED. |
+| 4.5.0 | 2026-04-03 | Whisper UNBLOCKED: aprender#576 fixed (3ce6576c). Phase 8: 6/7. |
