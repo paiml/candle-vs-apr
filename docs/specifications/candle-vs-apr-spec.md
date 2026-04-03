@@ -485,7 +485,7 @@ either confirmed, weakened, or retracted.
 | F-COLD-01 | realizr cold-start slower (HTTP) | realizr cold faster | **CONFIRMED** |
 | F-SERVING-01 | Serving overhead <5ms at c=1 | Overhead >=10ms | **CONFIRMED** |
 | F-FMTPARITY-01 | All 3 formats GPU +/-10% | Any lacks GPU or >10% | **FALSIFIED** |
-| F-TOOLPARITY-01 | `apr`/`realizr` same tok/s +/-5% | Diff >5% same format | **WEAKENED** |
+| F-TOOLPARITY-01 | `apr`/`realizr` same tok/s +/-5% | Diff >5% same format | **CONFIRMED** (GGUF) |
 | F-PARITY-02 | realizr c=4 <=1.5x slower llama.cpp | <149.9 tok/s after fixes | **CONFIRMED** |
 | F-CLIPARITY-01 | `apr run` has all Candle features | Any feature missing | **CONFIRMED** |
 
@@ -549,10 +549,9 @@ threshold.
 (realizr 4f54b8a3) — pending re-measurement with
 exclusive GPU to validate SafeT improvement.
 
-**F-TOOLPARITY-01:** GGUF: 2.1% PASS. APR: 25.6% FAIL.
-Feature flag hypothesis FALSIFIED — FP8 is runtime
-(gpu_profile.rs:232). Delta likely from init path
-differences. Needs probador on both tools to isolate.
+**F-TOOLPARITY-01:** GGUF: **0.0% PASS** (Yoga, both
+0.8.3). Previous 13.1% gap was version skew (0.8.1 FP16
+vs 0.8.3 FP8). APR format: 25.6% still open (PMAT-393).
 
 **F-PARITY-02:** **274.5 tok/s at c=4 (1.22x FASTER
 than llama.cpp 224.8).** Graph poison fix:
@@ -818,7 +817,7 @@ tool reliability + measurement validation.
 | PMAT-401 | probador health-gate pre-flight | **DONE** | probar#37 [28] |
 | PMAT-402 | apr profile stack overflow fix | **DONE** | aprender#578 [29] |
 | PMAT-403 | Re-measure SafeT FP16 HGEMM | PENDING | realizr#174 |
-| PMAT-404 | Tool parity probador benchmark | PENDING | realizr#176 |
+| PMAT-404 | Tool parity probador benchmark | **DONE** | realizr#179 [31] |
 | PMAT-405 | entrenar cfg guard fix | **DONE** | [30] |
 
 [28]: probar 328c22f. Hard health-gate: GET /health with
@@ -838,6 +837,19 @@ lora_fused_clip field + constructors. Unblocked aprender build.
 4. Why no early exit? → probador has no health check
 5. Root cause: **probador lacks health-gate pre-flight**
    Fix: probar 328c22f. Contract: health-gate-v1.
+
+[31]: GGUF 0.0% delta (PASS) with matched versions (both
+0.8.3). Previous 13.1% was version skew: 0.8.1 used FP16
+HGEMM (149.8), 0.8.3 FP8 E4M3 (132.5). FP8 trades 13%
+decode speed for 50% less VRAM. realizr#179.
+
+**PMAT-404 five-whys (tool parity 13.1% gap):**
+1. Why 13.1%? → Different decode throughput
+2. Why different? → FP16 vs FP8 weight cache
+3. Why different cache? → Version skew (0.8.1 vs 0.8.3)
+4. Why different version? → Yoga had stale realizr binary
+5. Root cause: **version skew; matched versions = 0.0%**
+   Falsification: matched versions → gap disappears.
 
 **PMAT-402 five-whys (apr profile stack overflow):**
 1. Why overflow? → Deep call chain, large stack frames
@@ -875,3 +887,4 @@ certified)
 | 5.0.0 | 2026-04-03 | Phase 8 COMPLETE: T5 5/5, VRAM gate, evidence synced. |
 | 5.1.0 | 2026-04-03 | F-SCALE-01 CONFIRMED: Yoga c=32 1,776 tok/s (13.4x). All 7/7 DONE. |
 | 5.2.0 | 2026-04-03 | Phase 9: probador health-gate (probar#37), apr profile 16MB stack (aprender#578). |
+| 5.3.0 | 2026-04-03 | F-TOOLPARITY-01 CONFIRMED (GGUF 0.0%). Version skew was root cause. realizr#179. |
