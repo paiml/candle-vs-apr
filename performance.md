@@ -435,7 +435,8 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 | paiml/realizar#177  | T5 arch constraints + config       | **PARTIAL**  | `encoder-decoder-v1` [28]      |
 | paiml/aprender#575  | Whisper integration test           | **TESTED**   | Routing works, output bad [29] |
 | paiml/aprender#576  | apr import arch override bug       | **FIXED**    | aprender 3ce6576c              |
-| paiml/aprender#577  | Whisper tensor name mapping        | Filed        | Enc-dec mapping needed         |
+| paiml/aprender#577  | Whisper tensor name mapping        | Filed        | whisper-apr crate load issue    |
+| paiml/realizar#178  | OOM when cohabiting GPU w/ training | Filed        | VRAM gate needed               |
 
 [24]: realizr 54ed5e7e. Corrected: 60s from APR native q4,
 not --preserve-q4k. --preserve-q4k already passes Q4_K raw.
