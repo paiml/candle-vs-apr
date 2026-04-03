@@ -466,11 +466,12 @@ rebuilt with --features whisper.
 | F-MODEL-01      | Candle loads Q4_K_M GGUF        | **CONFIRMED**            |
 | F-COLD-01       | realizr cold-start slower       | **CONFIRMED**            |
 | F-SERVING-01    | Serving overhead <5 ms          | **WEAKENED** (27 ms E2E) |
-| F-FORMAT-01     | APR v2 load 2-5x faster        | **FALSIFIED** (120x slower) |
+| F-FORMAT-01     | APR v2 load 2-5x faster        | **FALSIFIED** (native q4 120x) |
 | F-RSS-01        | APR v2 RSS < GGUF RSS          | **CONFIRMED** (26% less) |
 | F-KERNEL-01     | Fused Q4K lower mem traffic     | **WEAKENED**             |
-| F-FMTPARITY-01  | All 3 formats GPU +/-10%       | **FALSIFIED** (15x spread) |
-| F-TOOLPARITY-01 | apr-cli vs realizr +/-5%       | **WEAKENED**             |
-| F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FALSIFIED** (35pp gap) |
+| F-FMTPARITY-01  | All 3 formats GPU +/-10%       | **FALSIFIED** (FP16 fix pending) |
+| F-TOOLPARITY-01 | apr-cli vs realizr +/-5%       | **WEAKENED** (runtime FP8) |
+| F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FIXED** (c0953fd7) |
 
-**Score: 5 CONFIRMED, 5 FALSIFIED, 3 WEAKENED, 2 REVISED**
+**Score: 5 CONFIRMED, 4 FALSIFIED, 3 WEAKENED, 2 REVISED,
+1 FIXED**

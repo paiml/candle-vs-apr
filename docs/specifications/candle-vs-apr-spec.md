@@ -499,9 +499,10 @@ RSS still Candle (449 vs 3082).
 **v3: 1.20x in realizr's favor** (273.8 vs 227.4,
 probador).
 
-**F-FORMAT-01:** APR load ~60s (dequant+requant via
-from_apr) vs GGUF 0.49s. Zero-copy claim does not
-hold. #170 fixed but load is 120x slower.
+**F-FORMAT-01:** APR load ~60s was from native q4 format
+(CPU dequant). With --preserve-q4k, raw Q4_K bytes pass
+through (realizr 54ed5e7e confirms). Zero-copy claim
+does not hold for native q4. GGUF path is fast.
 
 **F-SCALE-01:** v1: FALSIFIED (SINGLE-REQUEST flat).
 v4: c=4 streaming **626.5 tok/s** (2.39x c=1, 2.79x
@@ -521,9 +522,10 @@ missing on Lambda Vector) and CUDA 12.6 toolkit (PTX
 vs 106ms). Fused kernels reduce launches, not total
 compute at M=1.
 
-**F-BRICKPARITY-01:** apr: 20% mem / 1% compute. ncu:
-55% mem / 29% compute. Delta 35pp/28pp.
-paiml/aprender#567.
+**F-BRICKPARITY-01:** **FIXED** (aprender c0953fd7).
+Was: apr 20%/1%, ncu 55%/29% (35pp delta). Fix subtracts
+kernel launch overhead from roofline. Pending re-verify
+with `apr profile --granular` on exclusive GPU.
 
 **F-RSS-01:** APR 2,278 MB < GGUF 3,082 MB (26% less).
 Mmap paging reduces resident set.
@@ -538,12 +540,14 @@ Serving overhead = TTFT - prefill ~ 8ms. Within
 threshold.
 
 **F-FMTPARITY-01:** GGUF 273.8 (v3), SafeT 21.2
-(-92%), APR 17.4 (-94%). Not at parity — SafeT/APR
-use dequant path.
+(-92%), APR 17.4 (-94%). FP16 HGEMM path shipped
+(realizr 4f54b8a3) — pending re-measurement with
+exclusive GPU to validate SafeT improvement.
 
-**F-TOOLPARITY-01:** GGUF: 2.1% PASS. APR: 25.6% FAIL
-(apr-cli 21.9 vs realizr 17.4) — version skew (FP8
-cache in apr-cli).
+**F-TOOLPARITY-01:** GGUF: 2.1% PASS. APR: 25.6% FAIL.
+Feature flag hypothesis FALSIFIED — FP8 is runtime
+(gpu_profile.rs:232). Delta likely from init path
+differences. Needs probador on both tools to isolate.
 
 **F-PARITY-02:** **274.5 tok/s at c=4 (1.22x FASTER
 than llama.cpp 224.8).** Graph poison fix:
@@ -824,3 +828,4 @@ certified)
 | 4.3.0 | 2026-04-03 | APR q4 dequant warn (54ed5e7e). Tool parity REVISED (runtime). |
 | 4.4.0 | 2026-04-03 | T5 ArchConstraints + config (26ec4f14, 620f81de). Whisper BLOCKED. |
 | 4.5.0 | 2026-04-03 | Whisper UNBLOCKED: aprender#576 fixed (3ce6576c). Phase 8: 6/7. |
+| 5.0.0 | 2026-04-03 | Phase 8 COMPLETE: T5 5/5 (67c85394), VRAM gate (95b4e932), evidence synced. |
