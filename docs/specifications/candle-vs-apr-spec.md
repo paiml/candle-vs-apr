@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 5.4.0
+**Version:** 5.6.0
 **Last Updated:** 2026-04-03
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -308,8 +308,7 @@ limitation.
 | APR v2 Q4K | N/A | -- | 17.4 | **132.3** | parity with GGUF |
 
 v5 Yoga: all 3 formats GPU, within 14.4% (FP16 fastest).
-v3 SafeT/APR gaps were bugs (#169 F32 SGEMM, #170 dequant,
-#180 F16-as-F32 dtype). All fixed.
+v3 SafeT/APR gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16-as-F32 dtype). All fixed.
 
 #### 3b. Tool parity: `apr` CLI vs `realizr`
 
@@ -736,16 +735,20 @@ contract + `perf-gate-run.sh`.
 | quantized (llama) | LLaMA | `apr run l.gguf` | llama-3.1 MVP | Certified A+ |
 | quantized-phi | Phi-2/3 | `apr run phi.gguf` | phi-3 MVP | Certified A+ |
 | quantized-gemma | Gemma | `apr run g.gguf` | gemma-2b MVP | Certified A+ |
-| quantized-qwen3 | Qwen3 | `apr run q3.gguf` | CPU 2.7 tok/s | GPU needs Q4_K_M |
+| quantized-qwen3 | Qwen3 | `apr run q3.gguf` | CPU 2.7 tok/s | GPU READY [34] |
 | quantized-t5 | T5 | encode/decode API | enc-dec-v1 | API DONE [17] |
-| whisper | Whisper | `apr run w.apr -i a.wav` | TESTED [18] | BLOCKED [30] |
+| whisper | Whisper | `apr run w.apr -i a.wav` | TESTED [18] | UNBLOCKED [35] |
 
 [17]: API done (67c85394). Internal wiring (encoder weight
 separation, layer iteration) placeholder. realizr#177.
+4 items remain: weight storage, encoder forward, cross-attn, LM head.
 [18]: Routing WORKS (audio detected, whisper-apr invoked).
-[30]: Garbage output — whisper-apr crate's load_from_apr()
-needs HF→internal tensor name mapping (aprender#577).
-Import tensor names are correct (HF preserved).
+[34]: realizr GH-280 added Qwen3 GPU (PerHeadRmsNormKernel).
+Qwen3-8B-Q4_K_M.gguf downloaded. `apr check` 10/10 PASS.
+GPU benchmark pending (run on remote box, not host).
+[35]: **FIXED** (aprender 500ac7df, closes #577).
+`whisper_map_name()` now strips `model.` prefix to match
+whisper-apr's `load_from_apr()` convention. Re-import + test needed.
 
 `apr run` extras Candle lacks: `--serve`, `--profile`,
 `--batch-jsonl`, `--offline`, `--backend`, multi-format
@@ -886,6 +889,40 @@ all cache warmups. Parity gate now PASSES on Yoga.
 5. Root cause: **GPU profiling on default 8MB stack**
    Fix: aprender a558ee91. Contract: profile-stack-v1.
 
+### Phase 10: Arch Expansion + Blocker Fixes (PMAT-410)
+
+Whisper unblocked, Qwen3 GPU ready, entrenar build fixed.
+
+| ID | Task | Status | Ticket |
+|----|------|--------|--------|
+| PMAT-411 | Whisper tensor name mapping fix | **DONE** | aprender#577 [35] |
+| PMAT-412 | entrenar cuda_init cfg gate fix | **DONE** | entrenar 60f63847 [36] |
+| PMAT-413 | Qwen3 GPU Q4_K_M model + check | **DONE** | realizr GH-280 [34] |
+| PMAT-414 | Qwen3 GPU benchmark (remote) | PENDING | needs SSH to test box |
+| PMAT-415 | Whisper re-import + end-to-end | PENDING | re-import after #577 fix |
+| PMAT-416 | T5 internal wiring (encoder fwd) | OPEN | realizr#177 (4 items) |
+
+[36]: `impl InstructPipeline` ungated but `use super::*` was
+cfg(cuda)-gated → compile error without cuda feature. Fix:
+gate entire impl block.
+
+**PMAT-411 five-whys (whisper garbage output):**
+1. Why garbage? → All-zero weights loaded
+2. Why all-zero? → Tensor name lookup returns None
+3. Why None? → APR has `model.encoder.*`, whisper-apr expects `encoder.*`
+4. Why mismatch? → `whisper_map_name()` was identity function
+5. Root cause: **aprender import didn't strip `model.` prefix;
+   whisper-apr's loader expects stripped names**
+   Fix: aprender 500ac7df. Contract: tensor name consistency.
+
+**PMAT-412 five-whys (entrenar compile error):**
+1. Why compile error? → `InstructPipeline` not in scope
+2. Why not in scope? → `use super::*` gated behind cfg(cuda)
+3. Why mismatch? → impl block ungated, methods individually gated
+4. Why not caught? → Only manifests without cuda feature
+5. Root cause: **missing cfg(feature="cuda") on impl block**
+   Fix: entrenar 60f63847.
+
 ---
 
 ## 11. PMAT Compliance
@@ -917,3 +954,4 @@ certified)
 | 5.3.0 | 2026-04-03 | F-TOOLPARITY-01 CONFIRMED: GGUF 0.0%, APR 1.6%. Both PASS. Version skew root cause. |
 | 5.4.0 | 2026-04-03 | FP16 APR: 151.6 tok/s (7.15x from 21.2). GH-180 fixed: F16 dtype dispatch. |
 | 5.5.0 | 2026-04-03 | Parity gate FIXED: FP8 workspace reinit (GH-181). No more SKIP_PARITY_GATE. |
+| 5.6.0 | 2026-04-03 | Phase 10: whisper #577 FIXED (tensor name mapping), entrenar cfg gate, Qwen3 GPU ready. |
