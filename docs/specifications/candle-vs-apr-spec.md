@@ -743,8 +743,8 @@ falsified/weakened F-condition.
 | PMAT-392 | APR native q4 dequant warn | **DONE** | realizr#175 [22] |
 | PMAT-393 | Tool parity investigation | **REVISED** | realizr#176 [23] |
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
-| PMAT-395 | T5 encoder forward + cross-attn | FILED | realizr#177 |
-| PMAT-396 | Whisper integration test | FILED | aprender#575 |
+| PMAT-395 | T5 arch constraints + config | **DONE** | realizr#177 [26] |
+| PMAT-396 | Whisper integration test | BLOCKED | aprender#575 [27] |
 | PMAT-397 | c=32 batch mode re-test | BLOCKED | [20] |
 
 [19]: aprender c0953fd7. Subtracts launch overhead from
@@ -756,6 +756,12 @@ apr-load-parity-v1, tool-parity-v1.
 [22]: realizr 54ed5e7e. Corrected: 60s from APR native q4,
 not --preserve-q4k. Added diagnostic warnings + timing.
 Also fixed ..Default::default() in runtime.rs.
+[26]: Steps 1-2 of 5 done: ArchConstraints (realizr 26ec4f14)
++ is_encoder_decoder() method (620f81de) + provable-contracts
+(4191ad3). Steps 3-5 (encoder forward, cross-attn, API) remain.
+[27]: Model downloaded (231MB). Two blockers: (a) aprender#576
+arch detection overrides --arch whisper with Qwen2, (b) apr
+binary lacks --features whisper (not in defaults).
 [23]: Feature flag hypothesis FALSIFIED — FP8 cache is
 runtime-detected (gpu_profile.rs:232), not compile-time.
 25.6% delta needs probador benchmark to isolate.
@@ -808,3 +814,4 @@ certified)
 | 4.1.0 | 2026-04-03 | Phase 8: upstream fixes. apr profile roofline FIXED (c0953fd7). |
 | 4.2.0 | 2026-04-03 | SafeT FP16 HGEMM (realizr 4f54b8a3). 3 provable contracts. |
 | 4.3.0 | 2026-04-03 | APR q4 dequant warn (54ed5e7e). Tool parity REVISED (runtime). |
+| 4.4.0 | 2026-04-03 | T5 ArchConstraints + config (26ec4f14, 620f81de). Whisper BLOCKED. |
