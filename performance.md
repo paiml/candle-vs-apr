@@ -429,7 +429,7 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 | paiml/realizar#169  | SafeTensors GPU inference missing  | Fixed        | `tensor-name-resolution-v1`    |
 | paiml/realizar#170  | 0 contracts on tensor name res.    | Added        | `tensor-name-resolution-v1`    |
 | paiml/aprender#567  | apr profile conflates roofline     | **FIXED**    | aprender c0953fd7              |
-| paiml/realizar#174  | SafeT FP32 SGEMM 7.11x BW penalty | Filed        | Needs `safetensors-gpu-parity` |
+| paiml/realizar#174  | SafeT FP32 SGEMM 7.11x BW penalty | **FIXED**    | `safetensors-gpu-parity-v1`    |
 | paiml/realizar#175  | APR eager CPU dequant (120x load)  | Filed        | Needs `apr-load-parity-v1`     |
 | paiml/realizar#176  | Tool parity FP8 feature skew       | Filed        | Needs `tool-parity-v1`         |
 | paiml/realizar#177  | T5 encoder forward + cross-attn    | Filed        | `encoder-decoder-v1`           |

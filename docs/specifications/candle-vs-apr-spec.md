@@ -739,9 +739,9 @@ falsified/weakened F-condition.
 
 | ID | Task | Status | Ticket |
 |----|------|--------|--------|
-| PMAT-391 | SafeT FP32 SGEMM → FP16/Q4K | FILED | realizr#174 |
-| PMAT-392 | APR eager CPU dequant → lazy GPU | FILED | realizr#175 |
-| PMAT-393 | Tool parity feature flag skew | FILED | realizr#176 |
+| PMAT-391 | SafeT FP16 HGEMM path | **DONE** | realizr#174 [21] |
+| PMAT-392 | APR lazy dequant → GPU | FILED | realizr#175 |
+| PMAT-393 | Tool parity feature flags | FILED | realizr#176 |
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
 | PMAT-395 | T5 encoder forward + cross-attn | FILED | realizr#177 |
 | PMAT-396 | Whisper integration test | FILED | aprender#575 |
@@ -750,6 +750,9 @@ falsified/weakened F-condition.
 [19]: aprender c0953fd7. Subtracts launch overhead from
 roofline. Expected: 20%→55% mem, 1%→29% compute.
 [20]: Needs probador llm rebuild + realizr batch mode.
+[21]: realizr 4f54b8a3. FP16 weight cache + cuBLAS HGEMM
+dispatch. 3 provable contracts: safetensors-gpu-parity-v1,
+apr-load-parity-v1, tool-parity-v1.
 
 **PMAT-391 five-whys (SafeTensors 92% gap):**
 1. Why 21.2 vs 273.8? → FP32 SGEMM (GemmTiled)
@@ -796,3 +799,4 @@ certified)
 | 1.0-3.1 | 2026-04-01..02 | Phases 1-7. probador. Graph fix: 273.8. CLI parity. |
 | 4.0.0 | 2026-04-02 | SSE streaming FIXED. TTFT 8.4ms, A+ (99.0). 95 models. |
 | 4.1.0 | 2026-04-03 | Phase 8: upstream fixes. apr profile roofline FIXED (c0953fd7). |
+| 4.2.0 | 2026-04-03 | SafeT FP16 HGEMM (realizr 4f54b8a3). 3 provable contracts. |
