@@ -461,7 +461,7 @@ rebuilt with --features whisper.
 | F-SUMMARY-01    | realizr wins >=1 metric, c=1    | **REVISED** — v3: 1.20x  |
 | F-PARITY-01     | realizr within +/-10% of Candle | **REVISED** — v3: 1.20x  |
 | F-PARITY-02     | realizr c=4 <=1.5x llama.cpp   | **CONFIRMED** (1.22x faster) |
-| F-SCALE-01      | realizr c=32 >=1,280 tok/s     | **FALSIFIED** (145.7)    |
+| F-SCALE-01      | realizr c=32 >=1,280 tok/s     | **CONFIRMED** (1,776 Yoga) |
 | F-HW-01         | Variance <5% with locked clocks | **CONFIRMED** (CV <1%)   |
 | F-MODEL-01      | Candle loads Q4_K_M GGUF        | **CONFIRMED**            |
 | F-COLD-01       | realizr cold-start slower       | **CONFIRMED**            |
@@ -473,5 +473,19 @@ rebuilt with --features whisper.
 | F-TOOLPARITY-01 | apr-cli vs realizr +/-5%       | **WEAKENED** (runtime FP8) |
 | F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FIXED** (c0953fd7) |
 
-**Score: 5 CONFIRMED, 4 FALSIFIED, 3 WEAKENED, 2 REVISED,
+**Score: 6 CONFIRMED, 3 FALSIFIED, 3 WEAKENED, 2 REVISED,
 1 FIXED**
+
+### Yoga RTX 4060 Scaling (probador llm load, c=1..32)
+
+| c | Agg tok/s | Decode tok/s | TTFT P50 | ITL P50 |
+|---|-----------|-------------|----------|---------|
+| 1 | 132.6 | 133.3 | 18.3ms | 7.5ms |
+| 4 | 302.2 | 77.0 | 75.8ms | 13.0ms |
+| 8 | 519.7 | 67.2 | 143.7ms | 14.9ms |
+| 16 | 980.2 | 65.4 | 272.5ms | 15.3ms |
+| 32 | 1,776.5 | 63.1 | 42.1ms | 15.8ms |
+
+F-SCALE-01 **CONFIRMED**: 13.4x aggregate scaling from c=1 to
+c=32. Batch scheduling active (v1 was SINGLE-REQUEST flat).
+Per-request decode drops as expected (shared bandwidth).

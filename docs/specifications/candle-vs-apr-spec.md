@@ -476,7 +476,7 @@ either confirmed, weakened, or retracted.
 | F-SUMMARY-01 | realizr wins >=1 metric at c=1 | Candle matches all 3 | **REVISED** |
 | F-PARITY-01 | realizr c=1 within +/-10% | realizr >20% slower | **REVISED** |
 | F-FORMAT-01 | APR v2 load 2-5x faster | APR <1.5x faster | **FALSIFIED** |
-| F-SCALE-01 | realizr c=32 >=1,280 tok/s | c=32 <1,280 tok/s | **REVISED** |
+| F-SCALE-01 | realizr c=32 >=1,280 tok/s | c=32 <1,280 tok/s | **CONFIRMED** |
 | F-HW-01 | Variance <5% with locked clocks | Variance >=5% | **CONFIRMED** |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | Candle errors on load | **CONFIRMED** |
 | F-KERNEL-01 | Fused Q4K DP4A lower mem traffic | Brick scores equal/worse | **WEAKENED** |
@@ -504,9 +504,12 @@ probador).
 through (realizr 54ed5e7e confirms). Zero-copy claim
 does not hold for native q4. GGUF path is fast.
 
-**F-SCALE-01:** v1: FALSIFIED (SINGLE-REQUEST flat).
-v4: c=4 streaming **626.5 tok/s** (2.39x c=1, 2.79x
-llama.cpp). c=32 untested.
+**F-SCALE-01:** **CONFIRMED on Yoga RTX 4060.**
+c=32: **1,776.5 tok/s** (13.4x scaling from c=1).
+Batch scheduling active. v1 FALSIFIED was from
+SINGLE-REQUEST mode (no batching). Full Yoga data:
+c=1: 132.6, c=4: 302.2, c=8: 519.7, c=16: 980.2,
+c=32: 1,776.5 tok/s.
 
 **F-HW-01:** Candle CV=0.8% (temp=0, greedy). realizr
 CV=0.9%. Locked 2520 MHz on RTX 4090. Note: temp=0.8
@@ -753,13 +756,13 @@ falsified/weakened F-condition.
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
 | PMAT-395 | T5 encoder-decoder (5/5) | **DONE** | realizr#177 [26] |
 | PMAT-396 | Whisper integration test | **TESTED** | aprender#575 [27] |
-| PMAT-397 | c=32 batch mode re-test | BLOCKED | [20] |
+| PMAT-397 | c=32 batch mode re-test | **DONE** | [20] |
 
 [19]: aprender c0953fd7. Subtracts launch overhead from
 roofline. Expected: 20%→55% mem, 1%→29% compute.
-[20]: probador llm REBUILT. realizr#178 VRAM gate FIXED
-(95b4e932): reserve 3.5GB for prefill cache + workspace.
-Still needs exclusive GPU access (apr-train uses 12.7GB).
+[20]: **DONE on Yoga RTX 4060.** c=32: 1,776.5 tok/s
+(13.4x scaling). Batch scheduling confirmed working.
+probador llm rebuilt, ran via SSH to Yoga (8GB free).
 [21]: realizr 4f54b8a3. FP16 weight cache + cuBLAS HGEMM
 dispatch. 3 provable contracts: safetensors-gpu-parity-v1,
 apr-load-parity-v1, tool-parity-v1.
@@ -828,4 +831,5 @@ certified)
 | 4.3.0 | 2026-04-03 | APR q4 dequant warn (54ed5e7e). Tool parity REVISED (runtime). |
 | 4.4.0 | 2026-04-03 | T5 ArchConstraints + config (26ec4f14, 620f81de). Whisper BLOCKED. |
 | 4.5.0 | 2026-04-03 | Whisper UNBLOCKED: aprender#576 fixed (3ce6576c). Phase 8: 6/7. |
-| 5.0.0 | 2026-04-03 | Phase 8 COMPLETE: T5 5/5 (67c85394), VRAM gate (95b4e932), evidence synced. |
+| 5.0.0 | 2026-04-03 | Phase 8 COMPLETE: T5 5/5, VRAM gate, evidence synced. |
+| 5.1.0 | 2026-04-03 | F-SCALE-01 CONFIRMED: Yoga c=32 1,776 tok/s (13.4x). All 7/7 DONE. |
