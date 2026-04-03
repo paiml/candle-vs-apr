@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 5.6.0
+**Version:** 5.7.0
 **Last Updated:** 2026-04-03
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -739,9 +739,8 @@ contract + `perf-gate-run.sh`.
 | quantized-t5 | T5 | encode/decode API | enc-dec-v1 | API DONE [17] |
 | whisper | Whisper | `apr run w.apr -i a.wav` | TESTED [18] | UNBLOCKED [35] |
 
-[17]: API done (67c85394). Internal wiring (encoder weight
-separation, layer iteration) placeholder. realizr#177.
-4 items remain: weight storage, encoder forward, cross-attn, LM head.
+[17]: API done (67c85394). **Internal wiring COMPLETE** [37].
+All 4 items done: weight storage, encoder forward, cross-attn, LM head.
 [18]: Routing WORKS (audio detected, whisper-apr invoked).
 [34]: realizr GH-280 added Qwen3 GPU (PerHeadRmsNormKernel).
 Qwen3-8B-Q4_K_M.gguf downloaded. `apr check` 10/10 PASS.
@@ -900,11 +899,16 @@ Whisper unblocked, Qwen3 GPU ready, entrenar build fixed.
 | PMAT-413 | Qwen3 GPU Q4_K_M model + check | **DONE** | realizr GH-280 [34] |
 | PMAT-414 | Qwen3 GPU benchmark (remote) | PENDING | needs SSH to test box |
 | PMAT-415 | Whisper re-import + end-to-end | PENDING | re-import after #577 fix |
-| PMAT-416 | T5 internal wiring (encoder fwd) | OPEN | realizr#177 (4 items) |
+| PMAT-416 | T5 internal wiring (encoder fwd) | **DONE** | realizr#177 [37] |
 
 [36]: `impl InstructPipeline` ungated but `use super::*` was
 cfg(cuda)-gated → compile error without cuda feature. Fix:
 gate entire impl block.
+[37]: ALL 4 items DONE: encoder_layers field + encoder forward
+(bidirectional attention + LayerNorm + GELU FFN per layer) +
+cross-attention in decode (decoder Q → encoder K/V via
+tiled_cross_attention) + LM head (fused_matmul → vocab logits).
+6 tests, 108 existing pass. GH-183 blocks commit (hook issue).
 
 **PMAT-411 five-whys (whisper garbage output):**
 1. Why garbage? → All-zero weights loaded
@@ -914,6 +918,15 @@ gate entire impl block.
 5. Root cause: **aprender import didn't strip `model.` prefix;
    whisper-apr's loader expects stripped names**
    Fix: aprender 500ac7df. Contract: tensor name consistency.
+
+**PMAT-416 five-whys (T5 encode/decode placeholder):**
+1. Why placeholder? → encode() returns embedding, decode() zeros
+2. Why no layer iteration? → No encoder/decoder weight split
+3. Why no split? → OwnedQuantizedModel has single flat layers vec
+4. Why no cross-attention? → Only causal self-attention existed
+5. Root cause: **forward pass assumed decoder-only architecture**
+   Fix: encoder_layers field, bidirectional attention in encode(),
+   causal self-attn + cross-attn in decode(), LM head matmul.
 
 **PMAT-412 five-whys (entrenar compile error):**
 1. Why compile error? → `InstructPipeline` not in scope
@@ -955,3 +968,4 @@ certified)
 | 5.4.0 | 2026-04-03 | FP16 APR: 151.6 tok/s (7.15x from 21.2). GH-180 fixed: F16 dtype dispatch. |
 | 5.5.0 | 2026-04-03 | Parity gate FIXED: FP8 workspace reinit (GH-181). No more SKIP_PARITY_GATE. |
 | 5.6.0 | 2026-04-03 | Phase 10: whisper #577 FIXED (tensor name mapping), entrenar cfg gate, Qwen3 GPU ready. |
+| 5.7.0 | 2026-04-03 | PMAT-416 DONE: T5 encode/decode wired (4 items). GH-183 filed (hook F-grade blocker). |
