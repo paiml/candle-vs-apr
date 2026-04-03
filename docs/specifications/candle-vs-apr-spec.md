@@ -761,9 +761,9 @@ apr-load-parity-v1, tool-parity-v1.
 [22]: realizr 54ed5e7e. Corrected: 60s from APR native q4,
 not --preserve-q4k. Added diagnostic warnings + timing.
 Also fixed ..Default::default() in runtime.rs.
-[26]: Steps 1-2 of 5 done: ArchConstraints (realizr 26ec4f14)
-+ is_encoder_decoder() method (620f81de) + provable-contracts
-(4191ad3). Steps 3-5 (encoder forward, cross-attn, API) remain.
+[26]: Steps 1-4 of 5 done: ArchConstraints (realizr 26ec4f14)
++ is_encoder_decoder() (620f81de) + bidirectional attn
++ cross-attention (4d801762). Step 5 (API) remains.
 [27]: Routing WORKS: audio detected, whisper-apr invoked,
 184.7s audio processed. Output garbage — tensor name
 mapping missing (aprender#577). Blocker (a) #576 FIXED,
