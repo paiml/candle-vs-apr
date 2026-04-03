@@ -827,6 +827,7 @@ tool reliability + measurement validation.
 | PMAT-403 | Re-measure SafeT FP16 HGEMM | **DONE** | realizr#180 [32] |
 | PMAT-404 | Tool parity probador benchmark | **DONE** | realizr#179 [31] |
 | PMAT-405 | entrenar cfg guard fix | **DONE** | [30] |
+| PMAT-406 | Parity gate FP8 workspace fix | **DONE** | realizr#181 [33] |
 
 [28]: probar 328c22f. Hard health-gate: GET /health with
 5s timeout, fail-fast with clear error. --skip-health-check
@@ -854,6 +855,20 @@ faster than GGUF Q4K (132.5) — no dequant overhead.
 0.8.3). Previous 13.1% was version skew: 0.8.1 used FP16
 HGEMM (149.8), 0.8.3 FP8 E4M3 (132.5). FP8 trades 13%
 decode speed for 50% less VRAM. realizr#179.
+
+[33]: FP8 cache warmup invalidated workspace buffers →
+parity gate forward read stale pointers → cosine -0.28.
+Fix: force_workspace_reinit() + init_workspace() after
+all cache warmups. Parity gate now PASSES on Yoga.
+
+**PMAT-406 five-whys (parity gate -0.28):**
+1. Why -0.28? → GPU logits garbage after FP8 warmup
+2. Why garbage? → Workspace buffers stale
+3. Why stale? → FP8 alloc (1472 MB) relocated GPU memory
+4. Why not reinit? → No reinit between warmup and gate
+5. Root cause: **missing workspace reinit after cache warmup**
+   Fix: force_workspace_reinit + init_workspace in
+   preload_and_verify(). Contract: fp8-warmup-workspace-v1.
 
 **PMAT-404 five-whys (tool parity 13.1% gap):**
 1. Why 13.1%? → Different decode throughput
@@ -901,3 +916,4 @@ certified)
 | 5.2.0 | 2026-04-03 | Phase 9: probador health-gate (probar#37), apr profile 16MB stack (aprender#578). |
 | 5.3.0 | 2026-04-03 | F-TOOLPARITY-01 CONFIRMED: GGUF 0.0%, APR 1.6%. Both PASS. Version skew root cause. |
 | 5.4.0 | 2026-04-03 | FP16 APR: 151.6 tok/s (7.15x from 21.2). GH-180 fixed: F16 dtype dispatch. |
+| 5.5.0 | 2026-04-03 | Parity gate FIXED: FP8 workspace reinit (GH-181). No more SKIP_PARITY_GATE. |
