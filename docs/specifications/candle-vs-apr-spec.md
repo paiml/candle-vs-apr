@@ -527,8 +527,10 @@ compute at M=1.
 
 **F-BRICKPARITY-01:** **FIXED** (aprender c0953fd7).
 Was: apr 20%/1%, ncu 55%/29% (35pp delta). Fix subtracts
-kernel launch overhead from roofline. Pending re-verify
-with `apr profile --granular` on exclusive GPU.
+kernel launch overhead from roofline. Re-verify blocked by
+self-referential Default in QuantizedGenerateConfig
+(realizr aaf88ecf fixes it, needs apr rebuild — trueno
+release build has pre-existing error, aprender#578).
 
 **F-RSS-01:** APR 2,278 MB < GGUF 3,082 MB (26% less).
 Mmap paging reduces resident set.
