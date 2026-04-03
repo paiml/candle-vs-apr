@@ -433,8 +433,8 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 | paiml/realizar#175  | APR native q4 dequant warn         | **DONE**     | `apr-load-parity-v1` [24]      |
 | paiml/realizar#176  | Tool parity (runtime, not flags)   | **REVISED**  | `tool-parity-v1` [25]          |
 | paiml/realizar#177  | T5 arch constraints + config       | **PARTIAL**  | `encoder-decoder-v1` [28]      |
-| paiml/aprender#575  | Whisper integration test           | BLOCKED      | aprender#576 [29]              |
-| paiml/aprender#576  | apr import arch override bug       | Filed        | --                             |
+| paiml/aprender#575  | Whisper integration test           | UNBLOCKED    | aprender#576 fixed [29]        |
+| paiml/aprender#576  | apr import arch override bug       | **FIXED**    | aprender 3ce6576c              |
 
 [24]: realizr 54ed5e7e. Corrected: 60s from APR native q4,
 not --preserve-q4k. --preserve-q4k already passes Q4_K raw.
@@ -442,8 +442,9 @@ not --preserve-q4k. --preserve-q4k already passes Q4_K raw.
 (gpu_profile.rs:232). Needs probador benchmark to isolate.
 [28]: Steps 1-2 of 5: ArchConstraints (LayerNorm, GELU,
 Relative) + is_encoder_decoder() method. Forward pass remains.
-[29]: Model downloaded but arch detection overrides whisper→Qwen2
-(aprender#576) and apr binary lacks --features whisper.
+[29]: Model downloaded. Blocker aprender#576 FIXED (3ce6576c):
+--arch whisper no longer overridden by bias heuristic.
+apr rebuilt with --features whisper for testing.
 
 `pv coverage` (realizr): 12 contracts, 44 equations,
 100% obligation coverage.

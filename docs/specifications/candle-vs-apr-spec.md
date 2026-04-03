@@ -744,7 +744,7 @@ falsified/weakened F-condition.
 | PMAT-393 | Tool parity investigation | **REVISED** | realizr#176 [23] |
 | PMAT-394 | apr profile roofline fix | **DONE** | aprender#567 [19] |
 | PMAT-395 | T5 arch constraints + config | **DONE** | realizr#177 [26] |
-| PMAT-396 | Whisper integration test | BLOCKED | aprender#575 [27] |
+| PMAT-396 | Whisper integration test | **UNBLOCKED** | aprender#575 [27] |
 | PMAT-397 | c=32 batch mode re-test | BLOCKED | [20] |
 
 [19]: aprender c0953fd7. Subtracts launch overhead from
@@ -759,9 +759,9 @@ Also fixed ..Default::default() in runtime.rs.
 [26]: Steps 1-2 of 5 done: ArchConstraints (realizr 26ec4f14)
 + is_encoder_decoder() method (620f81de) + provable-contracts
 (4191ad3). Steps 3-5 (encoder forward, cross-attn, API) remain.
-[27]: Model downloaded (231MB). Two blockers: (a) aprender#576
-arch detection overrides --arch whisper with Qwen2, (b) apr
-binary lacks --features whisper (not in defaults).
+[27]: Model downloaded (231MB). Blocker (a) aprender#576
+FIXED (3ce6576c): --arch whisper no longer overridden.
+Blocker (b): apr rebuilt with --features whisper.
 [23]: Feature flag hypothesis FALSIFIED — FP8 cache is
 runtime-detected (gpu_profile.rs:232), not compile-time.
 25.6% delta needs probador benchmark to isolate.
