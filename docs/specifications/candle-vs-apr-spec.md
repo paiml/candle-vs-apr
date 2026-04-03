@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 5.8.0
+**Version:** 5.9.0
 **Last Updated:** 2026-04-03
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -897,13 +897,17 @@ Whisper unblocked, Qwen3 GPU ready, entrenar build fixed.
 | PMAT-411 | Whisper tensor name mapping fix | **DONE** | aprender#577 [35] |
 | PMAT-412 | entrenar cuda_init cfg gate fix | **DONE** | entrenar 60f63847 [36] |
 | PMAT-413 | Qwen3 GPU Q4_K_M model + check | **DONE** | realizr GH-280 [34] |
-| PMAT-414 | Qwen3 GPU benchmark (remote) | BLOCKED | Yoga apr needs GH-280 |
+| PMAT-414 | Qwen3 GPU benchmark (remote) | **DONE** | 133.7 tok/s Yoga [39] |
 | PMAT-415 | Whisper re-import + end-to-end | **DONE** | re-import verified [38] |
 | PMAT-416 | T5 internal wiring (encoder fwd) | **DONE** | realizr#177 [37] |
 
 [36]: `impl InstructPipeline` ungated but `use super::*` was
 cfg(cuda)-gated → compile error without cuda feature. Fix:
 gate entire impl block.
+[39]: Qwen3-8B-Q4_K_M GPU: 133.7 tok/s decode, 5551.8 prefill,
+TTFT 18.4ms, ITL 7.5ms on Yoga RTX 4060 (8GB). apr check 10/10.
+apr rebuilt via cross-compile (Lambda → Yoga SCP). probador llm load
+c=1, 30s, medium prompt. Qwen3.5-0.8B is hybrid SSM (unsupported).
 [38]: Re-import VERIFIED. whisper-tiny.safetensors → APR produces
 67 encoder.* + 100 decoder.* tensors, zero model.* prefixes.
 Test fix (aprender 88312252): assertion corrected to verify
@@ -975,3 +979,4 @@ certified)
 | 5.6.0 | 2026-04-03 | Phase 10: whisper #577 FIXED (tensor name mapping), entrenar cfg gate, Qwen3 GPU ready. |
 | 5.7.0 | 2026-04-03 | PMAT-416 DONE: T5 encode/decode wired (4 items). GH-183 filed + fixed (hook ratchet). |
 | 5.8.0 | 2026-04-03 | PMAT-415 DONE: whisper re-import verified (67+100 tensors, 0 model.* prefix). |
+| 5.9.0 | 2026-04-03 | PMAT-414 DONE: Qwen3-8B GPU 133.7 tok/s (Yoga). Phase 10 COMPLETE (6/6). |
