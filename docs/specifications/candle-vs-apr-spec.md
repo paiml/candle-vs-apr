@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.6.0
+**Version:** 8.7.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -686,7 +686,7 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 
 | ID | Task | Status | Tool |
 |----|------|--------|------|
-| PMAT-440 | Perplexity: realizr vs llama.cpp on WikiText-2 | **BLOCKED** | llama.cpp PPL=15.80+/-1.10. realizr needs logprobs (realizr#191). |
+| PMAT-440 | Perplexity: realizr vs llama.cpp on WikiText-2 | **PARTIAL** | llama.cpp PPL=15.80. /v1/logprobs shipped. Needs teacher-forcing mode for PPL comparison. |
 | PMAT-441 | Bootstrap CIs on decode tok/s | **MEASURED** | Showdown: realizr 250.9, llama.cpp 296.4. Bootstrap: 231.9 [229.4, 234.3]. |
 | PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
 | PMAT-443 | Poisson arrival: c=1..32 with `--rate` | **MEASURED** | c=1: 245-254 tok/s (rate 0.5-2.0). c=4: 151 tok/s decode, 387 agg (rate 8.0). Latency drift at c=4. |
@@ -696,9 +696,14 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 > **F-QUALITY-01:** If realizr perplexity on WikiText-2
 > exceeds llama.cpp perplexity by >0.1 PPL on the same
 > Q4_K_M model, the dequant path diverges.
-> **BLOCKED:** llama.cpp PPL=15.80+/-1.10 (baseline).
-> realizr needs logprobs endpoint (realizr#191).
-> Action: audit trueno DP4A accumulator precision.
+> **PARTIAL:** llama.cpp PPL=15.80+/-1.10 (baseline).
+> realizr `/v1/logprobs` endpoint shipped (realizr
+> e8da8431) — works for generation logprobs. Perplexity
+> comparison needs **teacher-forcing mode** (feed ground
+> truth tokens, extract logprobs at each position).
+> Current endpoint measures model confidence on its own
+> output (PPL ~1.06), not ground-truth prediction.
+> Action: add `/v1/perplexity` with chunked teacher-forcing.
 
 ### Poisson Arrival Results (PMAT-443)
 
@@ -724,7 +729,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | ID | Task | Status | Upstream | Impact |
 |----|------|--------|----------|--------|
 | PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
-| PMAT-451 | Logprobs endpoint | FILED | realizr#191 | Unblock F-QUALITY-01 (PPL comparison) |
+| PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused QKV Phase 2 (single kernel launch) | BLOCKED | trueno#237 (stub only) | -2 launches/layer, ~2% decode |
 | PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | TODO | trueno#238 infra done | -85% kernel launches, +20-40% |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
@@ -771,3 +776,4 @@ QKV Phase 2 (PMAT-433/452) is lower-effort but stub only.
 | 8.4.0 | 2026-04-04 | Phase 13: 5/6 MEASURED, 1 BLOCKED. Poisson c=1 stable 245-254, c=4 387 agg. llama.cpp PPL=15.80. |
 | 8.5.0 | 2026-04-04 | **FALSE REGRESSION: GPU contention** (stale apr finetune/serve). Clean GPU: **277.3** [276.1, 278.5] (+1.3% vs baseline). Showdown: realizr 289 vs llama.cpp 333 (total), decode-only ~parity. realizr#190 CLOSED, trueno#240 CLOSED. Mandatory pre-flight check added. |
 | 8.6.0 | 2026-04-04 | Phase 14 proposed: KV prefix caching (realizr#193), logprobs (realizr#191). Phase 12 status corrected: PMAT-434 REVERTED (5% slower), PMAT-436 DEPRIORITIZED. GPU pre-flight added to scripts. F-CACHE-01 proposed. |
+| 8.7.0 | 2026-04-04 | `/v1/logprobs` SHIPPED (realizr e8da8431). Generation logprobs work; perplexity needs teacher-forcing (measures model confidence on own output, not ground truth). Phase 14 PMAT-451 DONE, PMAT-440 PARTIAL. |
