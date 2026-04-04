@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 7.6.0
+**Version:** 8.0.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -29,7 +29,8 @@
 9. [Falsification Register](#9-falsification-register)
 10. [Work Items](#10-work-items)
 11. [PMAT Compliance](#11-pmat-compliance)
-12. [Revision History](#12-revision-history)
+12. [Scientific Methodology Gaps](#12-scientific-methodology-gaps)
+13. [Revision History](#13-revision-history)
 
 ---
 
@@ -604,7 +605,83 @@ survived validation. Mega-kernels fail at low SM count.
 | Perf gate | `probador --perf-gate 341` (Phase 12) |
 | QA playbook | 95 models certified via apr-model-qa-playbook |
 
-## 12. Revision History
+## 12. Scientific Methodology Gaps
+
+Audit of what this benchmark does well and what it
+lacks, grounded in MLPerf v4.0 (2024), Splitwise
+(Patel 2024), Sarathi-Serve (Agrawal 2024), and
+LLMPerf (Anyscale 2024).
+
+### What we do well
+
+| Requirement | Status | How |
+|-------------|--------|-----|
+| Clock locking | **PASS** | nvidia-smi -lgc, CV <1% |
+| Deterministic decode | **PASS** | temperature 0, greedy |
+| Latency decomposition | **PASS** | TTFT, ITL, TPOT, us/layer via probador |
+| Isolated builds | **PASS** | forjar deploy, kill competing procs |
+| Machine-readable results | **PASS** | JSON with per-request detail |
+| Pre-registered predictions | **PASS** | 18 F-conditions, Popperian falsification |
+| Provable contracts | **PASS** | 12 contracts, 44 equations, 100% coverage |
+
+### What we're missing
+
+| Gap | Severity | Why it matters | Fix |
+|-----|----------|---------------|-----|
+| **Output correctness** | Critical | Fast-but-wrong is meaningless. Reviewers demand quality co-reporting with speed (SqueezeLLM, AQLM 2024). | `lm-evaluation-harness` or llama.cpp perplexity on WikiText-2 |
+| **Statistical significance** | High | Single-run medians rejected in peer review. MLPerf requires min sample counts. | Bootstrap CIs on tok/s (min 30 runs), Mann-Whitney U for comparisons |
+| **VRAM measurement** | High | Nearly universal gap (Alizadeh 2024). nvidia-smi polling is crude; misses fragmentation. | `nvidia-smi --query-gpu=memory.used -l 100` during runs, or CUDA memory API in probador |
+| **Realistic traffic** | Medium | Rankings invert with workload shape (Vidur, Microsoft 2024). | Poisson arrival via `probador --rate`, ShareGPT prompt-length distributions |
+| **Prefill/decode separation** | Medium | Combined tok/s hides regime-specific bottlenecks (Splitwise 2024). | probador reports prefill_tok_per_sec; not yet used in falsification |
+| **Perplexity delta** | Medium | Speed claims without quality loss quantification are incomplete. | llama.cpp perplexity tool or batuta `/api/v1/eval/perplexity` |
+| **Multi-framework harness** | Low | Ad-hoc per-framework scripts don't scale to 6+ comparisons. | Standardize on OpenAI-compatible API (all 6 frameworks support it) |
+
+### Tooling available in ~/src
+
+| Tool | Repo | What it provides | Gap it closes |
+|------|------|-----------------|--------------|
+| `probador llm load` | probar | tok/s, TTFT, ITL, us/layer, GPU telemetry, Poisson `--rate`, `--validate` | Latency, throughput, basic traffic |
+| `probador llm score` | probar | Weighted A+-F grades, SLO thresholds | Quality grading |
+| `batuta eval perplexity` | batuta | Per-token PPL via Banco API | Perplexity delta |
+| llama.cpp `llama-perplexity` | llama.cpp | WikiText-2 PPL, KL divergence, HellaSwag/MMLU/TruthfulQA | Output correctness, quant accuracy |
+| vLLM benchmarks | vllm | ShareGPT traces, Poisson arrival, VRAM via `torch.cuda.memory_allocated` | Realistic traffic, VRAM methodology |
+| `lm-evaluation-harness` | (pip) | 400+ tasks, multi-backend (HF/GGUF/vLLM/API) | Correctness at scale |
+| `apr profile --granular` | aprender | Per-brick timing, roofline, kernel overhead | Decode bottleneck analysis |
+| `apr check` / `apr trace` | aprender | Integrity + layer correctness | Pre-flight validation |
+
+### Parity query: framework comparison capability
+
+| Framework | In ~/src | OpenAI API | probador compatible | Perplexity tool | Notes |
+|-----------|---------|-----------|-------------------|----------------|-------|
+| realizr | Yes | Yes | **Yes** | via batuta | Primary |
+| Candle | Yes | **No** (CLI) | Ad-hoc scripts | N/A | CLI-only, no server |
+| llama.cpp | Yes | Yes (`llama-server`) | **Yes** | `llama-perplexity` | Has KL divergence |
+| ollama | Yes | Yes | **Yes** | N/A | Wraps llama.cpp |
+| vLLM | Yes | Yes | **Yes** | via lm-eval | Python, torch required |
+| unsloth | Yes | **No** (library) | N/A | via lm-eval | Training-focused |
+| PyTorch | Yes | **No** (library) | N/A | via lm-eval | Too low-level for direct comparison |
+
+**5 of 7 are OpenAI-compatible** → probador can benchmark
+realizr, llama.cpp, ollama, vLLM head-to-head with zero
+code changes. Candle/unsloth/PyTorch need wrappers.
+
+### Phase 13 proposal: Scientific rigor sprint
+
+| ID | Task | Tool | Priority |
+|----|------|------|----------|
+| PMAT-440 | Perplexity comparison: realizr vs Candle vs llama.cpp on WikiText-2 | `llama-perplexity` methodology, adapted for realizr | **P0** |
+| PMAT-441 | Bootstrap CIs on decode tok/s (30 runs × 30s each) | probador + python stats | **P0** |
+| PMAT-442 | VRAM measurement: nvidia-smi polling during probador runs | scripts/measure-vram.sh | P1 |
+| PMAT-443 | Poisson arrival benchmark: c=1..32 with `--rate` | probador `--rate` flag | P1 |
+| PMAT-444 | Output correctness: greedy token comparison (F-PARITY-03) | scripts/compare-outputs.sh | P1 |
+| PMAT-445 | Multi-framework showdown: realizr vs llama.cpp vs vLLM vs ollama | probador, same model, same hardware | P2 |
+
+> **F-QUALITY-01 (proposed):** If realizr perplexity on
+> WikiText-2 exceeds llama.cpp perplexity by >0.1 PPL on
+> the same Q4_K_M model, the dequant path diverges.
+> Action: audit trueno DP4A accumulator precision.
+
+## 13. Revision History
 
 | Version | Date | Changes |
 |---------|------|---------|
@@ -622,3 +699,4 @@ survived validation. Mega-kernels fail at low SM count.
 | 7.4.0 | 2026-04-04 | F-RSS-02 FALSIFIED (2,930 > 673). PMAT-433 Integrating (trueno 60a0dd51). PMAT-432 scripted. |
 | 7.5.0 | 2026-04-04 | trueno#238 (graph dispatch), #239 (pre-pack) filed. PMAT-434 kernel designed. All Phase 12 items FILED+. |
 | 7.6.0 | 2026-04-04 | Parity gap analysis: arch (1 gap: MoE), quant (2 gaps: Q2K/Q3K), 5 unmeasured dims. F-PARITY-03 registered. |
+| 8.0.0 | 2026-04-04 | Section 12: Scientific methodology gaps. 7 gaps identified, 8 tools audited, 6 framework parity matrix. Phase 13 proposed (PMAT-440..445). F-QUALITY-01 proposed. |
