@@ -503,7 +503,7 @@ survived validation. Mega-kernels fail at low SM count.
 
 | ID | Task | Status | Depends |
 |----|------|--------|---------|
-| PMAT-431 | `--context-length` + `--no-fp8-cache` flags | TODO | GH-286 |
+| PMAT-431 | `--context-length` + `--no-fp8-cache` flags | **DONE** | realizr 2a8de443, aprender |
 | PMAT-432 | RSS audit: profile all GPU allocations | TODO | 431 |
 | PMAT-433 | Concurrent Q/K/V stream dispatch | TODO | -- |
 | PMAT-434 | RMSNorm+Residual fusion into matmul | TODO | -- |
