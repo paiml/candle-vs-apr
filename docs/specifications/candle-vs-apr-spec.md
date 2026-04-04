@@ -479,6 +479,7 @@ and confirmed, weakened, or retracted.
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
 | F-PARITY-03 | Greedy output divergence <=1% | **UNTESTED** | scripts/compare-outputs.sh. Needs GPU to run. |
+| F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **UNTESTED** | WikiText-2 Q4_K_M. Phase 13 PMAT-440. |
 
 ---
 
@@ -596,7 +597,7 @@ survived validation. Mega-kernels fail at low SM count.
 | Determinism | Locked clocks, temperature 0, CV <1% (F-HW-01) |
 | Isolation | forjar deploy, kill competing GPU procs |
 | Reproducibility | probador llm load, machine-readable JSON |
-| Falsifiability | 18 F-conditions pre-registered (section 9) |
+| Falsifiability | 19 F-conditions pre-registered (section 9) |
 | Format parity | 3 formats GPU-tested (F-FMTPARITY-01) |
 | Tool parity | apr vs realizr within 1.4% (F-TOOLPARITY-01) |
 | CLI parity | 6/6 features matched (F-CLIPARITY-01) |
