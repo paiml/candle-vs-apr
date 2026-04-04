@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.8.0
+**Version:** 8.9.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -691,7 +691,7 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
 | PMAT-443 | Poisson arrival: c=1..32 with `--rate` | **MEASURED** | c=1: 245-254 tok/s (rate 0.5-2.0). c=4: 151 tok/s decode, 387 agg (rate 8.0). Latency drift at c=4. |
 | PMAT-444 | Output correctness (F-PARITY-03) | **MEASURED** | 72% divergence (chat template, not dequant). F-PARITY-03 WEAKENED. |
-| PMAT-445 | Multi-framework showdown (4-way) | **MEASURED** | Clean GPU: realizr 289.0 vs llama.cpp 333.1 (0.87x total). Decode-only: ~303 vs ~299 (parity). |
+| PMAT-445 | Multi-framework showdown (3-way) | **MEASURED** | llama.cpp 289.3, realizr 268.5, ollama 241.7. Candle 227.4 (ref). All clean GPU. |
 
 > **F-QUALITY-01: FALSIFIED.** realizr WikiText-2
 > PPL = **17.40** vs llama.cpp **12.97** (delta +4.4).
@@ -781,4 +781,5 @@ QKV Phase 2 (PMAT-433/452) is lower-effort but stub only.
 | 8.5.0 | 2026-04-04 | **FALSE REGRESSION: GPU contention** (stale apr finetune/serve). Clean GPU: **277.3** [276.1, 278.5] (+1.3% vs baseline). Showdown: realizr 289 vs llama.cpp 333 (total), decode-only ~parity. realizr#190 CLOSED, trueno#240 CLOSED. Mandatory pre-flight check added. |
 | 8.6.0 | 2026-04-04 | Phase 14 proposed: KV prefix caching (realizr#193), logprobs (realizr#191). Phase 12 status corrected: PMAT-434 REVERTED (5% slower), PMAT-436 DEPRIORITIZED. GPU pre-flight added to scripts. F-CACHE-01 proposed. |
 | 8.7.0 | 2026-04-04 | `/v1/logprobs` SHIPPED (realizr e8da8431). Generation logprobs work; perplexity needs teacher-forcing. |
-| 8.8.0 | 2026-04-04 | **F-QUALITY-01 FALSIFIED:** `/v1/perplexity` teacher-forcing SHIPPED (realizr e49d5534). WikiText-2 PPL: realizr **17.40** vs llama.cpp **12.97** (+4.4). DP4A int8 vs FP32 precision tradeoff. Phase 13 now **6/6 MEASURED**. All 21 F-conditions tested. |
+| 8.8.0 | 2026-04-04 | **F-QUALITY-01 FALSIFIED:** `/v1/perplexity` SHIPPED. WikiText-2 PPL: realizr 17.40 vs llama.cpp 12.97 (+4.4). DP4A int8 vs FP32. All 21 F-conditions tested. |
+| 8.9.0 | 2026-04-04 | 3-way showdown: llama.cpp 289.3 > realizr 268.5 > ollama 241.7 > Candle 227.4. trueno#241 filed (DP4A precision). README updated with full competitive picture. |

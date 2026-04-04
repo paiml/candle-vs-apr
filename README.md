@@ -16,22 +16,21 @@ Candle's general-purpose approach?**
 
 ## Key Findings
 
-### Showdown v8 (RTX 4090, 2520 MHz, clean GPU)
+### Showdown v8.8 (RTX 4090, 2520 MHz, clean GPU)
 
-| Metric | Candle | realizr | llama.cpp | Winner |
-|--------|--------|---------|-----------|--------|
-| Total tok/s (c=1) | 227.4 | 289.0 | **333.1** | llama.cpp (prompt caching) |
-| Decode-only tok/s | 227.4 | **~303** | ~299 | **realizr** (parity) |
-| TTFT P50 (c=1) | -- | 885.9ms | **768.6ms** | llama.cpp |
-| Bootstrap CI | -- | **277.3** [276.1, 278.5] | -- | CV 0.7% |
-| Decode tok/s (c=4) | N/A | **274.5** | 224.8 | **realizr 1.22x** |
-| Peak RSS (MB) | **449** | 3,082 | ~906 | Candle |
+| Metric | Candle | realizr | llama.cpp | ollama | Winner |
+|--------|--------|---------|-----------|--------|--------|
+| Decode tok/s (c=1) | 227.4 | 268.5 | **289.3** | 241.7 | llama.cpp |
+| TTFT P50 (c=1) | -- | 953.6ms | **884.9ms** | 1059.1ms | llama.cpp |
+| ITL P50 (c=1) | -- | 3.73ms | **3.46ms** | 4.14ms | llama.cpp |
+| Decode tok/s (c=4) | N/A | **274.5** | 224.8 | -- | **realizr** |
+| WikiText-2 PPL | -- | 17.40 | **12.97** | -- | llama.cpp |
+| Peak RSS (MB) | **449** | 3,082 | ~906 | -- | Candle |
 
-> **F-PARITY-04:** Total throughput favors llama.cpp
-> (prompt caching). Decode-only: **parity** (~303 vs
-> ~299). realizr wins at c>=4 (continuous batching).
-> Bootstrap: 277.3 tok/s, CV 0.7%, no regression from
-> baseline (273.8).
+> **Rankings at c=1:** llama.cpp > realizr > ollama > Candle.
+> realizr wins at c>=4 (continuous batching).
+> PPL gap (+4.4) is DP4A int8 vs FP32 dequant precision
+> tradeoff (trueno#241).
 
 Full analysis: [performance.md](performance.md).
 Falsification spec (21 F-conditions):
