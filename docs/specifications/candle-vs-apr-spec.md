@@ -511,7 +511,7 @@ survived validation. Mega-kernels fail at low SM count.
 |----|------|--------|---------|
 | PMAT-431 | `--context-length` + `--no-fp8-cache` flags | **DONE** | realizr 2a8de443, aprender |
 | PMAT-432 | RSS audit: profile all GPU allocations | TODO | 431 |
-| PMAT-433 | Fused QKV DP4A GEMV kernel | **P1 DONE** | realizr 8e2f6900, trueno#237 P2 |
+| PMAT-433 | Fused QKV DP4A GEMV kernel | **Design DONE** | realizr 8e2f6900 (design), trueno#237 (integration) |
 | PMAT-434 | RMSNorm+GEMV fusion kernel | FILED | realizr#189 |
 | PMAT-435 | Tensor graph dispatch (trueno layer) | TODO | 433,434 |
 | PMAT-436 | Marlin-style Q4K weight pre-packing | TODO | -- |

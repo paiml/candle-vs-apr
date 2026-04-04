@@ -372,11 +372,12 @@ The 142.8 was from a different realizr build.
 Wrongly dismissed it as WASM-only — a stale 1.0.3 was
 installed; the `llm` subcommand was added later.
 
-**So what:** The kernel itself is fast (246 tok/s on first
-pass via CUDA graph replay). 89% of wall time was serving
-overhead (HTTP + tokenizer + per-token sync + logits
-download). Cross-reference: qwen-coder-deploy confirms
-apr GGUF GPU = 15.1 tok/s at c=1, 107.7 at c=4.
+**So what:** The kernel was fast (246 tok/s measured during
+graph replay, before graph capture was disabled). 89% of
+v1 wall time was serving overhead (HTTP + tokenizer +
+per-token sync). After graph fix (eager dispatch, v3):
+273.8 tok/s. Cross-reference: qwen-coder-deploy confirms
+apr GGUF GPU = 15.1 tok/s at c=1, 107.7 at c=4 (pre-fix).
 
 **Parity target:** <=1.5x vs llama.cpp at c=4 (224.8 tok/s).
 realizr needs >=149.9 tok/s (was 107.7, 39% gap — now
@@ -455,8 +456,8 @@ at c=1 on RTX 4090. Current: 273.8 tok/s (1.20x). Gap: +24.6%.
    only validated approach from qcd (16 fusion attempts failed)
 
 **Work in progress:**
-- PMAT-433 P1 DONE: Fused QKV DP4A GEMV kernel designed
-  and staged for trueno team (trueno#237)
+- PMAT-433 Design DONE: Fused QKV DP4A GEMV kernel designed
+  and staged for trueno integration (trueno#237)
 - PMAT-434 FILED: RMSNorm+GEMV fusion (realizr#189)
 - PMAT-435 TODO: Tensor graph dispatch (depends on 433, 434)
 - PMAT-437 TODO: Re-benchmark with `probador --perf-gate 341`
