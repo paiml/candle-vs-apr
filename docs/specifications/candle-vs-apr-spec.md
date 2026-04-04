@@ -666,16 +666,16 @@ LLMPerf (Anyscale 2024).
 realizr, llama.cpp, ollama, vLLM head-to-head with zero
 code changes. Candle/unsloth/PyTorch need wrappers.
 
-### Phase 13 proposal: Scientific rigor sprint
+### Phase 13: Scientific Rigor Sprint (PMAT-440)
 
-| ID | Task | Tool | Priority |
-|----|------|------|----------|
-| PMAT-440 | Perplexity comparison: realizr vs Candle vs llama.cpp on WikiText-2 | `llama-perplexity` methodology, adapted for realizr | **P0** |
-| PMAT-441 | Bootstrap CIs on decode tok/s (30 runs × 30s each) | probador + python stats | **P0** |
-| PMAT-442 | VRAM measurement: nvidia-smi polling during probador runs | scripts/measure-vram.sh | P1 |
-| PMAT-443 | Poisson arrival benchmark: c=1..32 with `--rate` | probador `--rate` flag | P1 |
-| PMAT-444 | Output correctness: greedy token comparison (F-PARITY-03) | scripts/compare-outputs.sh | P1 |
-| PMAT-445 | Multi-framework showdown: realizr vs llama.cpp vs vLLM vs ollama | probador, same model, same hardware | P2 |
+| ID | Task | Status | Tool |
+|----|------|--------|------|
+| PMAT-440 | Perplexity: realizr vs llama.cpp on WikiText-2 | TODO | `llama-perplexity` methodology |
+| PMAT-441 | Bootstrap CIs on decode tok/s (30 × 30s) | **SCRIPTED** | scripts/bootstrap-ci.sh |
+| PMAT-442 | VRAM measurement during probador runs | **SCRIPTED** | scripts/measure-vram.sh |
+| PMAT-443 | Poisson arrival: c=1..32 with `--rate` | TODO | probador `--rate` flag |
+| PMAT-444 | Output correctness (F-PARITY-03) | **SCRIPTED** | scripts/compare-outputs.sh |
+| PMAT-445 | Multi-framework showdown (4-way) | **SCRIPTED** | scripts/run-showdown.sh + configs/showdown.yaml |
 
 > **F-QUALITY-01 (proposed):** If realizr perplexity on
 > WikiText-2 exceeds llama.cpp perplexity by >0.1 PPL on

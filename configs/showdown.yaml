@@ -1,0 +1,109 @@
+# PMAT-445: Multi-Framework Inference Showdown
+#
+# 4-way comparison: realizr vs llama.cpp vs vLLM vs ollama
+# Same model, same hardware, same methodology.
+#
+# All 4 serve OpenAI-compatible API → probador works unchanged.
+#
+# Usage:
+#   bash scripts/run-showdown.sh            # Full showdown
+#   bash scripts/run-showdown.sh realizr    # Single framework
+#
+# Prerequisites:
+#   - All 4 frameworks built in ~/src/
+#   - Model: qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
+#   - GPU clocks locked (nvidia-smi -lgc)
+
+metadata:
+  version: "1.0.0"
+  created: "2026-04-04"
+  model: "Qwen2.5-Coder-1.5B-Instruct Q4_K_M GGUF"
+  methodology: "probador llm load, 30s, 5s warmup, temp=0, locked clocks"
+  spec_ref: "candle-vs-apr-spec.md section 12, PMAT-445"
+
+model:
+  path: "/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+  arch: "qwen2"
+  params: "1.78B"
+  layers: 28
+  quant: "Q4_K_M"
+
+hardware:
+  lambda:
+    gpu: "RTX 4090"
+    clock_mhz: 2520
+    vram_gb: 24
+  yoga:
+    gpu: "RTX 4060 Laptop"
+    clock_mhz: 1900
+    vram_gb: 8
+
+# Each framework: how to start, what port, how to stop
+frameworks:
+  realizr:
+    port: 8081
+    start: |
+      apr serve run {{model.path}} --gpu --port 8081
+    health: "http://127.0.0.1:8081/health"
+    stop: "pkill -f 'realizr serve.*8081' || true"
+    notes: "Primary. Fused Q4K DP4A. Eager dispatch."
+
+  llama-cpp:
+    port: 8082
+    start: |
+      /home/noah/src/llama.cpp/build/bin/llama-server \
+        --model {{model.path}} \
+        --port 8082 --n-gpu-layers 28 \
+        --ctx-size 4096 --threads 4
+    health: "http://127.0.0.1:8082/health"
+    stop: "pkill -f 'llama-server.*8082' || true"
+    notes: "Reference. cuBLAS + Flash Attention. Most popular C++ runtime."
+
+  vllm:
+    port: 8083
+    start: |
+      python3 -m vllm.entrypoints.openai.api_server \
+        --model /home/noah/models/qwen2.5-coder-1.5b-instruct-safetensors/ \
+        --port 8083 --gpu-memory-utilization 0.9 \
+        --dtype float16 --max-model-len 4096
+    health: "http://127.0.0.1:8083/health"
+    stop: "pkill -f 'vllm.entrypoints.*8083' || true"
+    notes: "PagedAttention. FP16 SafeTensors (no GGUF). Python/torch."
+
+  ollama:
+    port: 8084
+    start: |
+      OLLAMA_HOST=127.0.0.1:8084 ollama serve &
+      sleep 5
+      ollama run qwen2.5-coder:1.5b-instruct-q4_K_M --keepalive 0
+    health: "http://127.0.0.1:8084/api/tags"
+    stop: "pkill -f 'ollama serve' || true"
+    notes: "Wraps llama.cpp. Easiest setup. Model must be pulled first."
+
+# Probador benchmark params (identical for all frameworks)
+benchmark:
+  concurrency: [1, 4]
+  duration: "30s"
+  warmup: "5s"
+  max_tokens: 256
+  stream: false
+  num_layers: 28
+  gpu_telemetry: true
+
+# What to measure and compare
+metrics:
+  primary:
+    - decode_tok_per_sec
+    - ttft_p50_ms
+    - itl_p50_ms
+  secondary:
+    - error_rate
+    - ttft_p99_ms
+    - us_per_layer
+  vram:
+    poll_ms: 100
+    script: "scripts/measure-vram.sh"
+  statistical:
+    runs: 30
+    ci_level: 0.95
+    script: "scripts/bootstrap-ci.sh"
