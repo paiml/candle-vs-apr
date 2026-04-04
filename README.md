@@ -34,7 +34,7 @@ Candle's general-purpose approach?**
 > and llama.cpp 1.22x at c=4.
 
 Full analysis: [performance.md](performance.md).
-Falsification spec (15 F-conditions):
+Falsification spec (17 F-conditions):
 [candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md).
 
 [qcd]: https://github.com/paiml/qwen-coder-deploy
@@ -53,8 +53,9 @@ Falsification spec (15 F-conditions):
 
 **Qwen2.5-Coder-1.5B-Instruct Q4_K_M** -- same model as
 [qwen-coder-deploy][qcd].
-APR v2 prepared via `apr import --preserve-q4k`
+APR v2 prepared via `apr import`
 ([aprender](https://github.com/paiml/aprender)).
+Default produces Q4K (raw passthrough, `--preserve-q4k` deprecated).
 
 ## Benchmark Results
 
@@ -181,9 +182,9 @@ Source of truth: [performance.md](performance.md) scorecard.
 | F-SCALE-01 | realizr c=32 >=1,280 tok/s | **CONFIRMED** (Yoga: 1,776.5, 13.4x scaling) |
 | F-HW-01 | Variance <5% with locked clocks | **CONFIRMED** (CV <1%) |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | **CONFIRMED** |
-| F-COLD-01 | realizr cold-start slower | **CONFIRMED** |
+| F-COLD-01 | realizr cold-start slower | **REVISED** (preload, not JIT) |
 | F-SERVING-01 | Serving overhead <5ms | **CONFIRMED** (TTFT 8.4ms, ~8ms overhead) |
-| F-FORMAT-01 | APR v2 load 2-5x faster | **FALSIFIED** (native q4: 120x slower) |
+| F-FORMAT-01 | APR v2 load 2-5x faster | **FIXED** (Q4K default, raw passthrough) |
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (fewer launches, same GPU time) |
 | F-FMTPARITY-01 | All 3 formats GPU +/-10% | **REVISED** (Yoga: 132.5/151.6/132.3) |
@@ -191,5 +192,7 @@ Source of truth: [performance.md](performance.md) scorecard.
 | F-BRICKPARITY-01 | apr profile vs ncu +/-15% | **FIXED** (Grade A: mem 151.4%, compute 16.2%) |
 | F-PARITY-02 | realizr c=4 <=1.5x llama.cpp | **CONFIRMED** (274.5, 1.22x faster) |
 | F-CLIPARITY-01 | `apr run` = all Candle features | **CONFIRMED** (6/6 closed) |
+| F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** (Phase 12) |
+| F-RSS-02 | realizr RSS <=673 MB at c=1 | **TESTING** (Phase 12) |
 
-**Score: 9 CONFIRMED, 1 FALSIFIED, 1 WEAKENED, 3 REVISED, 1 FIXED**
+**Score: 8 CONFIRMED, 1 WEAKENED, 4 REVISED, 2 FIXED, 2 TESTING**

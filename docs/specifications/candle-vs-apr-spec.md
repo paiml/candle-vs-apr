@@ -163,13 +163,13 @@ qwen-coder-deploy and qwen-train-canary.
 ```bash
 apr import \
   ~/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf \
-  --preserve-q4k --arch qwen2 \
+  --arch qwen2 \
   -o ~/models/qwen2.5-coder-1.5b-instruct-q4k.apr
 ```
 
-`--preserve-q4k` keeps Q4_K superblock layout intact for
-fused DP4A kernels; without it, weights are dequantized
-to F32 and requantized.
+Default import now produces Q4K via raw byte passthrough
+(realizr#185, aprender#582). `--preserve-q4k` is
+deprecated — the flag is accepted but has no effect.
 
 **Raw realizr (fallback — direct GGUF serving):**
 ```bash
