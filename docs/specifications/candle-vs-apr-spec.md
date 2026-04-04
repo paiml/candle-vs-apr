@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.3.0
+**Version:** 8.4.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -676,17 +676,35 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 
 | ID | Task | Status | Tool |
 |----|------|--------|------|
-| PMAT-440 | Perplexity: realizr vs llama.cpp on WikiText-2 | TODO | `llama-perplexity` methodology |
-| PMAT-441 | Bootstrap CIs on decode tok/s | **MEASURED** | 234.2 [232.4, 236.3] 95% CI, CV 1.4%. realizr#190 regression. |
+| PMAT-440 | Perplexity: realizr vs llama.cpp on WikiText-2 | **BLOCKED** | llama.cpp PPL=15.80+/-1.10. realizr needs logprobs (realizr#191). |
+| PMAT-441 | Bootstrap CIs on decode tok/s | **MEASURED** | Showdown: realizr 250.9, llama.cpp 296.4. Bootstrap: 231.9 [229.4, 234.3]. |
 | PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
-| PMAT-443 | Poisson arrival: c=1..32 with `--rate` | TODO | probador `--rate` flag |
+| PMAT-443 | Poisson arrival: c=1..32 with `--rate` | **MEASURED** | c=1: 245-254 tok/s (rate 0.5-2.0). c=4: 151 tok/s decode, 387 agg (rate 8.0). Latency drift at c=4. |
 | PMAT-444 | Output correctness (F-PARITY-03) | **MEASURED** | 72% divergence (chat template, not dequant). F-PARITY-03 WEAKENED. |
 | PMAT-445 | Multi-framework showdown (4-way) | **MEASURED** | realizr 250.9 vs llama.cpp **296.4** (0.85x). F-PARITY-04 FALSIFIED. |
 
-> **F-QUALITY-01 (proposed):** If realizr perplexity on
-> WikiText-2 exceeds llama.cpp perplexity by >0.1 PPL on
-> the same Q4_K_M model, the dequant path diverges.
+> **F-QUALITY-01:** If realizr perplexity on WikiText-2
+> exceeds llama.cpp perplexity by >0.1 PPL on the same
+> Q4_K_M model, the dequant path diverges.
+> **BLOCKED:** llama.cpp PPL=15.80+/-1.10 (baseline).
+> realizr needs logprobs endpoint (realizr#191).
 > Action: audit trueno DP4A accumulator precision.
+
+### Poisson Arrival Results (PMAT-443)
+
+| c | Rate (req/s) | Decode tok/s | Agg tok/s | TTFT P50 | ITL P50 | ITL CV |
+|---|-------------|-------------|-----------|----------|---------|--------|
+| 1 | 0.5 | 245.4 | 6.3 | 21.1ms | 4.1ms | -- |
+| 1 | 1.0 | 250.8 | 80.6 | 41.0ms | 4.0ms | 0.02 |
+| 1 | 2.0 | 253.5 | 169.7 | 41.5ms | 3.9ms | 0.02 |
+| 4 | 2.0 | 151.5 | 254.9 | 241.8ms | 6.6ms | 0.23 |
+| 4 | 4.0 | 151.1 | 297.8 | 1016.5ms | 6.6ms | 0.09 |
+| 4 | 8.0 | 156.8 | 386.7 | 709.1ms | 6.4ms | 0.10 |
+
+At c=1, decode stable 245-254 tok/s (Poisson doesn't
+degrade single-request). At c=4, continuous batching
+scales aggregate throughput (387 vs 254 at rate 2→8)
+while per-request decode drops to ~152 (shared GPU).
 
 ## 13. Revision History
 
@@ -710,3 +728,4 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | 8.1.0 | 2026-04-04 | Phase 13: 4/6 items SCRIPTED. bootstrap-ci.sh, measure-vram.sh, run-showdown.sh + showdown.yaml. F-QUALITY-01 registered (19 F-conditions). |
 | 8.2.0 | 2026-04-04 | **MEASURED on Lambda RTX 4090**: PMAT-441 bootstrap CI (234.2 tok/s), PMAT-442 VRAM (5,388 MiB peak), F-PARITY-03 (72% — chat template). F-REGRESSION-01 FALSIFIED: 273.8→234.2 (-14.5%). realizr#190 filed. 20 F-conditions. |
 | 8.3.0 | 2026-04-04 | **SHOWDOWN: llama.cpp 296.4 > realizr 250.9 (0.85x)**. Bisect: trueno 0.17 host-side dispatch regression (trueno#240 filed). Kernel unchanged (276.4 apr profile). F-PARITY-01, F-SUMMARY-01 FALSIFIED. F-PARITY-04 registered. 21 F-conditions. |
+| 8.4.0 | 2026-04-04 | Phase 13 COMPLETE: 5/6 items MEASURED, 1 BLOCKED (logprobs, realizr#191). Poisson arrival: c=1 stable 245-254, c=4 scales to 387 agg. llama.cpp PPL=15.80. |
