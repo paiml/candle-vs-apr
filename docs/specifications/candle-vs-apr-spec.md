@@ -387,6 +387,70 @@ Candle: CLI only (`stdin->forward->stdout`).
 realizr: full serving stack
 (`HTTP->batch scheduler->eager dispatch->SSE`).
 
+### Parity Gap Analysis
+
+What Candle provides that this benchmark does/doesn't cover.
+
+#### Architecture coverage
+
+| Arch | Candle quantized example | realizr | Benchmarked? |
+|------|-------------------------|---------|-------------|
+| LLaMA | quantized | Yes (llama) | A+ (qa-playbook) |
+| Qwen2 | quantized-qwen2-instruct | Yes (qwen2) | **A+ 273.8** (primary) |
+| Qwen3 | quantized-qwen3 | Yes (qwen3) | **133.7** (Yoga) |
+| Qwen3-MoE | quantized-qwen3-moe | **NO** | Gap |
+| Phi-2/3 | quantized-phi | Yes (phi, phi2) | A+ (qa-playbook) |
+| Gemma | quantized-gemma | Yes (gemma) | A+ (qa-playbook) |
+| T5 | quantized-t5 | Yes (enc/dec) | API wired |
+| Whisper | whisper (non-quantized) | Yes (re-import) | UNBLOCKED |
+| Mistral | (uses quantized/llama) | Yes (mistral) | A+ (qa-playbook) |
+| DeepSeek | deepseekv2 | Yes (deepseek) | Not benchmarked |
+| Falcon | falcon | Yes (falcon) | Not benchmarked |
+| StableLM | stable-lm | Yes (stablelm) | Not benchmarked |
+
+**Gap: Qwen3-MoE** — Candle has `quantized-qwen3-moe`
+but realizr has no MoE dispatch. This is the only
+architecture gap in the quantized examples.
+
+#### GGUF quantization format coverage (CUDA)
+
+| Format | Candle CUDA | trueno GPU | Gap? |
+|--------|------------|-----------|------|
+| Q4_K (Q4_K_M) | QMatMul dequant | **Fused DP4A** | realizr wins |
+| Q5_K (Q5_K_S/M) | QMatMul dequant | **Fused DP4A** | realizr wins |
+| Q6_K | QMatMul dequant | **Fused DP4A** | realizr wins |
+| Q4_0 | QMatMul dequant | cuBLAS (dequant→F16) | Parity |
+| Q4_1 | QMatMul dequant | cuBLAS (dequant→F16) | Parity |
+| Q5_0 | QMatMul dequant | cuBLAS (dequant→F16) | Parity |
+| Q5_1 | QMatMul dequant | cuBLAS (dequant→F16) | Parity |
+| Q8_0 | QMatMul dequant | cuBLAS (dequant→F16) | Parity |
+| Q2_K | QMatMul dequant | **CPU only** | **Gap** |
+| Q3_K | QMatMul dequant | **CPU only** | **Gap** |
+| Q8_1 | QMatMul dequant | cuBLAS | Parity |
+| Q8_K | QMatMul dequant | cuBLAS | Parity |
+| F16 | Native | HGEMM (#174) | Parity |
+| BF16 | Native | cuBLAS | Parity |
+| F32 | Native | cuBLAS | Parity |
+
+**Gaps: Q2_K, Q3_K** — no GPU kernel in trueno. These
+are low-bit formats (2/3-bit) rarely used in practice
+(quality too low for production). Not blocking.
+
+#### Unmeasured dimensions
+
+| Dimension | Status | Why missing |
+|-----------|--------|-------------|
+| VRAM comparison | **Not measured** | Candle VRAM not captured (CLI, no nvidia-smi hook) |
+| Prefill throughput | **Not measured** | probador reports TTFT but not prefill tok/s separately |
+| Output correctness | **Not measured** | Both produce text but no bitwise comparison of logits |
+| Model load time | **Partial** | F-FORMAT-01 covers APR vs GGUF; no Candle-vs-realizr GGUF load comparison |
+| Quantization accuracy | **Not measured** | No perplexity/eval comparison between runtimes |
+
+> **F-PARITY-03 (proposed):** If realizr and Candle
+> produce different top-1 tokens for >1% of positions
+> on the same prompt with temperature 0, the decode
+> paths diverge. Action: compare greedy output strings.
+
 ---
 
 ## 9. Falsification Register
