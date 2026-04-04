@@ -2,8 +2,8 @@
 
 ## Version History
 
-This document has been revised three times as measurement
-methodology improved and upstream bugs were fixed:
+This document tracks measurement methodology, upstream fixes,
+and Phase 12 optimization work:
 
 - **v1 (superseded):** Ad-hoc curl scripts against forjar-deployed
   realizr. Showed 142.8 tok/s. Unreliable — different build,
@@ -13,6 +13,8 @@ methodology improved and upstream bugs were fixed:
 - **v3 (current):** After fixing CUDA graph capture
   (realizr 81c912d2) and self-referential Default (realizr
   cf10c0f7). All numbers below are v3 unless marked otherwise.
+- **Phase 12:** 1.5x Candle target (>=341 tok/s). RSS measured
+  (F14). Fused QKV kernel designed (F15). See findings below.
 
 ## Methodology
 
@@ -163,7 +165,7 @@ via raw byte passthrough (realizr#185). Load time parity.
 | Aspect          | Candle                  | realizr                       |
 |-----------------|-------------------------|-------------------------------|
 | Dequantization  | Separate (QMatMul)      | Fused with matmul (Q4K/Q5K)  |
-| CUDA dispatch   | Per-op kernel launch    | CUDA graph (M=1)              |
+| CUDA dispatch   | Per-op kernel launch    | Eager (graph disabled, Phase 12) |
 | Attention       | Standard                | FlashAttention-style tiled    |
 | KV cache        | Manual management       | Integrated with serving layer |
 
@@ -299,8 +301,8 @@ RMSNorm, attention, and sampling are separate launches.
 The GPU is idle between launches.
 
 **So what:** The fused Q4K kernel saves one memory pass, but
-launch overhead between kernels dominates. CUDA graph capture
-(designed for M=1) should help — needs investigation.
+launch overhead between kernels dominates. Tensor graph
+dispatch (Phase 12, PMAT-435) targets 430→~15 launches.
 
 ---
 

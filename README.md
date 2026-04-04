@@ -44,7 +44,7 @@ Falsification spec (17 F-conditions):
 | Runtime | Architecture | Server | Formats |
 |---------|-------------|--------|---------|
 | [Candle][candle] | QMatMul dequant, general-purpose | CLI only | GGUF, SafeTensors |
-| [realizr][realizr] | Fused Q4K/Q5K/Q6K, CUDA graphs | OpenAI API | GGUF, SafeT, APR v2 |
+| [realizr][realizr] | Fused Q4K/Q5K/Q6K DP4A, eager dispatch | OpenAI API | GGUF, SafeT, APR v2 |
 
 [candle]: https://github.com/huggingface/candle
 [realizr]: https://github.com/paiml/realizar

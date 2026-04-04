@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 7.1.0
+**Version:** 7.2.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -359,7 +359,7 @@ v1 was flat because realizr used SINGLE-REQUEST mode
 > **F-FORMAT-01: FIXED.** Legacy APR native q4 (dtype=128)
 > was 120x slower (CPU dequant). Default `apr import` now
 > produces Q4K (dtype=12) via raw byte passthrough
-> (PMAT-103). Load time parity with GGUF.
+> (realizr#185, aprender#582). Load time parity with GGUF.
 
 ---
 
@@ -370,7 +370,7 @@ v1 was flat because realizr used SINGLE-REQUEST mode
 | Dimension | Candle | realizr |
 |-----------|--------|---------|
 | Dequant | Separate QMatMul step | Fused matmul (Q4K/Q5K/Q6K DP4A) |
-| CUDA dispatch | Per-op kernel launch | CUDA graph (M=1 decode) |
+| CUDA dispatch | Per-op kernel launch | Eager (graph capture disabled after poison fix) |
 | Attention | Standard scaled dot-product | Flash Decoding (KV chunked) |
 | KV cache | Manual, per-call alloc | GPU-resident, per-slot batching |
 | Weight reuse | None (c=1 only) | Batched GEMV: shared across M reqs |
@@ -385,7 +385,7 @@ v1 was flat because realizr used SINGLE-REQUEST mode
 
 Candle: CLI only (`stdin->forward->stdout`).
 realizr: full serving stack
-(`HTTP->batch scheduler->CUDA graph->SSE`).
+(`HTTP->batch scheduler->eager dispatch->SSE`).
 
 ---
 
@@ -525,10 +525,19 @@ survived validation. Mega-kernels fail at low SM count.
 
 ## 11. PMAT Compliance
 
-Determinism . Isolation . Reproducibility .
-Falsifiability . Format/Tool/CLI parity . apr-cli
-gates . Contracts . probador . perf-gate .
-**QA playbook** (95 models certified)
+| Principle | How Enforced |
+|-----------|-------------|
+| Determinism | Locked clocks, temperature 0, CV <1% (F-HW-01) |
+| Isolation | forjar deploy, kill competing GPU procs |
+| Reproducibility | probador llm load, machine-readable JSON |
+| Falsifiability | 17 F-conditions pre-registered (section 9) |
+| Format parity | 3 formats GPU-tested (F-FMTPARITY-01) |
+| Tool parity | apr vs realizr within 1.4% (F-TOOLPARITY-01) |
+| CLI parity | 6/6 features matched (F-CLIPARITY-01) |
+| Contracts | 12 provable-contracts, 44 equations, 100% coverage |
+| Gates | `apr check` -> `apr profile` -> `apr trace` pre-merge |
+| Perf gate | `probador --perf-gate 341` (Phase 12) |
+| QA playbook | 95 models certified via apr-model-qa-playbook |
 
 ## 12. Revision History
 
@@ -543,3 +552,4 @@ gates . Contracts . probador . perf-gate .
 | 6.1.0 | 2026-04-04 | F-FORMAT-01 FIXED (realizr#185, aprender#582). F-COLD-01 REVISED (preload, not JIT). |
 | 7.0.0 | 2026-04-04 | Phase 12: 1.5x Candle target. arXiv + Candle source + qcd research. 8 work items. |
 | 7.1.0 | 2026-04-04 | PMAT-438 measured. Fused QKV design (trueno#237). Multi-stream→fused pivot. |
+| 7.2.0 | 2026-04-04 | CUDA graph→eager (stale claim). PMAT-103→realizr#185. Section 11 expanded. RSS gap 78.2%. |
