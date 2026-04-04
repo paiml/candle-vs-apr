@@ -34,7 +34,7 @@ Candle's general-purpose approach?**
 > and llama.cpp 1.22x at c=4.
 
 Full analysis: [performance.md](performance.md).
-Falsification spec (19 F-conditions):
+Falsification spec (20 F-conditions):
 [candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md).
 
 [qcd]: https://github.com/paiml/qwen-coder-deploy
@@ -198,7 +198,8 @@ Source of truth: [performance.md](performance.md) scorecard.
 | F-CLIPARITY-01 | `apr run` = all Candle features | **CONFIRMED** (6/6 closed) |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** (Phase 12) |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** (min 2,930 MB, irreducible) |
-| F-PARITY-03 | Greedy output divergence <=1% | **UNTESTED** (needs GPU) |
+| F-PARITY-03 | Greedy output divergence <=1% | **WEAKENED** (chat template, not dequant) |
 | F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **UNTESTED** (Phase 13) |
+| F-REGRESSION-01 | No >5% regression vs 81c912d2 | **FALSIFIED** (273.8→234.2, -14.5%) |
 
-**Score: 8 CONFIRMED, 1 FALSIFIED, 1 WEAKENED, 4 REVISED, 2 FIXED, 1 TESTING, 2 UNTESTED**
+**Score: 8 CONFIRMED, 2 FALSIFIED, 2 WEAKENED, 4 REVISED, 2 FIXED, 1 TESTING, 1 UNTESTED**

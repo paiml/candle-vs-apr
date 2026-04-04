@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.1.0
+**Version:** 8.2.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -69,8 +69,10 @@ c=1 is primary (Candle has no server). Concurrent
 benchmarks (c=4..32) show what Candle cannot provide.
 
 **Result:** realizr **1.20x faster** (273.8 vs 227.4)
-after graph poison fix. RSS still favors Candle
-(449 vs 3082 MB). See F-SUMMARY-01, F-PARITY-02 in
+at commit 81c912d2. Current build (37a7e0ae): **234.2**
+[232.4, 236.3] 95% CI — **14.5% regression** filed as
+realizr#190. RSS still favors Candle (449 vs 3082 MB).
+See F-SUMMARY-01, F-PARITY-02, F-REGRESSION-01 in
 section 9.
 
 ---
@@ -478,8 +480,9 @@ and confirmed, weakened, or retracted.
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
-| F-PARITY-03 | Greedy output divergence <=1% | **UNTESTED** | scripts/compare-outputs.sh. Needs GPU to run. |
+| F-PARITY-03 | Greedy output divergence <=1% | **WEAKENED** | 72% word divergence — but caused by chat template wrapping, not dequant. Needs prompt-parity test. |
 | F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **UNTESTED** | WikiText-2 Q4_K_M. Phase 13 PMAT-440. |
+| F-REGRESSION-01 | No >5% decode regression vs 81c912d2 | **FALSIFIED** | 273.8→234.2 (-14.5%). realizr#190 filed. Bootstrap CI: [232.4, 236.3]. |
 
 ---
 
@@ -597,7 +600,7 @@ survived validation. Mega-kernels fail at low SM count.
 | Determinism | Locked clocks, temperature 0, CV <1% (F-HW-01) |
 | Isolation | forjar deploy, kill competing GPU procs |
 | Reproducibility | probador llm load, machine-readable JSON |
-| Falsifiability | 19 F-conditions pre-registered (section 9) |
+| Falsifiability | 20 F-conditions pre-registered (section 9) |
 | Format parity | 3 formats GPU-tested (F-FMTPARITY-01) |
 | Tool parity | apr vs realizr within 1.4% (F-TOOLPARITY-01) |
 | CLI parity | 6/6 features matched (F-CLIPARITY-01) |
@@ -671,10 +674,10 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | ID | Task | Status | Tool |
 |----|------|--------|------|
 | PMAT-440 | Perplexity: realizr vs llama.cpp on WikiText-2 | TODO | `llama-perplexity` methodology |
-| PMAT-441 | Bootstrap CIs on decode tok/s (30 × 30s) | **SCRIPTED** | scripts/bootstrap-ci.sh |
-| PMAT-442 | VRAM measurement during probador runs | **SCRIPTED** | scripts/measure-vram.sh |
+| PMAT-441 | Bootstrap CIs on decode tok/s | **MEASURED** | 234.2 [232.4, 236.3] 95% CI, CV 1.4%. realizr#190 regression. |
+| PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
 | PMAT-443 | Poisson arrival: c=1..32 with `--rate` | TODO | probador `--rate` flag |
-| PMAT-444 | Output correctness (F-PARITY-03) | **SCRIPTED** | scripts/compare-outputs.sh |
+| PMAT-444 | Output correctness (F-PARITY-03) | **MEASURED** | 72% divergence (chat template, not dequant). F-PARITY-03 WEAKENED. |
 | PMAT-445 | Multi-framework showdown (4-way) | **SCRIPTED** | scripts/run-showdown.sh + configs/showdown.yaml |
 
 > **F-QUALITY-01 (proposed):** If realizr perplexity on
@@ -702,3 +705,4 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | 7.6.0 | 2026-04-04 | Parity gap analysis: arch (1 gap: MoE), quant (2 gaps: Q2K/Q3K), 5 unmeasured dims. F-PARITY-03 registered. |
 | 8.0.0 | 2026-04-04 | Section 12: Scientific methodology gaps. 7 gaps identified, 8 tools audited, 6 framework parity matrix. Phase 13 proposed (PMAT-440..445). F-QUALITY-01 proposed. |
 | 8.1.0 | 2026-04-04 | Phase 13: 4/6 items SCRIPTED. bootstrap-ci.sh, measure-vram.sh, run-showdown.sh + showdown.yaml. F-QUALITY-01 registered (19 F-conditions). |
+| 8.2.0 | 2026-04-04 | **MEASURED on Lambda RTX 4090**: PMAT-441 bootstrap CI (234.2 tok/s), PMAT-442 VRAM (5,388 MiB peak), F-PARITY-03 (72% — chat template). F-REGRESSION-01 FALSIFIED: 273.8→234.2 (-14.5%). realizr#190 filed. 20 F-conditions. |

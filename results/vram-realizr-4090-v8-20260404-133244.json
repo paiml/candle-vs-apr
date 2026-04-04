@@ -1,0 +1,13 @@
+{
+  "name": "realizr-4090-v8",
+  "url": "http://127.0.0.1:8081",
+  "pre_vram_mib": 5253,
+  "post_vram_mib": 5283,
+  "peak_vram_mib": 5388,
+  "mean_vram_mib": 5288.3,
+  "min_vram_mib": 5253,
+  "samples": 287,
+  "poll_ms": 100,
+  "decode_tok_s": 234.4,
+  "vram_timeline_csv": "results/vram-realizr-4090-v8-20260404-133244.csv"
+}
