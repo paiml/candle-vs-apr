@@ -22,6 +22,29 @@
 # LLMPerf (Anyscale 2024) and Splitwise (Patel 2024) demand CIs.
 set -euo pipefail
 
+# PMAT-445 pre-flight: GPU isolation check
+# False regression (realizr#190) was caused by stale GPU processes.
+# Abort if unexpected compute processes are detected.
+gpu_preflight() {
+    local procs
+    procs=$(nvidia-smi --query-compute-apps=pid,name,used_memory \
+        --format=csv,noheader 2>/dev/null || true)
+    if [ -n "$procs" ]; then
+        local count
+        count=$(echo "$procs" | wc -l)
+        echo "WARNING: $count GPU compute process(es) detected:"
+        echo "$procs" | sed 's/^/  /'
+        echo ""
+        echo "GPU contention causes false regressions (realizr#190)."
+        echo "Kill competing processes or set SKIP_GPU_PREFLIGHT=1 to override."
+        if [ "${SKIP_GPU_PREFLIGHT:-}" != "1" ]; then
+            exit 1
+        fi
+        echo "SKIP_GPU_PREFLIGHT=1 — continuing anyway."
+    fi
+}
+gpu_preflight
+
 # Defaults
 RUNS=30
 DURATION=30

@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.5.0
+**Version:** 8.6.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -541,8 +541,8 @@ cold model). Contract: `gpu-inference-parity-v1`.
 **Target:** realizr >=341 tok/s decode AND RSS <=673 MB
 at c=1 on RTX 4090. (1.5x Candle's 227.4 / 449 MB.)
 
-**Current:** 273.8 tok/s (1.20x), 3,082 MB RSS (6.9x).
-Gap: +24.6% decode, -78.2% RSS.
+**Current (v8.5 clean GPU):** **277.3** tok/s (1.22x),
+3,082 MB RSS (6.9x). Gap: +23.0% decode, -78.2% RSS.
 
 > **F-1.5X-01:** If realizr cannot sustain >=341 tok/s
 > decode at c=1 (30s, probador) on RTX 4090, the 1.5x
@@ -592,10 +592,12 @@ survived validation. Mega-kernels fail at low SM count.
 |----|------|--------|---------|
 | PMAT-431 | `--context-length` + `--no-fp8-cache` flags | **DONE** | realizr 2a8de443, aprender |
 | PMAT-432 | RSS audit: profile all GPU allocations | SCRIPTED | scripts/audit-gpu-allocs.sh |
-| PMAT-433 | Fused QKV DP4A GEMV kernel | **Integrating** | realizr 8e2f6900 (design), trueno 60a0dd51 (KernelType registered) |
-| PMAT-434 | RMSNorm+GEMV fusion kernel | **Design DONE** | realizr#189, staged kernel + 5 contracts |
-| PMAT-435 | Tensor graph dispatch (trueno layer) | FILED | trueno#238, depends 433,434 |
-| PMAT-436 | Marlin-style Q4K weight pre-packing | FILED | trueno#239 |
+| PMAT-431 | `--context-length` + `--no-fp8-cache` flags | **DONE** | realizr 2a8de443, aprender |
+| PMAT-432 | RSS audit: profile all GPU allocations | SCRIPTED | scripts/audit-gpu-allocs.sh |
+| PMAT-433 | Fused QKV DP4A GEMV kernel | **Phase 1 DONE** | realizr 8e2f6900 (shared Q8 cache). Phase 2 (single launch, trueno#237) = stub only. |
+| PMAT-434 | RMSNorm+GEMV fusion kernel | **REVERTED** | realizr PMAT-092: fused kernel 5% slower. Dead end without new approach. |
+| PMAT-435 | Tensor graph dispatch (trueno layer) | **INFRA DONE** | trueno#238 graph module merged. Phase 12 quantized wiring NOT started. |
+| PMAT-436 | Marlin-style Q4K weight pre-packing | **DEPRIORITIZED** | trueno#239 branch stale (1453 behind). Not beneficial for M=1 decode. |
 | PMAT-437 | Re-benchmark: probador 1.5x gate | TODO | 435 |
 | PMAT-438 | RSS re-measure with --no-fp8-cache | **DONE** | Yoga measured |
 
@@ -714,6 +716,36 @@ degrade single-request). At c=4, continuous batching
 scales aggregate throughput (387 vs 254 at rate 2→8)
 while per-request decode drops to ~152 (shared GPU).
 
+### Phase 14: Parity Sprint — Close Remaining Gaps
+
+**Goal:** Close the 13% total-throughput gap with llama.cpp
+and unblock the only untested F-condition (F-QUALITY-01).
+
+| ID | Task | Status | Upstream | Impact |
+|----|------|--------|----------|--------|
+| PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
+| PMAT-451 | Logprobs endpoint | FILED | realizr#191 | Unblock F-QUALITY-01 (PPL comparison) |
+| PMAT-452 | Fused QKV Phase 2 (single kernel launch) | BLOCKED | trueno#237 (stub only) | -2 launches/layer, ~2% decode |
+| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | TODO | trueno#238 infra done | -85% kernel launches, +20-40% |
+| PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
+
+> **F-CACHE-01 (proposed):** If realizr with KV prefix
+> caching does not achieve total tok/s >= 0.95 * llama.cpp
+> on repeated-prompt workloads, the caching implementation
+> is insufficient. Action: profile cache hit rate.
+
+### Phase 12 Status Update
+
+PMAT-434 (RMSNorm+GEMV fusion) **REVERTED** — fused
+kernel was 5% slower (realizr PMAT-092). PMAT-436
+(Marlin pre-packing) **DEPRIORITIZED** — not beneficial
+for M=1 decode (trueno#239 branch 1453 behind main).
+
+Remaining Phase 12 path: tensor graph dispatch
+(PMAT-435/453) is the highest-impact single technique
+(+20-40%), but requires significant wiring work. Fused
+QKV Phase 2 (PMAT-433/452) is lower-effort but stub only.
+
 ## 13. Revision History
 
 | Version | Date | Changes |
@@ -738,3 +770,4 @@ while per-request decode drops to ~152 (shared GPU).
 | 8.3.0 | 2026-04-04 | **SHOWDOWN: llama.cpp 296.4 > realizr 250.9 (0.85x)**. Bisect: trueno 0.17 host-side dispatch regression (trueno#240 filed). Kernel unchanged (276.4 apr profile). F-PARITY-01, F-SUMMARY-01 FALSIFIED. F-PARITY-04 registered. 21 F-conditions. |
 | 8.4.0 | 2026-04-04 | Phase 13: 5/6 MEASURED, 1 BLOCKED. Poisson c=1 stable 245-254, c=4 387 agg. llama.cpp PPL=15.80. |
 | 8.5.0 | 2026-04-04 | **FALSE REGRESSION: GPU contention** (stale apr finetune/serve). Clean GPU: **277.3** [276.1, 278.5] (+1.3% vs baseline). Showdown: realizr 289 vs llama.cpp 333 (total), decode-only ~parity. realizr#190 CLOSED, trueno#240 CLOSED. Mandatory pre-flight check added. |
+| 8.6.0 | 2026-04-04 | Phase 14 proposed: KV prefix caching (realizr#193), logprobs (realizr#191). Phase 12 status corrected: PMAT-434 REVERTED (5% slower), PMAT-436 DEPRIORITIZED. GPU pre-flight added to scripts. F-CACHE-01 proposed. |

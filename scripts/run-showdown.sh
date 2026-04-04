@@ -14,6 +14,22 @@
 #   - No competing GPU processes
 set -euo pipefail
 
+# PMAT-445 pre-flight: GPU isolation check (realizr#190 lesson)
+gpu_preflight() {
+    local procs
+    procs=$(nvidia-smi --query-compute-apps=pid,name,used_memory \
+        --format=csv,noheader 2>/dev/null || true)
+    if [ -n "$procs" ]; then
+        echo "ERROR: GPU compute processes detected before showdown:"
+        echo "$procs" | sed 's/^/  /'
+        echo "Kill all GPU processes first. GPU contention = false data."
+        if [ "${SKIP_GPU_PREFLIGHT:-}" != "1" ]; then
+            exit 1
+        fi
+    fi
+}
+gpu_preflight
+
 MODEL="/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
 RESULTS_DIR="results/showdown"
 DATE=$(date +%Y%m%d-%H%M%S)
