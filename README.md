@@ -167,6 +167,10 @@ quantized-qwen2-instruct --model model.gguf \
 | `scripts/bench-realizr.sh` | realizr API benchmark harness |
 | `scripts/bench-scaling.sh` | Concurrent scaling benchmark |
 | `scripts/bench-compare.sh` | Generate comparison tables |
+| `scripts/bootstrap-ci.sh` | Bootstrap CIs + Mann-Whitney U (Phase 13) |
+| `scripts/measure-vram.sh` | VRAM polling during probador runs |
+| `scripts/run-showdown.sh` | 4-way framework showdown runner |
+| `configs/showdown.yaml` | Showdown framework definitions |
 | `results/` | JSON results (git-tracked) |
 | `performance.md` | Full analysis and findings |
 | `docs/specifications/` | Popperian falsification spec |

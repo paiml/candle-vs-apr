@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.0.0
+**Version:** 8.1.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -701,3 +701,4 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | 7.5.0 | 2026-04-04 | trueno#238 (graph dispatch), #239 (pre-pack) filed. PMAT-434 kernel designed. All Phase 12 items FILED+. |
 | 7.6.0 | 2026-04-04 | Parity gap analysis: arch (1 gap: MoE), quant (2 gaps: Q2K/Q3K), 5 unmeasured dims. F-PARITY-03 registered. |
 | 8.0.0 | 2026-04-04 | Section 12: Scientific methodology gaps. 7 gaps identified, 8 tools audited, 6 framework parity matrix. Phase 13 proposed (PMAT-440..445). F-QUALITY-01 proposed. |
+| 8.1.0 | 2026-04-04 | Phase 13: 4/6 items SCRIPTED. bootstrap-ci.sh, measure-vram.sh, run-showdown.sh + showdown.yaml. F-QUALITY-01 registered (19 F-conditions). |
