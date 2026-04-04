@@ -207,9 +207,9 @@ request at a time.
 **Candle:** `quantized-qwen2-instruct --model <gguf>
 --prompt <text> --sample-len 256 --temperature 0`
 
-**realizr:** `curl /v1/chat/completions` with
-`stream: false`, `temperature: 0`,
-extract `usage.completion_tokens`
+**realizr:** `probador llm load --url <URL>
+--stream false --max-tokens 256` (v2).
+v1 used raw curl; probador is authoritative.
 
 Temperature 0 (greedy) is mandatory for determinism.
 With temperature >0, non-deterministic output lengths
@@ -406,7 +406,7 @@ and confirmed, weakened, or retracted.
 | F-BRICKPARITY-01 | apr profile = ncu +/-15% | **FIXED** | mem 151.4%, compute 16.2%, Grade A (was C). L2 cache hits |
 | F-RSS-01 | APR RSS < GGUF RSS | **CONFIRMED** | 2,278 < 3,082 MB (26% less via mmap) |
 | F-COLD-01 | realizr cold slower | **REVISED** | preload_modules_for_capture pre-compiles ~60 kernels. Disk cache at ~/.cache/trueno/ptx/ |
-| F-SERVING-01 | Overhead <5ms at c=1 | **CONFIRMED** | TTFT P50=8.4ms. ~8ms overhead |
+| F-SERVING-01 | Overhead <5ms at c=1 | **CONFIRMED** | TTFT 8.4ms - ITL 3.8ms = **4.6ms overhead** |
 | F-FMTPARITY-01 | 3 formats GPU +/-10% | **REVISED** | GGUF 132.5, FP16 **151.6**, APR Q4K 132.3 (Yoga) |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.4%. Version skew was root cause |
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |

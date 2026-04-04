@@ -231,13 +231,14 @@ when batch scheduling is active.
 
 **What:** Candle 449 MB vs realizr 3,082 MB.
 
-**Why:** realizr pre-allocates KV cache for `max_batch=32`
-slots at startup (32 x ~0.2 GB = 6.4 GB). It also includes
-tokio runtime, axum HTTP stack, and tokenizer. Candle is a
-CLI tool with no server overhead and no KV cache pool.
+**Why:** realizr includes tokio runtime, axum HTTP stack,
+tokenizer, and mmap'd model weights — totaling ~3 GB host
+RSS. KV cache is GPU-resident (VRAM, not RSS). Candle is
+a CLI tool with no server overhead.
 
-**So what:** RSS comparison is only meaningful at matched
-concurrency. At c=1, realizr over-provisions by 32x.
+**So what:** RSS comparison is not apples-to-apples:
+server vs CLI. See F14 for measured RSS/VRAM breakdown
+with `--no-fp8-cache` and `--context-length` flags.
 
 ---
 
@@ -514,7 +515,7 @@ wiring complete (encoder layers + LM head).
 | F-HW-01         | Variance <5% with locked clocks | **CONFIRMED** (CV <1%)   |
 | F-MODEL-01      | Candle loads Q4_K_M GGUF        | **CONFIRMED**            |
 | F-COLD-01       | realizr cold-start slower       | **REVISED** (preload, not JIT) |
-| F-SERVING-01    | Serving overhead <5 ms          | **CONFIRMED** (TTFT 8.4ms) |
+| F-SERVING-01    | Serving overhead <5 ms          | **CONFIRMED** (TTFT 8.4 - ITL 3.8 = 4.6ms) |
 | F-FORMAT-01     | APR v2 load 2-5x faster        | **FIXED** (Q4K default, raw passthrough) |
 | F-RSS-01        | APR v2 RSS < GGUF RSS          | **CONFIRMED** (26% less) |
 | F-KERNEL-01     | Fused Q4K lower mem traffic     | **WEAKENED**             |

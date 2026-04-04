@@ -183,7 +183,7 @@ Source of truth: [performance.md](performance.md) scorecard.
 | F-HW-01 | Variance <5% with locked clocks | **CONFIRMED** (CV <1%) |
 | F-MODEL-01 | Candle loads Q4_K_M GGUF | **CONFIRMED** |
 | F-COLD-01 | realizr cold-start slower | **REVISED** (preload, not JIT) |
-| F-SERVING-01 | Serving overhead <5ms | **CONFIRMED** (TTFT 8.4ms, ~8ms overhead) |
+| F-SERVING-01 | Serving overhead <5ms | **CONFIRMED** (TTFT 8.4 - ITL 3.8 = 4.6ms) |
 | F-FORMAT-01 | APR v2 load 2-5x faster | **FIXED** (Q4K default, raw passthrough) |
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (fewer launches, same GPU time) |
