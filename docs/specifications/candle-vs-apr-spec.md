@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 6.0.1
+**Version:** 6.1.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -344,20 +344,22 @@ v1 was flat because realizr used SINGLE-REQUEST mode
 
 | Metric | Predict | Pass | Fail | Status |
 |--------|---------|------|------|--------|
-| APR load | 2-5x faster | ratio 2.0-5.0 | <1.5 | **FALSIFIED** [1] |
+| APR load | 2-5x faster | ratio 2.0-5.0 | <1.5 | **FIXED** [1] |
 | APR RSS | < GGUF | RSS_apr < RSS_gguf | >= | **CONFIRMED** [2] |
 | APR decode | +/-5% of GGUF | 0.95-1.05 | <0.95 | **CONFIRMED** [3] |
 
 **Notes:**
-1. 60s vs 0.49s = 120x slower (dequant+requant)
+1. Legacy AprQ4: 60s (dequant+requant). **FIXED:**
+   default import now produces Q4K (raw passthrough).
+   --preserve-q4k deprecated (aprender#582, realizr#185).
 2. 2,278 < 3,082 MB (26% less via mmap paging)
 3. v3: 17.4 vs 273.8 = 0.06x (FALSIFIED). **v5: 132.3
    vs 132.5 = 0.998x (CONFIRMED, Yoga, #180 fixed)**
 
-> **F-FORMAT-01: FALSIFIED.** APR loads via
-> from_apr->GGUF CUDA (#170 fixed) but takes ~60s
-> (dequant+requant) vs GGUF 0.49s — 120x slower, not
-> 2-5x faster. Zero-copy claim does not hold.
+> **F-FORMAT-01: FIXED.** Legacy APR native q4 (dtype=128)
+> was 120x slower (CPU dequant). Default `apr import` now
+> produces Q4K (dtype=12) via raw byte passthrough
+> (PMAT-103). Load time parity with GGUF.
 
 ---
 
@@ -396,14 +398,14 @@ and confirmed, weakened, or retracted.
 |----|-----------|--------|---------|
 | F-SUMMARY-01 | realizr wins >=1 at c=1 | **REVISED** | v3: 273.8 vs 227.4 (decode win). RSS: Candle (449 vs 3082) |
 | F-PARITY-01 | c=1 within +/-10% | **REVISED** | v1: 0.63x (poisoned). v3: **1.20x realizr** |
-| F-FORMAT-01 | APR load 2-5x faster | **FALSIFIED** | 60s native q4 dequant vs GGUF 0.49s. --preserve-q4k works |
+| F-FORMAT-01 | APR load 2-5x faster | **FIXED** | Legacy AprQ4: 60s (dequant). Current: Q4K raw passthrough (realizr#185) |
 | F-SCALE-01 | c=32 >=1,280 tok/s | **CONFIRMED** | Yoga: **1,776.5** (13.4x from c=1 132.6) |
 | F-HW-01 | Variance <5% locked | **CONFIRMED** | CV 0.8% (Candle), 0.9% (realizr). 2520 MHz locked |
 | F-MODEL-01 | Candle loads Q4_K_M | **CONFIRMED** | 339 tensors, 1.11 GB, 0.49s. Lazy-curand patch needed |
 | F-KERNEL-01 | Fused Q4K lower mem | **WEAKENED** | 22K vs 41K launches but GPU time identical (105/106ms) |
 | F-BRICKPARITY-01 | apr profile = ncu +/-15% | **FIXED** | mem 151.4%, compute 16.2%, Grade A (was C). L2 cache hits |
 | F-RSS-01 | APR RSS < GGUF RSS | **CONFIRMED** | 2,278 < 3,082 MB (26% less via mmap) |
-| F-COLD-01 | realizr cold slower | **CONFIRMED** | Candle 223.1 vs realizr 134.4 (kernel compilation) |
+| F-COLD-01 | realizr cold slower | **REVISED** | preload_modules_for_capture pre-compiles ~60 kernels. Disk cache at ~/.cache/trueno/ptx/ |
 | F-SERVING-01 | Overhead <5ms at c=1 | **CONFIRMED** | TTFT P50=8.4ms. ~8ms overhead |
 | F-FMTPARITY-01 | 3 formats GPU +/-10% | **REVISED** | GGUF 132.5, FP16 **151.6**, APR Q4K 132.3 (Yoga) |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.6%. Version skew was root cause |
@@ -478,6 +480,30 @@ cold model). Contract: `gpu-inference-parity-v1`.
 Qwen3-8B: 133.7 tok/s, TTFT 18.4ms, ITL 7.5ms (Yoga).
 Whisper: re-import verified (67+100 tensors, 0 model.* prefix).
 
+### Phase 11: Format Load + Cold Start (PMAT-420)
+
+| Ticket | Root Cause | Fix |
+|--------|-----------|-----|
+| realizr#185 | APR load warning mentions deprecated flag | Updated to `apr import` |
+| aprender#582 | --preserve-q4k redundant (default since PMAT-103) | Deprecation notice |
+
+**F-FORMAT-01 five-whys (RESOLVED):**
+1. Why 120x slower? → AprQ4 (dtype=128) CPU dequant
+2. Why AprQ4? → File created before raw import default
+3. Why not detected? → Warning mentioned wrong flag
+4. Why --preserve-q4k? → Predates PMAT-103 default
+5. Root cause: **default import already fixed; warning stale**
+
+**F-COLD-01 five-whys (REVISED):**
+1. Why 134.4 vs 223.1? → Server overhead, not kernel JIT
+2. Why not JIT? → `preload_modules_for_capture()` pre-compiles
+   ~60 kernels (GH-129) BEFORE accepting requests
+3. Why disk cache? → `~/.cache/trueno/ptx/{sha256}.cubin`
+   eliminates recompilation across process restarts
+4. Why still slower? → HTTP stack, KV cache pre-alloc,
+   FP8 warmup, parity gate verification
+5. Root cause: **server architecture overhead, not compilation**
+
 ---
 
 ## 11. PMAT Compliance
@@ -497,3 +523,4 @@ gates . Contracts . probador . perf-gate .
 | 5.6-5.9 | 2026-04-03 | Phase 10: whisper/Qwen3/T5 complete. |
 | 6.0.0 | 2026-04-03 | Spec condensed: 982→500 lines. Stale data fixed. |
 | 6.0.1 | 2026-04-04 | Date bump. All 10 phases complete. Parity summary. |
+| 6.1.0 | 2026-04-04 | F-FORMAT-01 FIXED (realizr#185, aprender#582). F-COLD-01 REVISED (preload, not JIT). |
