@@ -415,6 +415,55 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 
 ---
 
+### F14: RSS measured — F-RSS-02 NOT achievable
+
+**What:** PMAT-438 measured RSS on Yoga with all flag
+combinations:
+
+| Config | RSS (MB) | VRAM (MB) | vs baseline |
+|--------|----------|-----------|-------------|
+| baseline (4096, FP8) | 2,985 | 3,878 | -- |
+| --no-fp8-cache | 2,595 | 2,816 | **-1,062 VRAM** |
+| --context-length 512 | 3,069 | 3,682 | -196 VRAM |
+| both | 2,930 | 2,620 | **-1,258 VRAM** |
+
+**Why:** F-RSS-02 target (<=673 MB) requires 78.2% reduction
+from 3,082 MB. Model weights alone are ~1 GB. Server runtime
+(tokio + axum + tokenizer) ~1.5 GB. These are irreducible
+without PagedAttention or lazy weight loading.
+
+**So what:** F-RSS-02 will remain TESTING but is effectively
+NOT ACHIEVABLE at the c=1 server architecture level. The
+meaningful optimization is VRAM: `--no-fp8-cache` saves 1,062 MB
+(27% of baseline VRAM). RSS and VRAM are different problems.
+
+---
+
+### F15: Phase 12 — 1.5x Candle target
+
+**What:** Target: realizr >=341 tok/s (1.5x Candle's 227.4)
+at c=1 on RTX 4090. Current: 273.8 tok/s (1.20x). Gap: +24.6%.
+
+**Why (root cause analysis):**
+1. GPU BW utilization: 20.1% (202.5/1,008 GB/s)
+2. 83.2% kernel launch overhead at M=1
+3. DP4A GEMV compute ceiling: 412 tok/s (at 66%)
+4. Path: tensor graph dispatch (430→~15 launches) is the
+   only validated approach from qcd (16 fusion attempts failed)
+
+**Work in progress:**
+- PMAT-433 P1 DONE: Fused QKV DP4A GEMV kernel designed
+  and staged for trueno team (trueno#237)
+- PMAT-434 FILED: RMSNorm+GEMV fusion (realizr#189)
+- PMAT-435 TODO: Tensor graph dispatch (depends on 433, 434)
+- PMAT-437 TODO: Re-benchmark with `probador --perf-gate 341`
+
+**So what:** F-1.5X-01 requires tensor graph dispatch to
+reduce launch overhead from 83% to <20%. Individual kernel
+fusions (QKV, RMSNorm) are prerequisites, not sufficient.
+
+---
+
 ## Upstream Bugs Discovered
 
 | Issue               | Description                        | Status       | Contract                       |
