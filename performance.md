@@ -115,8 +115,9 @@ v1 was flat because realizr ran in SINGLE-REQUEST mode
 v5 Yoga: all 3 formats GPU, within 14.4%. Old v3 SafeT/APR
 gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16 dtype).
 
-**Verdict (F-FORMAT-01, FALSIFIED):** APR native q4 load ~60s
-vs GGUF 0.49s — 120x slower. --preserve-q4k passes Q4_K raw.
+**Verdict (F-FORMAT-01, FIXED):** Legacy APR native q4 load
+~60s (dequant+requant). Default `apr import` now produces Q4K
+via raw byte passthrough (realizr#185). Load time parity.
 
 **Verdict (F-RSS-01, CONFIRMED):** APR RSS 2,278 MB vs GGUF
 3,082 MB (26% less, mmap paging).
@@ -457,18 +458,20 @@ wiring complete (encoder layers + LM head).
 | F-SCALE-01      | realizr c=32 >=1,280 tok/s     | **CONFIRMED** (1,776 Yoga) |
 | F-HW-01         | Variance <5% with locked clocks | **CONFIRMED** (CV <1%)   |
 | F-MODEL-01      | Candle loads Q4_K_M GGUF        | **CONFIRMED**            |
-| F-COLD-01       | realizr cold-start slower       | **CONFIRMED**            |
+| F-COLD-01       | realizr cold-start slower       | **REVISED** (preload, not JIT) |
 | F-SERVING-01    | Serving overhead <5 ms          | **CONFIRMED** (TTFT 8.4ms) |
-| F-FORMAT-01     | APR v2 load 2-5x faster        | **FALSIFIED** (native q4 120x) |
+| F-FORMAT-01     | APR v2 load 2-5x faster        | **FIXED** (Q4K default, raw passthrough) |
 | F-RSS-01        | APR v2 RSS < GGUF RSS          | **CONFIRMED** (26% less) |
 | F-KERNEL-01     | Fused Q4K lower mem traffic     | **WEAKENED**             |
 | F-FMTPARITY-01  | All 3 formats GPU +/-10%       | **REVISED** (Yoga: 132.5/151.6/132.3) |
 | F-TOOLPARITY-01 | apr-cli vs realizr +/-5%       | **CONFIRMED** (0.0%/1.6%) |
 | F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FIXED** (Grade A) |
 | F-CLIPARITY-01  | `apr run` = all Candle features | **CONFIRMED** (6/6) |
+| F-1.5X-01       | realizr >=341 tok/s (1.5x)      | **TESTING** (Phase 12) |
+| F-RSS-02        | realizr RSS <=673 MB at c=1     | **TESTING** (Phase 12) |
 
-**Score: 9 CONFIRMED, 1 FALSIFIED, 1 WEAKENED, 3 REVISED,
-1 FIXED**
+**Score: 8 CONFIRMED, 1 WEAKENED, 4 REVISED, 2 FIXED,
+2 TESTING**
 
 ### Yoga RTX 4060 Scaling (probador llm load, c=1..32)
 
