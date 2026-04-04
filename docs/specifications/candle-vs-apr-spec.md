@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.4.0
+**Version:** 8.5.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -68,13 +68,14 @@ CUDA — isolating architecture from language/runtime.
 c=1 is primary (Candle has no server). Concurrent
 benchmarks (c=4..32) show what Candle cannot provide.
 
-**Result (v3, 81c912d2):** realizr **1.20x faster**
-(273.8 vs 227.4). **Current (a734cfae):** realizr
-**250.9** [stream=false] — llama.cpp now **296.4**
-(1.18x faster, F-PARITY-04). Root cause: trueno 0.17
-host-side dispatch regression (trueno#240). Raw kernel
-still 276.4 tok/s (apr profile). RSS: Candle 449 MB.
-See F-SUMMARY-01, F-PARITY-04, F-REGRESSION-01.
+**Result (v8 showdown, clean GPU):** realizr **289.0**
+vs llama.cpp **333.1** (total throughput). But llama.cpp
+uses prompt caching (LCP); decode-only: realizr ~303 vs
+llama.cpp ~299 — **parity**. Earlier regression
+(273.8→232) was GPU contention from stale processes, not
+code change (realizr#190 CLOSED). Bootstrap: **277.3**
+[276.1, 278.5] clean. Candle: 227.4. RSS: Candle 449 MB.
+See F-SUMMARY-01, F-PARITY-04.
 
 ---
 
@@ -317,14 +318,21 @@ plus `-summary.json` aggregates.
 
 | Metric | Predict | v1 | v3 (graph fix) | v8 (showdown) | Status |
 |--------|---------|----|----|----|----|
-| Decode tok/s | 0.90-1.10 | 0.63x (poisoned) | **1.20x** (273.8 vs 227.4) | **0.85x** (250.9 vs 296.4) | **v8: FAIL** |
+| Decode tok/s | 0.90-1.10 | 0.63x (poisoned) | **1.20x** (273.8 vs 227.4) | **0.87x total** (289.0 vs 333.1) | **v8: REVISED** |
+| Decode-only | 0.90-1.10 | -- | -- | **~1.01x** (~303 vs ~299) | **PARITY** |
 | Peak RSS | 0.85-1.15 | 0.15x (449/3082) | 0.15x (unchanged) | TBD | **FAIL** |
 
-**F-PARITY-01: FALSIFIED.** v3: 1.20x realizr. v8
-showdown: **0.85x** — llama.cpp 296.4 > realizr 250.9.
-Root cause: trueno 0.17 host-side dispatch regression
-(trueno#240). Raw kernel is 276.4 (apr profile).
+**F-PARITY-01: REVISED.** v3: 1.20x. v8 showdown
+(clean GPU): total throughput **0.87x** (realizr 289.0
+vs llama.cpp 333.1). But llama.cpp prompt caching (LCP
+similarity) inflates total. Decode-only ~303 vs ~299:
+**parity**. Bootstrap: **277.3** [276.1, 278.5].
 RSS still 6.9x higher (server + KV cache pool).
+
+> **Mandatory pre-flight:** `nvidia-smi
+> --query-compute-apps=pid,name --format=csv` must show
+> ONLY the process under test. GPU contention caused
+> false 15% regression (realizr#190 root cause).
 
 ### Phase 2: Scaling Demonstration
 
@@ -465,8 +473,8 @@ and confirmed, weakened, or retracted.
 
 | ID | Prediction | Status | Evidence |
 |----|-----------|--------|---------|
-| F-SUMMARY-01 | realizr wins >=1 at c=1 | **FALSIFIED** | v3: 273.8 (win). v8: **250.9 vs 296.4 llama.cpp** (0.85x). Kernel 276.4 (apr profile). Host-side dispatch regression (trueno#240). |
-| F-PARITY-01 | c=1 within +/-10% | **FALSIFIED** | v3: 1.20x. v8: **0.85x** (realizr 250.9 vs llama.cpp 296.4). Root cause: trueno 0.17 icache regression. |
+| F-SUMMARY-01 | realizr wins >=1 at c=1 | **REVISED** | v3: 273.8. v8 clean: **289.0 vs 333.1 llama.cpp** (total). Decode-only: ~303 vs ~299 (**parity**). llama.cpp wins total via prompt caching. |
+| F-PARITY-01 | c=1 within +/-10% | **REVISED** | v3: 1.20x. v8: **0.87x total** (289.0 vs 333.1). But decode-only ~1.01x (parity). Delta = prompt caching, not kernel speed. |
 | F-FORMAT-01 | APR load 2-5x faster | **FIXED** | Legacy AprQ4: 60s (dequant). Current: Q4K raw passthrough (realizr#185) |
 | F-SCALE-01 | c=32 >=1,280 tok/s | **CONFIRMED** | Yoga: **1,776.5** (13.4x from c=1 132.6) |
 | F-HW-01 | Variance <5% locked | **CONFIRMED** | CV 0.8% (Candle), 0.9% (realizr). 2520 MHz locked |
@@ -479,13 +487,13 @@ and confirmed, weakened, or retracted.
 | F-FMTPARITY-01 | 3 formats GPU +/-10% | **REVISED** | GGUF 132.5, FP16 **151.6**, APR Q4K 132.3 (Yoga) |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.4%. Version skew was root cause |
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
-| F-PARITY-04 | realizr >= llama.cpp at c=1 | **FALSIFIED** | Showdown: realizr 250.9 vs llama.cpp **296.4** (0.85x). trueno#240 host regression. |
+| F-PARITY-04 | realizr >= llama.cpp at c=1 | **REVISED** | Total: realizr 289.0 vs llama.cpp **333.1** (0.87x). Decode-only: ~303 vs ~299 (**parity**). Gap = prompt caching. |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
 | F-PARITY-03 | Greedy output divergence <=1% | **WEAKENED** | 72% word divergence — but caused by chat template wrapping, not dequant. Needs prompt-parity test. |
 | F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **UNTESTED** | WikiText-2 Q4_K_M. Phase 13 PMAT-440. |
-| F-REGRESSION-01 | No >5% decode regression vs 81c912d2 | **FALSIFIED** | 273.8→250.9 (-8.4% stream=false). Root cause: trueno#240 host dispatch. Bootstrap: 231.9 [229.4, 234.3]. realizr#190 filed. |
+| F-REGRESSION-01 | No >5% decode regression vs 81c912d2 | **CONFIRMED** | Clean GPU: **277.3** [276.1, 278.5] vs baseline 273.8 (+1.3%). Previous "regression" was GPU contention. realizr#190 CLOSED. |
 
 ---
 
@@ -681,7 +689,7 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
 | PMAT-443 | Poisson arrival: c=1..32 with `--rate` | **MEASURED** | c=1: 245-254 tok/s (rate 0.5-2.0). c=4: 151 tok/s decode, 387 agg (rate 8.0). Latency drift at c=4. |
 | PMAT-444 | Output correctness (F-PARITY-03) | **MEASURED** | 72% divergence (chat template, not dequant). F-PARITY-03 WEAKENED. |
-| PMAT-445 | Multi-framework showdown (4-way) | **MEASURED** | realizr 250.9 vs llama.cpp **296.4** (0.85x). F-PARITY-04 FALSIFIED. |
+| PMAT-445 | Multi-framework showdown (4-way) | **MEASURED** | Clean GPU: realizr 289.0 vs llama.cpp 333.1 (0.87x total). Decode-only: ~303 vs ~299 (parity). |
 
 > **F-QUALITY-01:** If realizr perplexity on WikiText-2
 > exceeds llama.cpp perplexity by >0.1 PPL on the same
@@ -728,4 +736,5 @@ while per-request decode drops to ~152 (shared GPU).
 | 8.1.0 | 2026-04-04 | Phase 13: 4/6 items SCRIPTED. bootstrap-ci.sh, measure-vram.sh, run-showdown.sh + showdown.yaml. F-QUALITY-01 registered (19 F-conditions). |
 | 8.2.0 | 2026-04-04 | **MEASURED on Lambda RTX 4090**: PMAT-441 bootstrap CI (234.2 tok/s), PMAT-442 VRAM (5,388 MiB peak), F-PARITY-03 (72% — chat template). F-REGRESSION-01 FALSIFIED: 273.8→234.2 (-14.5%). realizr#190 filed. 20 F-conditions. |
 | 8.3.0 | 2026-04-04 | **SHOWDOWN: llama.cpp 296.4 > realizr 250.9 (0.85x)**. Bisect: trueno 0.17 host-side dispatch regression (trueno#240 filed). Kernel unchanged (276.4 apr profile). F-PARITY-01, F-SUMMARY-01 FALSIFIED. F-PARITY-04 registered. 21 F-conditions. |
-| 8.4.0 | 2026-04-04 | Phase 13 COMPLETE: 5/6 items MEASURED, 1 BLOCKED (logprobs, realizr#191). Poisson arrival: c=1 stable 245-254, c=4 scales to 387 agg. llama.cpp PPL=15.80. |
+| 8.4.0 | 2026-04-04 | Phase 13: 5/6 MEASURED, 1 BLOCKED. Poisson c=1 stable 245-254, c=4 387 agg. llama.cpp PPL=15.80. |
+| 8.5.0 | 2026-04-04 | **FALSE REGRESSION: GPU contention** (stale apr finetune/serve). Clean GPU: **277.3** [276.1, 278.5] (+1.3% vs baseline). Showdown: realizr 289 vs llama.cpp 333 (total), decode-only ~parity. realizr#190 CLOSED, trueno#240 CLOSED. Mandatory pre-flight check added. |

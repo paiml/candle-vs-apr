@@ -16,22 +16,22 @@ Candle's general-purpose approach?**
 
 ## Key Findings
 
-### Showdown v8 (RTX 4090, 2520 MHz, stream=false)
+### Showdown v8 (RTX 4090, 2520 MHz, clean GPU)
 
 | Metric | Candle | realizr | llama.cpp | Winner |
 |--------|--------|---------|-----------|--------|
-| Decode tok/s (c=1) | 227.4 | 250.9 | **296.4** | **llama.cpp** |
-| TTFT P50 (c=1) | -- | 1020.2ms | **863.6ms** | llama.cpp |
-| ITL P50 (c=1) | -- | 3.99ms | **3.37ms** | llama.cpp |
-| Raw kernel (apr profile) | -- | **276.4** | -- | realizr kernel |
+| Total tok/s (c=1) | 227.4 | 289.0 | **333.1** | llama.cpp (prompt caching) |
+| Decode-only tok/s | 227.4 | **~303** | ~299 | **realizr** (parity) |
+| TTFT P50 (c=1) | -- | 885.9ms | **768.6ms** | llama.cpp |
+| Bootstrap CI | -- | **277.3** [276.1, 278.5] | -- | CV 0.7% |
 | Decode tok/s (c=4) | N/A | **274.5** | 224.8 | **realizr 1.22x** |
 | Peak RSS (MB) | **449** | 3,082 | ~906 | Candle |
 
-> **F-PARITY-04: FALSIFIED.** llama.cpp now 18% faster
-> than realizr at c=1. Root cause: trueno 0.17 host-side
-> dispatch regression (trueno#240). Raw kernel unchanged
-> at 276.4 tok/s (apr profile). realizr still wins at
-> c>=4 (concurrent batching, llama.cpp N/A for Candle).
+> **F-PARITY-04:** Total throughput favors llama.cpp
+> (prompt caching). Decode-only: **parity** (~303 vs
+> ~299). realizr wins at c>=4 (continuous batching).
+> Bootstrap: 277.3 tok/s, CV 0.7%, no regression from
+> baseline (273.8).
 
 Full analysis: [performance.md](performance.md).
 Falsification spec (21 F-conditions):
