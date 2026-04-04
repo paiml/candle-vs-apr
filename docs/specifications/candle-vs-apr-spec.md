@@ -239,7 +239,7 @@ All 3 formats must have GPU inference. Any gap is a bug.
 | FP16 APR | N/A | -- | 21.2 | **151.6** | #180 FIXED, 7.15x |
 | APR v2 Q4K | N/A | -- | 17.4 | **132.3** | parity with GGUF |
 
-v5 Yoga: all 3 formats GPU, within 14.4% (FP16 fastest).
+v5 Yoga: all 3 formats GPU, within 14.6% (FP16 fastest).
 v3 SafeT/APR gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16-as-F32 dtype). All fixed.
 
 #### 3b. Tool parity: `apr` CLI vs `realizr`
@@ -248,12 +248,12 @@ v3 SafeT/APR gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16-as-F32 dtype
 |--------|------|----|-----------|-----------|-------|
 | GGUF | `realizr serve` | 142.8 | 273.8 | 132.5 | 0.0% ✅ |
 | GGUF | `apr serve run` | 139.8 | 273.8 | 132.5 | |
-| APR Q4K | `realizr serve` | -- | 17.4 | **132.3** | 1.6% ✅ |
+| APR Q4K | `realizr serve` | -- | 17.4 | **132.3** | 1.4% ✅ |
 | APR Q4K | `apr serve run` | -- | 21.9 | **130.4** | |
 | FP16 APR | `realizr serve` | -- | -- | **151.6** | N/A |
 
 Both tools on the same model/format within +/-5%.
-GGUF: **0.0%** (132.5 vs 132.5). APR Q4K: **1.6%**
+GGUF: **0.0%** (132.5 vs 132.5). APR Q4K: **1.4%**
 (130.4 vs 132.3). Previous 25.6% was version skew
 (realizr#179).
 
@@ -408,7 +408,7 @@ and confirmed, weakened, or retracted.
 | F-COLD-01 | realizr cold slower | **REVISED** | preload_modules_for_capture pre-compiles ~60 kernels. Disk cache at ~/.cache/trueno/ptx/ |
 | F-SERVING-01 | Overhead <5ms at c=1 | **CONFIRMED** | TTFT P50=8.4ms. ~8ms overhead |
 | F-FMTPARITY-01 | 3 formats GPU +/-10% | **REVISED** | GGUF 132.5, FP16 **151.6**, APR Q4K 132.3 (Yoga) |
-| F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.6%. Version skew was root cause |
+| F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.4%. Version skew was root cause |
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |

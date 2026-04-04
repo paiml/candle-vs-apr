@@ -112,7 +112,7 @@ v1 was flat because realizr ran in SINGLE-REQUEST mode
 | FP16 APR        | realizr     | 21.2      | **151.6** | --       |
 | APR v2 Q4K      | realizr     | 17.4      | **132.3** | 2,278    |
 
-v5 Yoga: all 3 formats GPU, within 14.4%. Old v3 SafeT/APR
+v5 Yoga: all 3 formats GPU, within 14.6%. Old v3 SafeT/APR
 gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16 dtype).
 
 **Verdict (F-FORMAT-01, FIXED):** Legacy APR native q4 load
@@ -274,7 +274,7 @@ for reproducibility.
 ### F6: Tool parity — CONFIRMED (both pass)
 
 **What:** v5 Yoga with matched versions (both 0.8.3):
-GGUF 0.0% (132.5 vs 132.5), APR Q4K 1.6% (130.4 vs 132.3).
+GGUF 0.0% (132.5 vs 132.5), APR Q4K 1.4% (130.4 vs 132.3).
 Both within +/-5% threshold.
 
 **Why:** v3 25.6% delta was version skew — apr-cli 0.8.1 used
@@ -464,7 +464,7 @@ wiring complete (encoder layers + LM head).
 | F-RSS-01        | APR v2 RSS < GGUF RSS          | **CONFIRMED** (26% less) |
 | F-KERNEL-01     | Fused Q4K lower mem traffic     | **WEAKENED**             |
 | F-FMTPARITY-01  | All 3 formats GPU +/-10%       | **REVISED** (Yoga: 132.5/151.6/132.3) |
-| F-TOOLPARITY-01 | apr-cli vs realizr +/-5%       | **CONFIRMED** (0.0%/1.6%) |
+| F-TOOLPARITY-01 | apr-cli vs realizr +/-5%       | **CONFIRMED** (0.0%/1.4%) |
 | F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FIXED** (Grade A) |
 | F-CLIPARITY-01  | `apr run` = all Candle features | **CONFIRMED** (6/6) |
 | F-1.5X-01       | realizr >=341 tok/s (1.5x)      | **TESTING** (Phase 12) |

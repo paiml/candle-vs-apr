@@ -96,7 +96,7 @@ v5 Yoga confirms batch scheduling: **1,776.5 tok/s at c=32**.
 | FP16 APR | realizr | 21.2 | **151.6** | #180 FIXED (7.15x) |
 | APR v2 Q4K | realizr | 17.4 | **132.3** | parity with GGUF |
 
-v5 Yoga: all 3 formats GPU, within 14.4%. Old v3 SafeT/APR
+v5 Yoga: all 3 formats GPU, within 14.6%. Old v3 SafeT/APR
 gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16 dtype).
 
 ## Hardware
@@ -188,7 +188,7 @@ Source of truth: [performance.md](performance.md) scorecard.
 | F-RSS-01 | APR v2 RSS < GGUF RSS | **CONFIRMED** (26% less) |
 | F-KERNEL-01 | Fused Q4K lower mem traffic | **WEAKENED** (fewer launches, same GPU time) |
 | F-FMTPARITY-01 | All 3 formats GPU +/-10% | **REVISED** (Yoga: 132.5/151.6/132.3) |
-| F-TOOLPARITY-01 | apr-cli vs realizr +/-5% | **CONFIRMED** (GGUF 0.0%, APR 1.6%) |
+| F-TOOLPARITY-01 | apr-cli vs realizr +/-5% | **CONFIRMED** (GGUF 0.0%, APR 1.4%) |
 | F-BRICKPARITY-01 | apr profile vs ncu +/-15% | **FIXED** (Grade A: mem 151.4%, compute 16.2%) |
 | F-PARITY-02 | realizr c=4 <=1.5x llama.cpp | **CONFIRMED** (274.5, 1.22x faster) |
 | F-CLIPARITY-01 | `apr run` = all Candle features | **CONFIRMED** (6/6 closed) |
