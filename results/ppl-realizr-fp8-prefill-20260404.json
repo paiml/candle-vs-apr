@@ -1,0 +1,15 @@
+{
+  "runtime": "realizr",
+  "path": "fp8_prefill_teacher_forcing",
+  "dataset": "wikitext-2-raw",
+  "chunks": 267,
+  "errors": 373,
+  "total_tokens": 126715,
+  "weighted_ppl": 39.24,
+  "avg_tok_s": 127.2,
+  "gpu": "RTX 4090",
+  "comparison": {
+    "realizr_dp4a_decode_ppl": 17.4,
+    "llama_cpp_cublas_ppl": 12.97
+  }
+}

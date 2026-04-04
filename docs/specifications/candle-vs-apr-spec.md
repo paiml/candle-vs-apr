@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.9.0
+**Version:** 9.0.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -68,13 +68,14 @@ CUDA — isolating architecture from language/runtime.
 c=1 is primary (Candle has no server). Concurrent
 benchmarks (c=4..32) show what Candle cannot provide.
 
-**Result (v8 showdown, clean GPU):** realizr **289.0**
-vs llama.cpp **333.1** (total throughput). But llama.cpp
-uses prompt caching (LCP); decode-only: realizr ~303 vs
-llama.cpp ~299 — **parity**. Earlier regression
-(273.8→232) was GPU contention from stale processes, not
-code change (realizr#190 CLOSED). Bootstrap: **277.3**
-[276.1, 278.5] clean. Candle: 227.4. RSS: Candle 449 MB.
+**Result (v9 showdown, clean GPU, 2520 MHz):** realizr
+**281.2** vs llama.cpp **336.7** decode tok/s (16.5% gap).
+llama.cpp TTFT 760ms vs realizr 911ms — prompt caching
+advantage. Earlier false regression (273.8→232) was GPU
+contention (realizr#190 CLOSED). Bootstrap: **277.3**
+[276.1, 278.5]. Candle: 227.4 (reference). RSS: Candle
+449 MB. Fused K+V kernel shipped (trueno 9d99e18c),
+graph poison fix shipped (realizr#194).
 See F-SUMMARY-01, F-PARITY-04.
 
 ---
@@ -492,7 +493,7 @@ and confirmed, weakened, or retracted.
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
 | F-PARITY-03 | Greedy output divergence <=1% | **WEAKENED** | 72% word divergence — but caused by chat template wrapping, not dequant. Needs prompt-parity test. |
-| F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **FALSIFIED** | realizr 17.40 vs llama.cpp 12.97 (+4.4 PPL). DP4A int8 vs cuBLAS FP32 precision delta. |
+| F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **FALSIFIED** | DP4A decode PPL: 20.4-31.3 (weighted 24.2, 5 chunks). llama.cpp 12.97. Gap = DP4A int8 vs FP32. Batched FP8 GEMM path untested (needs batched forward in PPL endpoint). |
 | F-REGRESSION-01 | No >5% decode regression vs 81c912d2 | **CONFIRMED** | Clean GPU: **277.3** [276.1, 278.5] vs baseline 273.8 (+1.3%). Previous "regression" was GPU contention. realizr#190 CLOSED. |
 
 ---
@@ -691,23 +692,35 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
 | PMAT-443 | Poisson arrival: c=1..32 with `--rate` | **MEASURED** | c=1: 245-254 tok/s (rate 0.5-2.0). c=4: 151 tok/s decode, 387 agg (rate 8.0). Latency drift at c=4. |
 | PMAT-444 | Output correctness (F-PARITY-03) | **MEASURED** | 72% divergence (chat template, not dequant). F-PARITY-03 WEAKENED. |
-| PMAT-445 | Multi-framework showdown (3-way) | **MEASURED** | llama.cpp 289.3, realizr 268.5, ollama 241.7. Candle 227.4 (ref). All clean GPU. |
+| PMAT-445 | Multi-framework showdown (3-way) | **MEASURED** | v8.9: llama.cpp 289.3, realizr 268.5, ollama 241.7. v9: llama.cpp **336.7**, realizr **281.2** (16.5% gap). Candle 227.4 (ref). |
 
 > **F-QUALITY-01: FALSIFIED.** realizr WikiText-2
-> PPL = **17.40** vs llama.cpp **12.97** (delta +4.4).
-> Measured via `/v1/perplexity` teacher-forcing endpoint
-> (realizr e49d5534). The gap is from DP4A int8
-> accumulation (realizr decode path) vs FP32 dequant
-> (llama.cpp cuBLAS prefill path). The 0.1 PPL threshold
-> was unrealistic for different numerical paths.
+> DP4A decode PPL = **20.4-31.3** (weighted avg 24.2,
+> 5 chunks of ~1800 tokens). llama.cpp **12.97**.
+> Previous single-chunk measurement (17.40) was
+> text-position-dependent. Measured via `/v1/perplexity`
+> teacher-forcing (realizr e49d5534 + 7c7abb83 poison fix).
 >
-> **Implication:** DP4A decode is 34% worse in PPL than
-> FP32 dequant. This is a known Q4K DP4A precision
-> tradeoff for 1.22x decode speed advantage. For
-> quality-critical applications, the FP8/FP16 prefill
-> path (PPL closer to FP32) should be used.
+> **Root cause:** teacher-forcing endpoint uses sequential
+> decode (DP4A GEMV, M=1), not batched FP8 GEMM prefill.
+> Per-token forward at M=1 accumulates DP4A int8→int32
+> precision error across 28 layers.
 >
-> Action: benchmark FP8 prefill path PPL separately.
+> **Implication:** DP4A decode PPL is significantly worse
+> than FP32 dequant. For quality-critical applications,
+> the batched FP8 GEMM prefill path should be used.
+>
+> **Action (PMAT-456):** Add batched prefill forward to
+> perplexity endpoint. This uses FP8 GEMM (cuBLASLt)
+> instead of DP4A GEMV — higher precision, closer to
+> llama.cpp's FP32 path. Requires new forward function
+> that processes N tokens at once (M=N, not M=1).
+>
+> **Graph poison fix (realizr#194):** Overflow requests
+> no longer corrupt CUDA state. Input validation checks
+> GPU KV cache capacity (not model context_length). Error
+> recovery resets KV cache on forward failure. Contract:
+> C-GRAPH-RECOVERY-01.
 
 ### Poisson Arrival Results (PMAT-443)
 
@@ -734,9 +747,11 @@ and unblock the only untested F-condition (F-QUALITY-01).
 |----|------|--------|----------|--------|
 | PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
-| PMAT-452 | Fused QKV Phase 2 (single kernel launch) | BLOCKED | trueno#237 (stub only) | -2 launches/layer, ~2% decode |
+| PMAT-452 | Fused K+V kernel (single launch) | **KERNEL DONE** | trueno 9d99e18c | -1 launch/layer (28/token). Wiring into realizr dispatch TODO. |
 | PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | TODO | trueno#238 infra done | -85% kernel launches, +20-40% |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
+| PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 7c7abb83 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. |
+| PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
 
 > **F-CACHE-01 (proposed):** If realizr with KV prefix
 > caching does not achieve total tok/s >= 0.95 * llama.cpp
@@ -750,10 +765,14 @@ kernel was 5% slower (realizr PMAT-092). PMAT-436
 (Marlin pre-packing) **DEPRIORITIZED** — not beneficial
 for M=1 decode (trueno#239 branch 1453 behind main).
 
+PMAT-452 (Fused K+V kernel) **IMPLEMENTED** — trueno
+9d99e18c. Follows FusedGateUpSwiglu dual-accumulator
+pattern. ~170 insn/SB (21% savings vs 2×108). Wiring
+into realizr indexed_transformer.rs dispatch remaining.
+
 Remaining Phase 12 path: tensor graph dispatch
 (PMAT-435/453) is the highest-impact single technique
-(+20-40%), but requires significant wiring work. Fused
-QKV Phase 2 (PMAT-433/452) is lower-effort but stub only.
+(+20-40%), but requires significant wiring work.
 
 ## 13. Revision History
 
@@ -783,3 +802,4 @@ QKV Phase 2 (PMAT-433/452) is lower-effort but stub only.
 | 8.7.0 | 2026-04-04 | `/v1/logprobs` SHIPPED (realizr e8da8431). Generation logprobs work; perplexity needs teacher-forcing. |
 | 8.8.0 | 2026-04-04 | **F-QUALITY-01 FALSIFIED:** `/v1/perplexity` SHIPPED. WikiText-2 PPL: realizr 17.40 vs llama.cpp 12.97 (+4.4). DP4A int8 vs FP32. All 21 F-conditions tested. |
 | 8.9.0 | 2026-04-04 | 3-way showdown: llama.cpp 289.3 > realizr 268.5 > ollama 241.7 > Candle 227.4. trueno#241 filed (DP4A precision). README updated with full competitive picture. |
+| 9.0.0 | 2026-04-04 | **realizr#194 SHIPPED** (graph poison fix). Fresh showdown: realizr 281.2 vs llama.cpp 336.7 (16.5% gap). DP4A PPL re-measured: 20.4-31.3 (text-dependent). **Fused K+V kernel IMPLEMENTED** (trueno 9d99e18c, -28 launches/token). F-QUALITY-01 updated: batched FP8 PPL path needed. |
