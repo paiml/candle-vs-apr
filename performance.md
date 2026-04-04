@@ -436,10 +436,11 @@ from 3,082 MB. Model weights alone are ~1 GB. Server runtime
 (tokio + axum + tokenizer) ~1.5 GB. These are irreducible
 without PagedAttention or lazy weight loading.
 
-**So what:** F-RSS-02 will remain TESTING but is effectively
-NOT ACHIEVABLE at the c=1 server architecture level. The
-meaningful optimization is VRAM: `--no-fp8-cache` saves 1,062 MB
-(27% of baseline VRAM). RSS and VRAM are different problems.
+**So what:** F-RSS-02 **FALSIFIED** — minimum measured RSS
+(2,930 MB) is 4.35x the target (673 MB). Model weights
+(~1 GB) + server runtime (~1.5 GB) are irreducible. The
+meaningful optimization is VRAM: `--no-fp8-cache` saves
+1,062 MB (27% of baseline VRAM).
 
 ---
 
@@ -525,10 +526,10 @@ wiring complete (encoder layers + LM head).
 | F-BRICKPARITY-01| apr profile vs ncu +/-15%       | **FIXED** (Grade A) |
 | F-CLIPARITY-01  | `apr run` = all Candle features | **CONFIRMED** (6/6) |
 | F-1.5X-01       | realizr >=341 tok/s (1.5x)      | **TESTING** (Phase 12) |
-| F-RSS-02        | realizr RSS <=673 MB at c=1     | **TESTING** (Phase 12) |
+| F-RSS-02        | realizr RSS <=673 MB at c=1     | **FALSIFIED** (min 2,930 MB) |
 
-**Score: 8 CONFIRMED, 1 WEAKENED, 4 REVISED, 2 FIXED,
-2 TESTING**
+**Score: 8 CONFIRMED, 1 FALSIFIED, 1 WEAKENED, 4 REVISED,
+2 FIXED, 1 TESTING**
 
 ### Yoga RTX 4060 Scaling (probador llm load, c=1..32)
 

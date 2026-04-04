@@ -193,6 +193,6 @@ Source of truth: [performance.md](performance.md) scorecard.
 | F-PARITY-02 | realizr c=4 <=1.5x llama.cpp | **CONFIRMED** (274.5, 1.22x faster) |
 | F-CLIPARITY-01 | `apr run` = all Candle features | **CONFIRMED** (6/6 closed) |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** (Phase 12) |
-| F-RSS-02 | realizr RSS <=673 MB at c=1 | **TESTING** (Phase 12) |
+| F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** (min 2,930 MB, irreducible) |
 
-**Score: 8 CONFIRMED, 1 WEAKENED, 4 REVISED, 2 FIXED, 2 TESTING**
+**Score: 8 CONFIRMED, 1 FALSIFIED, 1 WEAKENED, 4 REVISED, 2 FIXED, 1 TESTING**

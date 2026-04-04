@@ -412,7 +412,7 @@ and confirmed, weakened, or retracted.
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
-| F-RSS-02 | realizr RSS <=673 MB at c=1 | **TESTING** | Phase 12: --context-length + --no-fp8-cache |
+| F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 GB |
 
 ---
 
