@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 6.1.0
+**Version:** 7.0.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -411,6 +411,8 @@ and confirmed, weakened, or retracted.
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.6%. Version skew was root cause |
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
+| F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
+| F-RSS-02 | realizr RSS <=673 MB at c=1 | **TESTING** | Phase 12: --context-length + --no-fp8-cache |
 
 ---
 
@@ -444,65 +446,74 @@ cold model). Contract: `gpu-inference-parity-v1`.
 | quantized-t5 | T5 | API DONE (enc/dec wired) |
 | whisper | Whisper | UNBLOCKED (re-import verified) |
 
-`apr run` extras: `--serve`, `--profile`, `--batch-jsonl`,
-`--offline`, `--backend`, multi-format, `hf://`, 95-model QA.
+### Phases 8-11: COMPLETE (PMAT-390..420)
 
-### Phase 8: Upstream Fixes (PMAT-390) — COMPLETE
+22 upstream tickets fixed across 5 repos. Key results:
+- Phase 8: SafeT 151.6 (7.15x), T5 enc/dec, whisper
+- Phase 9: health-gate, FP8 workspace, stack overflow
+- Phase 10: Qwen3 133.7 tok/s, whisper re-import
+- Phase 11: F-FORMAT-01 FIXED (Q4K default),
+  F-COLD-01 REVISED (preload, not JIT)
 
-| Ticket | Root Cause | Fix |
-|--------|-----------|-----|
-| realizr#174 | SafeT F32 SGEMM (no FP16 dispatch) | FP16 HGEMM: 21.2→151.6 tok/s |
-| realizr#175 | APR native q4 CPU dequant (120x) | Diagnostic + --preserve-q4k guidance |
-| realizr#179 | Tool parity 25.6% (version skew) | Matched versions → 0.0% |
-| aprender#567 | Roofline conflated pipeline/kernel time | Subtract launch overhead |
-| realizr#177 | T5: decoder-only forward pass assumed | Encoder layers + cross-attn |
-| aprender#575 | Whisper: tensor name identity mapping | Strip `model.` prefix |
+### Phase 12: 1.5x Candle Target (PMAT-430)
 
-### Phase 9: Validation Sprint (PMAT-400) — COMPLETE
+**Target:** realizr >=341 tok/s decode AND RSS <=673 MB
+at c=1 on RTX 4090. (1.5x Candle's 227.4 / 449 MB.)
 
-| Ticket | Root Cause | Fix |
-|--------|-----------|-----|
-| probar#37 | No health-gate → 100% failure (GPU busy) | Hard pre-flight check |
-| aprender#578 | 8MB stack overflow on deep profile | 16MB stack thread |
-| realizr#180 | F16-as-F32 dtype panic on serve | dtype dispatch |
-| realizr#179 | Version skew (FP16 vs FP8 cache) | Matched versions |
-| realizr#181 | FP8 warmup invalidated workspace | force_workspace_reinit() |
+**Current:** 273.8 tok/s (1.20x), 3,082 MB RSS (6.9x).
+Gap: +24.6% decode, -77.4% RSS.
 
-### Phase 10: Arch Expansion (PMAT-410) — COMPLETE
+> **F-1.5X-01:** If realizr cannot sustain >=341 tok/s
+> decode at c=1 (30s, probador) on RTX 4090, the 1.5x
+> claim is falsified. Action: profile bottleneck.
+>
+> **F-RSS-02:** If realizr RSS >673 MB at c=1, the
+> memory parity claim is falsified. Action: audit allocs.
 
-| Ticket | Root Cause | Fix |
-|--------|-----------|-----|
-| aprender#577 | whisper_map_name() was identity | Strip `model.` prefix |
-| entrenar 60f63847 | impl block ungated, use gated | cfg(cuda) on impl block |
-| realizr GH-280 | Qwen3 needed PerHeadRmsNormKernel | GPU kernel added |
-| realizr#177 | OwnedQuantizedModel: flat layers vec | encoder_layers + cross-attn + LM head |
+**Root cause analysis (decode):**
+- GPU utilization: 20.1% BW (202.5/1,008 GB/s)
+- 83.2% kernel launch overhead at M=1
+- DP4A GEMV compute ceiling: 412 tok/s (we're at 66%)
+- Candle weaknesses: no CUDA graphs, no FlashAttn for
+  quantized, 2-kernel QMatMul, ~640 launches/token,
+  per-call KV alloc, no memory pooling
 
-Qwen3-8B: 133.7 tok/s, TTFT 18.4ms, ITL 7.5ms (Yoga).
-Whisper: re-import verified (67+100 tensors, 0 model.* prefix).
+**Root cause analysis (RSS):**
+- FP8 weight cache: ~1,500 MB (auto on sm_89+)
+- KV cache: ~224 MB (hardcoded max_seq_len=4096)
+- Model weights: ~1,000 MB (Q4_K_M)
+- Server overhead: ~358 MB
+- Fix: `--context-length` + `--no-fp8-cache` (GH-286)
 
-### Phase 11: Format Load + Cold Start (PMAT-420)
+**Research basis (arXiv + Candle + qwen-coder-deploy):**
 
-| Ticket | Root Cause | Fix |
-|--------|-----------|-----|
-| realizr#185 | APR load warning mentions deprecated flag | Updated to `apr import` |
-| aprender#582 | --preserve-q4k redundant (default since PMAT-103) | Deprecation notice |
+| Technique | Source | Expected | Complexity |
+|-----------|--------|----------|------------|
+| Tensor graph dispatch | qcd Path A, FlashFormer | +20-40% | 4-8 wk |
+| Concurrent Q/K/V streams | CUDA multi-stream | +5-8% | 1 wk |
+| Weight pre-packing (Marlin-style) | IST-DASLab | +10-15% | 2-3 wk |
+| RMSNorm+Residual fusion | llama.cpp #17621 | +10-15% | 1-2 wk |
+| --context-length 512 | GH-286 | RSS -28 MB KV | 1 day |
+| --no-fp8-cache | GH-286 | RSS -1,500 MB | 1 day |
 
-**F-FORMAT-01 five-whys (RESOLVED):**
-1. Why 120x slower? → AprQ4 (dtype=128) CPU dequant
-2. Why AprQ4? → File created before raw import default
-3. Why not detected? → Warning mentioned wrong flag
-4. Why --preserve-q4k? → Predates PMAT-103 default
-5. Root cause: **default import already fixed; warning stale**
+**qcd lesson: 16 kernel fusion approaches FAILED** on
+RTX 4060 (PMAT-280..289). Only tensor graph dispatch
+(reduce 430→~15 launches) and cuBLASLt grouped GEMM
+survived validation. Mega-kernels fail at low SM count.
 
-**F-COLD-01 five-whys (REVISED):**
-1. Why 134.4 vs 223.1? → Server overhead, not kernel JIT
-2. Why not JIT? → `preload_modules_for_capture()` pre-compiles
-   ~60 kernels (GH-129) BEFORE accepting requests
-3. Why disk cache? → `~/.cache/trueno/ptx/{sha256}.cubin`
-   eliminates recompilation across process restarts
-4. Why still slower? → HTTP stack, KV cache pre-alloc,
-   FP8 warmup, parity gate verification
-5. Root cause: **server architecture overhead, not compilation**
+| ID | Task | Status | Depends |
+|----|------|--------|---------|
+| PMAT-431 | `--context-length` + `--no-fp8-cache` flags | TODO | GH-286 |
+| PMAT-432 | RSS audit: profile all GPU allocations | TODO | 431 |
+| PMAT-433 | Concurrent Q/K/V stream dispatch | TODO | -- |
+| PMAT-434 | RMSNorm+Residual fusion into matmul | TODO | -- |
+| PMAT-435 | Tensor graph dispatch (trueno layer) | TODO | 433,434 |
+| PMAT-436 | Marlin-style Q4K weight pre-packing | TODO | -- |
+| PMAT-437 | Re-benchmark: probador 1.5x gate | TODO | 435 |
+| PMAT-438 | RSS re-measure with --no-fp8-cache | TODO | 431 |
+
+**Perf gate:** `probador llm load --url ... --concurrency 1
+--duration 30s --perf-gate 341` (FAIL if <341 tok/s).
 
 ---
 
@@ -524,3 +535,4 @@ gates . Contracts . probador . perf-gate .
 | 6.0.0 | 2026-04-03 | Spec condensed: 982→500 lines. Stale data fixed. |
 | 6.0.1 | 2026-04-04 | Date bump. All 10 phases complete. Parity summary. |
 | 6.1.0 | 2026-04-04 | F-FORMAT-01 FIXED (realizr#185, aprender#582). F-COLD-01 REVISED (preload, not JIT). |
+| 7.0.0 | 2026-04-04 | Phase 12: 1.5x Candle target. arXiv + Candle source + qcd research. 8 work items. |
