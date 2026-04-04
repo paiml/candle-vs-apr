@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 8.2.0
+**Version:** 8.3.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -68,12 +68,13 @@ CUDA — isolating architecture from language/runtime.
 c=1 is primary (Candle has no server). Concurrent
 benchmarks (c=4..32) show what Candle cannot provide.
 
-**Result:** realizr **1.20x faster** (273.8 vs 227.4)
-at commit 81c912d2. Current build (37a7e0ae): **234.2**
-[232.4, 236.3] 95% CI — **14.5% regression** filed as
-realizr#190. RSS still favors Candle (449 vs 3082 MB).
-See F-SUMMARY-01, F-PARITY-02, F-REGRESSION-01 in
-section 9.
+**Result (v3, 81c912d2):** realizr **1.20x faster**
+(273.8 vs 227.4). **Current (a734cfae):** realizr
+**250.9** [stream=false] — llama.cpp now **296.4**
+(1.18x faster, F-PARITY-04). Root cause: trueno 0.17
+host-side dispatch regression (trueno#240). Raw kernel
+still 276.4 tok/s (apr profile). RSS: Candle 449 MB.
+See F-SUMMARY-01, F-PARITY-04, F-REGRESSION-01.
 
 ---
 
@@ -314,15 +315,16 @@ plus `-summary.json` aggregates.
 
 ### Phase 1: Single-Request Parity (c=1)
 
-| Metric | Predict | v1 | v3 (graph fix) | Status |
-|--------|---------|----|----|--------|
-| Decode tok/s | 0.90-1.10 | 0.63x (poisoned) | **1.20x** (273.8 vs 227.4) | **v3: PASS** |
-| Peak RSS | 0.85-1.15 | 0.15x (449/3082) | 0.15x (unchanged) | **FAIL** |
+| Metric | Predict | v1 | v3 (graph fix) | v8 (showdown) | Status |
+|--------|---------|----|----|----|----|
+| Decode tok/s | 0.90-1.10 | 0.63x (poisoned) | **1.20x** (273.8 vs 227.4) | **0.85x** (250.9 vs 296.4) | **v8: FAIL** |
+| Peak RSS | 0.85-1.15 | 0.15x (449/3082) | 0.15x (unchanged) | TBD | **FAIL** |
 
-**F-PARITY-01: REVISED.** v1 FALSIFIED (0.63x, context
-poisoned). v3 after graph fix: **1.20x in realizr's
-favor** (273.8 vs 227.4). RSS still 6.9x higher
-(server + KV cache pool).
+**F-PARITY-01: FALSIFIED.** v3: 1.20x realizr. v8
+showdown: **0.85x** — llama.cpp 296.4 > realizr 250.9.
+Root cause: trueno 0.17 host-side dispatch regression
+(trueno#240). Raw kernel is 276.4 (apr profile).
+RSS still 6.9x higher (server + KV cache pool).
 
 ### Phase 2: Scaling Demonstration
 
@@ -463,8 +465,8 @@ and confirmed, weakened, or retracted.
 
 | ID | Prediction | Status | Evidence |
 |----|-----------|--------|---------|
-| F-SUMMARY-01 | realizr wins >=1 at c=1 | **REVISED** | v3: 273.8 vs 227.4 (decode win). RSS: Candle (449 vs 3082) |
-| F-PARITY-01 | c=1 within +/-10% | **REVISED** | v1: 0.63x (poisoned). v3: **1.20x realizr** |
+| F-SUMMARY-01 | realizr wins >=1 at c=1 | **FALSIFIED** | v3: 273.8 (win). v8: **250.9 vs 296.4 llama.cpp** (0.85x). Kernel 276.4 (apr profile). Host-side dispatch regression (trueno#240). |
+| F-PARITY-01 | c=1 within +/-10% | **FALSIFIED** | v3: 1.20x. v8: **0.85x** (realizr 250.9 vs llama.cpp 296.4). Root cause: trueno 0.17 icache regression. |
 | F-FORMAT-01 | APR load 2-5x faster | **FIXED** | Legacy AprQ4: 60s (dequant). Current: Q4K raw passthrough (realizr#185) |
 | F-SCALE-01 | c=32 >=1,280 tok/s | **CONFIRMED** | Yoga: **1,776.5** (13.4x from c=1 132.6) |
 | F-HW-01 | Variance <5% locked | **CONFIRMED** | CV 0.8% (Candle), 0.9% (realizr). 2520 MHz locked |
@@ -477,12 +479,13 @@ and confirmed, weakened, or retracted.
 | F-FMTPARITY-01 | 3 formats GPU +/-10% | **REVISED** | GGUF 132.5, FP16 **151.6**, APR Q4K 132.3 (Yoga) |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.4%. Version skew was root cause |
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
+| F-PARITY-04 | realizr >= llama.cpp at c=1 | **FALSIFIED** | Showdown: realizr 250.9 vs llama.cpp **296.4** (0.85x). trueno#240 host regression. |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
 | F-PARITY-03 | Greedy output divergence <=1% | **WEAKENED** | 72% word divergence — but caused by chat template wrapping, not dequant. Needs prompt-parity test. |
 | F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **UNTESTED** | WikiText-2 Q4_K_M. Phase 13 PMAT-440. |
-| F-REGRESSION-01 | No >5% decode regression vs 81c912d2 | **FALSIFIED** | 273.8→234.2 (-14.5%). realizr#190 filed. Bootstrap CI: [232.4, 236.3]. |
+| F-REGRESSION-01 | No >5% decode regression vs 81c912d2 | **FALSIFIED** | 273.8→250.9 (-8.4% stream=false). Root cause: trueno#240 host dispatch. Bootstrap: 231.9 [229.4, 234.3]. realizr#190 filed. |
 
 ---
 
@@ -678,7 +681,7 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
 | PMAT-443 | Poisson arrival: c=1..32 with `--rate` | TODO | probador `--rate` flag |
 | PMAT-444 | Output correctness (F-PARITY-03) | **MEASURED** | 72% divergence (chat template, not dequant). F-PARITY-03 WEAKENED. |
-| PMAT-445 | Multi-framework showdown (4-way) | **SCRIPTED** | scripts/run-showdown.sh + configs/showdown.yaml |
+| PMAT-445 | Multi-framework showdown (4-way) | **MEASURED** | realizr 250.9 vs llama.cpp **296.4** (0.85x). F-PARITY-04 FALSIFIED. |
 
 > **F-QUALITY-01 (proposed):** If realizr perplexity on
 > WikiText-2 exceeds llama.cpp perplexity by >0.1 PPL on
@@ -706,3 +709,4 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | 8.0.0 | 2026-04-04 | Section 12: Scientific methodology gaps. 7 gaps identified, 8 tools audited, 6 framework parity matrix. Phase 13 proposed (PMAT-440..445). F-QUALITY-01 proposed. |
 | 8.1.0 | 2026-04-04 | Phase 13: 4/6 items SCRIPTED. bootstrap-ci.sh, measure-vram.sh, run-showdown.sh + showdown.yaml. F-QUALITY-01 registered (19 F-conditions). |
 | 8.2.0 | 2026-04-04 | **MEASURED on Lambda RTX 4090**: PMAT-441 bootstrap CI (234.2 tok/s), PMAT-442 VRAM (5,388 MiB peak), F-PARITY-03 (72% — chat template). F-REGRESSION-01 FALSIFIED: 273.8→234.2 (-14.5%). realizr#190 filed. 20 F-conditions. |
+| 8.3.0 | 2026-04-04 | **SHOWDOWN: llama.cpp 296.4 > realizr 250.9 (0.85x)**. Bisect: trueno 0.17 host-side dispatch regression (trueno#240 filed). Kernel unchanged (276.4 apr profile). F-PARITY-01, F-SUMMARY-01 FALSIFIED. F-PARITY-04 registered. 21 F-conditions. |

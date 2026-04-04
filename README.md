@@ -16,25 +16,25 @@ Candle's general-purpose approach?**
 
 ## Key Findings
 
-### probador llm load (v3, aligned with [qwen-coder-deploy][qcd])
+### Showdown v8 (RTX 4090, 2520 MHz, stream=false)
 
-| Metric | Candle | realizr | llama.cpp (ref) | Winner |
-|--------|--------|---------|-----------------|--------|
-| Decode tok/s (c=1) | 227.4 (decode) | **263.8** (stream) | -- | **realizr 1.16x** |
-| TTFT P50 (c=1) | -- | **8.4ms** | -- | -- |
-| ITL P50 (c=1) | -- | **3.8ms** | -- | -- |
+| Metric | Candle | realizr | llama.cpp | Winner |
+|--------|--------|---------|-----------|--------|
+| Decode tok/s (c=1) | 227.4 | 250.9 | **296.4** | **llama.cpp** |
+| TTFT P50 (c=1) | -- | 1020.2ms | **863.6ms** | llama.cpp |
+| ITL P50 (c=1) | -- | 3.99ms | **3.37ms** | llama.cpp |
+| Raw kernel (apr profile) | -- | **276.4** | -- | realizr kernel |
 | Decode tok/s (c=4) | N/A | **274.5** | 224.8 | **realizr 1.22x** |
-| Peak RSS (MB) | **449** | 3,082 | -- | Candle |
-| **probador Grade** | -- | **A+ (99.0)** | -- | -- |
+| Peak RSS (MB) | **449** | 3,082 | ~906 | Candle |
 
-> **probador A+ (99.0):** SSE streaming fixed (realizr cf10c0f7 --
-> `..Default::default()` in Default impl = infinite recursion).
-> TTFT 8.4ms, decode 263.8 tok/s, ITL 3.8ms.
-> realizr beats Candle 1.16x (streaming) / 1.20x (non-streaming)
-> and llama.cpp 1.22x at c=4.
+> **F-PARITY-04: FALSIFIED.** llama.cpp now 18% faster
+> than realizr at c=1. Root cause: trueno 0.17 host-side
+> dispatch regression (trueno#240). Raw kernel unchanged
+> at 276.4 tok/s (apr profile). realizr still wins at
+> c>=4 (concurrent batching, llama.cpp N/A for Candle).
 
 Full analysis: [performance.md](performance.md).
-Falsification spec (20 F-conditions):
+Falsification spec (21 F-conditions):
 [candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md).
 
 [qcd]: https://github.com/paiml/qwen-coder-deploy
