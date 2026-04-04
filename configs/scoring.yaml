@@ -43,21 +43,42 @@ scores:
 
     interactive:
       raw_data:
-        realizr_original:
+        # v1/v2 (superseded — CUDA graph poison + serving overhead)
+        realizr_v1_original:
           decode_tok_s: 20.1
           ttft_p50_ms: 12710
           itl_p50_ms: 49.7
           us_per_layer: 1773
           error_rate: 0.0
-        realizr_patched:
+          note: "superseded: poisoned CUDA context"
+        realizr_v1_patched:
           decode_tok_s: 22.7
           ttft_p50_ms: 11259
           itl_p50_ms: 44.0
           us_per_layer: 1571
           error_rate: 0.0
+          note: "superseded: event-based sync only"
+        # v3 (current — graph fix 81c912d2, stream fix cf10c0f7)
+        realizr_v3_nonstream:
+          decode_tok_s: 273.8
+          ttft_p50_ms: 935.0
+          itl_p50_ms: 3.65
+          us_per_layer: 130.4
+          error_rate: 0.0
+          note: "stream:false, probador-fixed-c1.json"
+        realizr_v3_stream:
+          decode_tok_s: 263.8
+          ttft_p50_ms: 8.4
+          itl_p50_ms: 3.79
+          us_per_layer: 135.5
+          error_rate: 0.0
+          note: "stream:true, Grade A+ (99.0)"
+        candle_decode:
+          decode_tok_s: 227.4
+          note: "CLI decode-only (no HTTP), self-reported"
 
     cross_reference:
       qwen_coder_deploy_v2:
         llamacpp_gpu_c4: { decode_tok_s: 224.8, note: "Target for ≤1.5x parity" }
-        apr_gpu_c4: { decode_tok_s: 107.7, note: "2.1x gap vs llama.cpp" }
+        apr_gpu_c4: { decode_tok_s: 107.7, note: "2.1x gap vs llama.cpp (pre-fix)" }
         apr_gpu_c1: { decode_tok_s: 15.1, note: "Baseline before event fix" }
