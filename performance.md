@@ -457,8 +457,9 @@ at c=1 on RTX 4090. Current: 273.8 tok/s (1.20x). Gap: +24.6%.
    only validated approach from qcd (16 fusion attempts failed)
 
 **Work in progress:**
-- PMAT-433 Design DONE: Fused QKV DP4A GEMV kernel designed
-  and staged for trueno integration (trueno#237)
+- PMAT-433 Integrating: Fused QKV DP4A GEMV kernel — design
+  done (realizr 8e2f6900), trueno stub registered (60a0dd51),
+  PTX builder unblocked (7361e587 selp_u64)
 - PMAT-434 FILED: RMSNorm+GEMV fusion (realizr#189)
 - PMAT-435 TODO: Tensor graph dispatch (depends on 433, 434)
 - PMAT-437 TODO: Re-benchmark with `probador --perf-gate 341`
