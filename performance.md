@@ -460,8 +460,12 @@ at c=1 on RTX 4090. Current: 273.8 tok/s (1.20x). Gap: +24.6%.
 - PMAT-433 Integrating: Fused QKV DP4A GEMV kernel — design
   done (realizr 8e2f6900), trueno stub registered (60a0dd51),
   PTX builder unblocked (7361e587 selp_u64)
-- PMAT-434 FILED: RMSNorm+GEMV fusion (realizr#189)
-- PMAT-435 TODO: Tensor graph dispatch (depends on 433, 434)
+- PMAT-434 Design DONE: RMSNorm+GEMV fusion (realizr#189) —
+  3-phase kernel staged with 5 provable-contracts (C1-C5)
+- PMAT-435 FILED: Tensor graph dispatch (trueno#238) — 5
+  provable-contracts, 430→15 launches, +20-40% expected
+- PMAT-436 FILED: Marlin-style weight pre-packing (trueno#239)
+  — 4 provable-contracts, +10-15% via coalesced reads
 - PMAT-437 TODO: Re-benchmark with `probador --perf-gate 341`
 
 **So what:** F-1.5X-01 requires tensor graph dispatch to

@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 7.4.0
+**Version:** 7.5.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -555,3 +555,4 @@ survived validation. Mega-kernels fail at low SM count.
 | 7.2.0 | 2026-04-04 | CUDA graph→eager (stale claim). PMAT-103→realizr#185. Section 11 expanded. RSS gap 78.2%. |
 | 7.3.0 | 2026-04-04 | F-SERVING-01 evidence (4.6ms = TTFT-ITL). Phase 1 curl→probador. F3 RSS/VRAM. F11 graph replay. |
 | 7.4.0 | 2026-04-04 | F-RSS-02 FALSIFIED (2,930 > 673). PMAT-433 Integrating (trueno 60a0dd51). PMAT-432 scripted. |
+| 7.5.0 | 2026-04-04 | trueno#238 (graph dispatch), #239 (pre-pack) filed. PMAT-434 kernel designed. All Phase 12 items FILED+. |
