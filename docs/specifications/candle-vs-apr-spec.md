@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 7.0.0
+**Version:** 7.1.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -478,23 +478,29 @@ Gap: +24.6% decode, -77.4% RSS.
   quantized, 2-kernel QMatMul, ~640 launches/token,
   per-call KV alloc, no memory pooling
 
-**Root cause analysis (RSS):**
-- FP8 weight cache: ~1,500 MB (auto on sm_89+)
-- KV cache: ~224 MB (hardcoded max_seq_len=4096)
-- Model weights: ~1,000 MB (Q4_K_M)
-- Server overhead: ~358 MB
-- Fix: `--context-length` + `--no-fp8-cache` (GH-286)
+**Root cause analysis (RSS) — MEASURED on Yoga:**
+
+| Config | RSS | VRAM | vs baseline |
+|--------|-----|------|-------------|
+| baseline (4096, FP8) | 2,985 | 3,878 | -- |
+| --no-fp8-cache | 2,595 | 2,816 | **-1,062 VRAM** |
+| --context-length 512 | 3,069 | 3,682 | -196 VRAM |
+| both | 2,930 | 2,620 | **-1,258 VRAM** |
+
+F-RSS-02 (<=673 MB) NOT achievable — model weights
+(~1 GB) + server (~1.5 GB) irreducible without
+PagedAttention or lazy weight loading.
 
 **Research basis (arXiv + Candle + qwen-coder-deploy):**
 
 | Technique | Source | Expected | Complexity |
 |-----------|--------|----------|------------|
 | Tensor graph dispatch | qcd Path A, FlashFormer | +20-40% | 4-8 wk |
-| Concurrent Q/K/V streams | CUDA multi-stream | +5-8% | 1 wk |
+| Fused QKV GEMV (trueno#237) | gate+up pattern | +8-11% | 2-3 wk |
 | Weight pre-packing (Marlin-style) | IST-DASLab | +10-15% | 2-3 wk |
 | RMSNorm+Residual fusion | llama.cpp #17621 | +10-15% | 1-2 wk |
-| --context-length 512 | GH-286 | RSS -28 MB KV | 1 day |
-| --no-fp8-cache | GH-286 | RSS -1,500 MB | 1 day |
+| --context-length 512 | GH-286 | VRAM -196 MB | **DONE** |
+| --no-fp8-cache | GH-286 | **VRAM -1,062 MB** | **DONE** |
 
 **qcd lesson: 16 kernel fusion approaches FAILED** on
 RTX 4060 (PMAT-280..289). Only tensor graph dispatch
@@ -505,8 +511,8 @@ survived validation. Mega-kernels fail at low SM count.
 |----|------|--------|---------|
 | PMAT-431 | `--context-length` + `--no-fp8-cache` flags | **DONE** | realizr 2a8de443, aprender |
 | PMAT-432 | RSS audit: profile all GPU allocations | TODO | 431 |
-| PMAT-433 | Concurrent Q/K/V stream dispatch | TODO | -- |
-| PMAT-434 | RMSNorm+Residual fusion into matmul | TODO | -- |
+| PMAT-433 | Fused QKV DP4A GEMV kernel | FILED | trueno#237, realizr#188 |
+| PMAT-434 | RMSNorm+GEMV fusion kernel | FILED | realizr#189 |
 | PMAT-435 | Tensor graph dispatch (trueno layer) | TODO | 433,434 |
 | PMAT-436 | Marlin-style Q4K weight pre-packing | TODO | -- |
 | PMAT-437 | Re-benchmark: probador 1.5x gate | TODO | 435 |
@@ -536,3 +542,4 @@ gates . Contracts . probador . perf-gate .
 | 6.0.1 | 2026-04-04 | Date bump. All 10 phases complete. Parity summary. |
 | 6.1.0 | 2026-04-04 | F-FORMAT-01 FIXED (realizr#185, aprender#582). F-COLD-01 REVISED (preload, not JIT). |
 | 7.0.0 | 2026-04-04 | Phase 12: 1.5x Candle target. arXiv + Candle source + qcd research. 8 work items. |
+| 7.1.0 | 2026-04-04 | PMAT-438 measured. Fused QKV design (trueno#237). Multi-stream→fused pivot. |
