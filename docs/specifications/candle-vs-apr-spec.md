@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 7.5.0
+**Version:** 7.6.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -476,7 +476,8 @@ and confirmed, weakened, or retracted.
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
-| F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 GB |
+| F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
+| F-PARITY-03 | Greedy output divergence <=1% | **UNTESTED** | scripts/compare-outputs.sh. Needs GPU to run. |
 
 ---
 
@@ -594,7 +595,7 @@ survived validation. Mega-kernels fail at low SM count.
 | Determinism | Locked clocks, temperature 0, CV <1% (F-HW-01) |
 | Isolation | forjar deploy, kill competing GPU procs |
 | Reproducibility | probador llm load, machine-readable JSON |
-| Falsifiability | 17 F-conditions pre-registered (section 9) |
+| Falsifiability | 18 F-conditions pre-registered (section 9) |
 | Format parity | 3 formats GPU-tested (F-FMTPARITY-01) |
 | Tool parity | apr vs realizr within 1.4% (F-TOOLPARITY-01) |
 | CLI parity | 6/6 features matched (F-CLIPARITY-01) |
@@ -620,3 +621,4 @@ survived validation. Mega-kernels fail at low SM count.
 | 7.3.0 | 2026-04-04 | F-SERVING-01 evidence (4.6ms = TTFT-ITL). Phase 1 curl→probador. F3 RSS/VRAM. F11 graph replay. |
 | 7.4.0 | 2026-04-04 | F-RSS-02 FALSIFIED (2,930 > 673). PMAT-433 Integrating (trueno 60a0dd51). PMAT-432 scripted. |
 | 7.5.0 | 2026-04-04 | trueno#238 (graph dispatch), #239 (pre-pack) filed. PMAT-434 kernel designed. All Phase 12 items FILED+. |
+| 7.6.0 | 2026-04-04 | Parity gap analysis: arch (1 gap: MoE), quant (2 gaps: Q2K/Q3K), 5 unmeasured dims. F-PARITY-03 registered. |
