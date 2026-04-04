@@ -510,7 +510,7 @@ survived validation. Mega-kernels fail at low SM count.
 | PMAT-435 | Tensor graph dispatch (trueno layer) | TODO | 433,434 |
 | PMAT-436 | Marlin-style Q4K weight pre-packing | TODO | -- |
 | PMAT-437 | Re-benchmark: probador 1.5x gate | TODO | 435 |
-| PMAT-438 | RSS re-measure with --no-fp8-cache | TODO | 431 |
+| PMAT-438 | RSS re-measure with --no-fp8-cache | **DONE** | Yoga measured |
 
 **Perf gate:** `probador llm load --url ... --concurrency 1
 --duration 30s --perf-gate 341` (FAIL if <341 tok/s).
