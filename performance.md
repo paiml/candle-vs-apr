@@ -436,7 +436,11 @@ instead of measuring. Violated our own Measure-and-Fix policy.
 | paiml/realizar#180  | FP16 APR dtype panic               | **FIXED**    | dtype dispatch, 151.6 tok/s    |
 | paiml/realizar#181  | Parity gate FP8 workspace stale    | **FIXED**    | force_workspace_reinit()       |
 | paiml/probar#37     | probador lacks health-gate         | **FIXED**    | health-gate-v1 contract        |
+| paiml/aprender#573  | apr run --gpu validation on cold   | **FIXED**    | `gpu-inference-parity-v1`      |
 | paiml/aprender#578  | apr profile stack overflow         | **FIXED**    | 16MB stack thread              |
+| paiml/realizar#185  | Q4K default import (raw passthrough) | **FIXED**  | `apr-load-parity-v1` (F-FORMAT-01) |
+| paiml/aprender#582  | --preserve-q4k deprecated          | **FIXED**    | Default produces Q4K           |
+| paiml/realizar#189  | RMSNorm+GEMV fusion kernel         | **FILED**    | Phase 12 (PMAT-434)            |
 
 [24]: realizr 54ed5e7e. --preserve-q4k passes Q4_K raw.
 [25]: FP8 cache is runtime (gpu_profile.rs:232). Matched
