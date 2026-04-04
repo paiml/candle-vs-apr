@@ -198,8 +198,8 @@ request at a time.
 |-----------|-------|
 | Prompt | Coding task (~38 tokens after template) |
 | Max tokens | 256 |
-| Iterations | 10 (drop first for cold-start) |
-| Measurement | Wall time, tok/s (runtime output) |
+| Duration | 30s (5s warmup) via `probador llm load` |
+| Measurement | decode tok/s, TTFT, ITL, us/layer |
 | Memory | Peak RSS via `/usr/bin/time -v` (Candle) |
 | Isolation | forjar deploy, kill competing GPU procs |
 | Clock | Locked (nvidia-smi -lgc) |
@@ -461,7 +461,7 @@ cold model). Contract: `gpu-inference-parity-v1`.
 at c=1 on RTX 4090. (1.5x Candle's 227.4 / 449 MB.)
 
 **Current:** 273.8 tok/s (1.20x), 3,082 MB RSS (6.9x).
-Gap: +24.6% decode, -77.4% RSS.
+Gap: +24.6% decode, -78.2% RSS.
 
 > **F-1.5X-01:** If realizr cannot sustain >=341 tok/s
 > decode at c=1 (30s, probador) on RTX 4090, the 1.5x
