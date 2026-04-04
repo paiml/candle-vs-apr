@@ -1,8 +1,8 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 6.0.0
-**Last Updated:** 2026-04-03
+**Version:** 6.0.1
+**Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
 **Primary Target:** Lambda Vector (RTX 4090, 24 GB VRAM, sm_89)
@@ -496,3 +496,4 @@ gates . Contracts . probador . perf-gate .
 | 5.0-5.5 | 2026-04-03 | Phase 9: health-gate, FP16 151.6, parity gate fixed. |
 | 5.6-5.9 | 2026-04-03 | Phase 10: whisper/Qwen3/T5 complete. |
 | 6.0.0 | 2026-04-03 | Spec condensed: 982→500 lines. Stale data fixed. |
+| 6.0.1 | 2026-04-04 | Date bump. All 10 phases complete. Parity summary. |
