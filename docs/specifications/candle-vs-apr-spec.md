@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.9.0
+**Version:** 10.0.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -770,7 +770,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | PMAT-450 | KV prefix caching (prompt reuse) | **MEASURED** | realizr#199, cb00153b | PrefixCache wired into streaming path. Cold 136ms → Warm 56ms (2.4x, 80ms saved). Prompt-only KV snapshot. Output parity limited by FP8/DP4A precision divergence. |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
-| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **619 KERNELS, LOGITS CHANGING** | trueno#243, realizr c4ac6f15, realizr#198 | All decode-path kernels wired including Q6K LM head. 619 nodes. Logits now CHANGE per position (was identical — Q6K GEMV had no recording). Remaining: output quality differs from eager path. |
+| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **A/B TESTED** | trueno#243, realizr 06357373, realizr#198 | 619 kernels wired. A/B test: RMSNorm IDENTICAL (diff=0), hidden_buf2 DIVERGED (155.1) after 28 layers. Bug is in Q8→GEMV→attention→FFN pipeline, not input/RMSNorm. Need layer binary search. |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
 | PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 1f527a89 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. Gate debt cleared (realizr#195). |
 | PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
@@ -877,3 +877,4 @@ which kernel's graph replay diverges from eager.
 | 9.7.0 | 2026-04-05 | **Q6K GEMV recording fix** (realizr c4ac6f15): Root cause of identical logits = LM head Q6K had no recording. Fixed all 10 GEMV variants. 619 kernels (was 590). Logits now CHANGE per position. Warmup graph at pos=0 identified (model init, cleared by prefill). Output quality still differs from eager — needs per-kernel divergence analysis. |
 | 9.8.0 | 2026-04-05 | **PMAT-450 KV prefix caching IMPLEMENTED** (realizr 045f1c2d, realizr#199). PrefixCache wired into generate_gpu_resident: lookup before prefill, GPU KV D2H snapshot after generate, H2D restore on cache hit. Skip prefill entirely for repeated prompts. Expected TTFT ~900ms → ~5ms. Needs GPU benchmark. |
 | 9.9.0 | 2026-04-05 | **PMAT-450 MEASURED** (realizr cb00153b). Cold 136ms → Warm 56ms (2.4x, 80ms saved). Fixed: prompt-only KV snapshot (was caching generated tokens too). Wired streaming path (server uses true streaming). Output parity limited by FP8/DP4A precision divergence at first-token boundary. |
+| 10.0.0 | 2026-04-05 | **PMAT-453 A/B TEST** (realizr 06357373). Graph replay at same position: RMSNorm IDENTICAL (diff=0.0), hidden_buf2 DIVERGED (155.1). Bug is in 28-layer Q8→GEMV→attention→FFN pipeline. 619 kernels all recorded + all launch configs correct. Need layer binary search to find first divergence point. |
