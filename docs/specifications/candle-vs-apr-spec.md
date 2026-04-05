@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.7.0
+**Version:** 14.7.1
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -46,7 +46,7 @@ Candle 227.4 is CLI-native decode (no HTTP server available).
 3. **realizr#211 fix: +6.9% c=1, +82% c=4, +168% c=8** (batch scheduler for all paths)
 4. AttentionScore: 44% of compute, 23µs/layer gap vs FA
 5. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap)
-6. Scaling: 1,776 tok/s at c=32 (Yoga, 13.4x from c=1)
+6. Scaling: **3,331 tok/s at c=32** (RTX 4090, 8.81x) / 1,776 at c=32 (Yoga, 13.4x)
 
 ---
 
@@ -135,9 +135,17 @@ Candle has no server — cannot demonstrate c>1.
 
 | c | Agg tok/s | Per-req | ITL P50 | Scaling |
 |---|-----------|---------|---------|---------|
-| 1 | 380.9 | 380.9 | 2.6ms | 1.0x |
-| 4 | **671.0** | 167.7 | 6.0ms | **1.76x** |
-| 8 | **1,009.1** | 127.7 | 7.8ms | **2.65x** |
+| 1 | 378.3 | 378.3 | 2.6ms | 1.0x |
+| 2 | 337.1 | 170.3 | 5.9ms | 0.89x |
+| 4 | **677.3** | 169.3 | 5.9ms | **1.79x** |
+| 8 | **1,042.5** | 130.3 | 7.7ms | **2.75x** |
+| 16 | **1,993.0** | 124.6 | 8.0ms | **5.27x** |
+| 32 | **3,331.4** | 104.2 | 9.6ms | **8.81x** |
+
+c=2 dip: batch scheduler window=0ms, 2 requests serialize through
+M=1 decode with GPU context switching overhead. At c≥4, batch
+coalescing kicks in. c=32 at 3,331 tok/s = 8.81x scaling confirms
+continuous batching works on RTX 4090 post-fix.
 
 **Pre-fix (stream=false serialization bug, realizr#211):**
 
@@ -156,14 +164,25 @@ through M=1 decode. Only `stream=true` was wired to `cuda_batch_tx()`.
 
 | c | realizr (fixed) | llama.cpp b7746 | gap |
 |---|-----------------|-----------------|-----|
-| 1 | 380.9 | 431.1 | 0.88x |
-| 4 | **671.0** | 902.3 | **0.74x** |
+| 1 | 378.3 | 431.1 | 0.88x |
+| 4 | **677.3** | 902.3 | **0.75x** |
 
-Per-request decode at c=4: realizr 167.7 vs llama.cpp ~225 tok/s.
-ITL P50 at c=4: realizr 6.0ms vs llama.cpp ~4.3ms.
-The ~26% gap at c=4 mirrors the c=1 gap (0.88x) and reflects
+Per-request decode at c=4: realizr 169.3 vs llama.cpp ~225 tok/s.
+ITL P50 at c=4: realizr 5.9ms vs llama.cpp ~4.3ms.
+The ~25% gap at c=4 mirrors the c=1 gap (0.88x) and reflects
 FlashAttention-2 (llama.cpp) vs Flash Decoding (realizr) kernel
 efficiency at M>1.
+
+**RTX 4090 vs Yoga (RTX 4060) scaling comparison:**
+
+| c | RTX 4090 (#211) | Yoga (v5) | 4090 scaling | Yoga scaling |
+|---|-----------------|-----------|--------------|--------------|
+| 1 | 378.3 | 132.6 | 1.0x | 1.0x |
+| 4 | 677.3 | 302.2 | 1.79x | 2.28x |
+| 32 | 3,331.4 | 1,776.5 | 8.81x | 13.4x |
+
+Yoga scales better per-c (13.4x vs 8.81x at c=32) because its 24
+SMs saturate later than 128 SMs. Both confirm continuous batching.
 
 **F-PARITY-02:** Now **REVISED** — c=4 scaling was 1.03x (FALSIFIED),
 now 1.76x post-fix. Contract FALSIFY-BATCH-006 added to
@@ -293,7 +312,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-SUMMARY-01 | realizr wins c=1 | **REVISED** | #211 fix: 378.3 vs llama.cpp 431.1 (0.88x). 1.66x Candle. |
 | F-PARITY-01 | c=1 within +/-10% | **REVISED** | #211 fix: 378.3 vs Candle 227 (1.66x). vs llama.cpp 0.88x. |
 | F-FORMAT-01 | APR load faster | **FIXED** | Q4K raw passthrough (realizr#185). |
-| F-SCALE-01 | c=32 >=1,280 | **CONFIRMED** | Yoga: **1,776.5** (13.4x). |
+| F-SCALE-01 | c=32 >=1,280 | **CONFIRMED** | Yoga 1,776.5 (13.4x). RTX 4090 **3,331.4** (8.81x) post-#211. |
 | F-HW-01 | CV <5% locked | **CONFIRMED** | CV 0.8-0.9%. Bootstrap CV=1.5%. |
 | F-MODEL-01 | Candle loads Q4K | **CONFIRMED** | 339 tensors, 0.49s. |
 | F-KERNEL-01 | Fused lower mem | **WEAKENED** | Fewer launches but same GPU time. |
@@ -714,3 +733,4 @@ validates under realistic traffic patterns.
 | 14.6.4 | 04-05 | **Phase 2b medium chunk=16 filled:** 357.7 tok/s (+24.1% vs chunk=32). Verified all 4 prompt profiles reproduce within 2.4% of spec. Binary version fingerprint preflight added to bootstrap-ci.sh (catches apr 0.4.11 vs 0.4.12 PATH regressions, 36% delta). |
 | 14.6.5 | 04-05 | **F-PARITY-02 FALSIFIED:** RTX 4090 c=4 comparison shows realizr scales only 1.03x (367.7 agg) while llama.cpp b7746 scales 2.09x (902.3 agg). realizr#211 filed upstream with five-whys + continuous-batching-v1.yaml proposed contract. New Phase 2c section. |
 | 14.7.0 | 04-05 | **realizr#211 FIXED upstream:** Non-streaming path routed through batch scheduler. c=4 stream=false: 367.7→671.0 (+82%), c=8: 376→1,009.1 (+168%). F-PARITY-02 → FIXED. Contract FALSIFY-BATCH-006 added. c=1 baseline improved 357→380.9 tok/s. |
+| 14.7.1 | 04-05 | **Full RTX 4090 scaling sweep:** c={1,2,4,8,16,32} post-#211. c=32: 3,331.4 agg (8.81x). c=1 bootstrap CI: 378.3 [372.4, 382.4] CV 1.1%. 4090 vs Yoga comparison. c=2 dip (0.89x) from M=1 context switching. realizr#203 five-whys + batched PPL plan filed. |
