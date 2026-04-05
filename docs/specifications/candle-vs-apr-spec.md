@@ -145,12 +145,22 @@ coalescing. Expected M=N decode would give ITL ratio ~1.0-1.5x.
 
 **vs llama.cpp b7746 (c=1 and c=4 measured):**
 
-| c | realizr (stream=false) | realizr (stream=true) | llama.cpp | gap vs llama |
-|---|------------------------|----------------------|-----------|--------------|
-| 1 | 353.9 | 353.9 | 431.1 | 0.82x |
-| 4 | **367.7** | **671.8** | **902.3** | 0.41x / **0.74x** |
+| c | Mode | realizr chunk=16 | llama.cpp b7746 | gap |
+|---|------|------------------|-----------------|-----|
+| 1 | -- | 353.9 | 431.1 | 0.82x |
+| 4 | stream=false | 367.7 | 902.3 | 0.41x |
+| 4 | stream=true | **671.8** | **911.2** | **0.74x** |
 
-llama.cpp c=1 → c=4 scaling: **2.09x**. realizr: **1.03x (serialized)** or **1.90x (batched)**.
+Per-request decode at c=4 stream=true: realizr 171.7 vs llama.cpp 231.4 tok/s (1.35x).
+ITL P50 at c=4 stream=true: realizr 5.82ms vs llama.cpp 4.32ms (1.35x).
+
+**Scaling c=1 → c=4 stream=true:**
+- realizr: 353.9 → 671.8 = **1.90x** ✓
+- llama.cpp: 431.1 → 911.2 = **2.11x** ✓
+
+Both scale properly with streaming. The remaining 35% per-req gap at
+c=4 mirrors the c=1 gap (0.82x) and reflects FlashAttention-2 (llama.cpp)
+vs Flash Decoding (realizr) kernel efficiency at M>1.
 
 **Finding:** realizr has a **dual-path architecture**:
 - `stream=true` → batch scheduler (continuous batching): scales **1.90x** at c=4 (671.8 agg)
