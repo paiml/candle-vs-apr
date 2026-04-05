@@ -45,6 +45,27 @@ gpu_preflight() {
 }
 gpu_preflight
 
+# PMAT-453 pre-flight: binary version fingerprint
+# PATH ordering can select stale apr/probador binaries, causing 36% decode
+# regression (apr 0.4.11 eager vs 0.4.12 graph+chunk=16). Log which binaries
+# resolve so bootstrap results are reproducible.
+binary_preflight() {
+    echo "=== Binary fingerprints ==="
+    for bin in apr probador; do
+        local path
+        path=$(command -v "$bin" 2>/dev/null || echo "not-found")
+        if [ "$path" != "not-found" ]; then
+            local version
+            version=$("$bin" --version 2>/dev/null | head -1 || echo "?")
+            echo "  $bin: $path ($version)"
+        else
+            echo "  $bin: NOT FOUND in PATH"
+        fi
+    done
+    echo ""
+}
+binary_preflight
+
 # Defaults
 RUNS=30
 DURATION=30

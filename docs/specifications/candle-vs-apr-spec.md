@@ -630,6 +630,7 @@ validates under realistic traffic patterns.
 | **L2 cache analysis** | **CLOSED** | P15-05: L2 82% (attn) / 14% (GEMV). Reversed priority ordering. |
 | **Chrome Trace export** | Medium | Custom JSON, not Perfetto/Chrome. |
 | **GPU-side kernel timing** | Medium | CPU Instant::now() + ncu for validation. CUPTI for continuous monitoring. |
+| **Binary version fingerprinting** | **MITIGATED** | bootstrap-ci.sh logs apr/probador PATH resolution + version. Prevents PATH-ordering 36% regressions (0.4.11 eager vs 0.4.12 graph). |
 | **Per-step callbacks** | Low | No loss/lr/grad_norm/step_ms. |
 | **Memory waterfall** | Low | No per-step alloc/peak/fragmentation. |
 
