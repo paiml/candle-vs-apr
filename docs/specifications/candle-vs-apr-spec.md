@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.0.1
+**Version:** 9.1.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -108,16 +108,24 @@ natively:
   decoder-only + enc-dec via realizr#173)
 - **GPU kernels:** `../trueno` (fused Q4K/Q5K/Q6K DP4A,
   CUDA graphs, cuBLAS)
+- **GPU profiling:** `../trueno/crates/cgp`
+  (`cgp profile kernel`, `cgp roofline`, `cgp compete`,
+  `cgp contract verify` — unified perf analysis for
+  CUDA/SIMD/wgpu kernels)
 - **CLI:** `../aprender`
-  (`apr run/serve/check/profile/trace`)
+  (`apr run/serve/check/profile/bench/trace`)
+- **Load testing:** `apr bench` (throughput gate,
+  CI assertions: `--assert-throughput`, `--assert-p99`)
+  and `probador llm load` (HTTP load, Poisson arrival)
 - **Quality:** `../provable-contracts`
   (compile-time contract enforcement)
 - **Testing:** `../probar` (`probador llm load/score`),
   `../apr-model-qa-playbook` (95 models certified)
 
-**Workflow:** `apr check` -> `apr profile` -> `apr trace`
--> `gh issue create` -> fix upstream -> contract ->
-`make perf-gate` -> re-run falsification.
+**Workflow:** `apr check` -> `apr profile` -> `apr bench`
+-> `cgp contract verify` -> `gh issue create` ->
+fix upstream -> contract -> `make perf-gate` ->
+re-run falsification.
 
 ---
 
@@ -619,8 +627,9 @@ survived validation. Mega-kernels fail at low SM count.
 | Tool parity | apr vs realizr within 1.4% (F-TOOLPARITY-01) |
 | CLI parity | 6/6 features matched (F-CLIPARITY-01) |
 | Contracts | 12 provable-contracts, 44 equations, 100% coverage |
-| Gates | `apr check` -> `apr profile` -> `apr trace` pre-merge |
-| Perf gate | `probador --perf-gate 341` (Phase 12) |
+| Gates | `apr check` -> `apr profile` -> `apr bench` -> `cgp contract verify` pre-merge |
+| Perf gate | `apr bench --assert-throughput 341` + `probador --perf-gate 341` (Phase 12) |
+| Kernel perf | `cgp profile kernel` + `cgp roofline --empirical` (trueno kernels) |
 | QA playbook | 95 models certified via apr-model-qa-playbook |
 
 ## 12. Scientific Methodology Gaps
@@ -658,13 +667,19 @@ LLMPerf (Anyscale 2024).
 
 | Tool | Repo | What it provides | Gap it closes |
 |------|------|-----------------|--------------|
-| `probador llm load` | probar | tok/s, TTFT, ITL, us/layer, GPU telemetry, Poisson `--rate`, `--validate` | Latency, throughput, basic traffic |
+| `probador llm load` | probar | tok/s, TTFT, ITL, us/layer, GPU telemetry, Poisson `--rate`, `--validate` | Latency, throughput, HTTP load |
 | `probador llm score` | probar | Weighted A+-F grades, SLO thresholds | Quality grading |
+| `apr profile --granular` | aprender | Per-brick timing, roofline, kernel overhead, `--perf-grade` | Decode bottleneck analysis |
+| `apr bench` | aprender | Throughput gate, CI assertions (`--assert-throughput`, `--assert-p99`) | Local load testing, perf gate |
+| `cgp profile kernel` | trueno/cgp | CUDA PTX kernel profiling via ncu + CUPTI | Kernel-level bottleneck |
+| `cgp roofline` | trueno/cgp | Roofline model (cuda/avx2/avx512/wgpu), empirical or spec | Memory vs compute bound analysis |
+| `cgp compete` | trueno/cgp | Head-to-head comparison (`--ours` vs `--theirs`) | Framework shootout automation |
+| `cgp contract verify` | trueno/cgp | Performance contract CI/CD gate | Regression prevention |
+| `cgp diff` | trueno/cgp | Compare two profiles (git integration) | Profile regression detection |
 | `batuta eval perplexity` | batuta | Per-token PPL via Banco API | Perplexity delta |
 | llama.cpp `llama-perplexity` | llama.cpp | WikiText-2 PPL, KL divergence, HellaSwag/MMLU/TruthfulQA | Output correctness, quant accuracy |
 | vLLM benchmarks | vllm | ShareGPT traces, Poisson arrival, VRAM via `torch.cuda.memory_allocated` | Realistic traffic, VRAM methodology |
 | `lm-evaluation-harness` | (pip) | 400+ tasks, multi-backend (HF/GGUF/vLLM/API) | Correctness at scale |
-| `apr profile --granular` | aprender | Per-brick timing, roofline, kernel overhead | Decode bottleneck analysis |
 | `apr check` / `apr trace` | aprender | Integrity + layer correctness | Pre-flight validation |
 
 ### Parity query: framework comparison capability
@@ -804,3 +819,4 @@ Remaining Phase 12 path: tensor graph dispatch
 | 8.9.0 | 2026-04-04 | 3-way showdown: llama.cpp 289.3 > realizr 268.5 > ollama 241.7 > Candle 227.4. trueno#241 filed (DP4A precision). README updated with full competitive picture. |
 | 9.0.0 | 2026-04-04 | **realizr#194 SHIPPED** (graph poison fix). Fresh showdown: realizr 281.2 vs llama.cpp 336.7 (16.5% gap). DP4A PPL re-measured: 20.4-31.3 (text-dependent). **Fused K+V kernel IMPLEMENTED** (trueno 9d99e18c, -28 launches/token). F-QUALITY-01 updated: batched FP8 PPL path needed. |
 | 9.0.1 | 2026-04-05 | **realizr#194 PUSHED** (all 4 gates ✅). Fixed 30+ examples/tests/benches (field accessors, clippy). trueno BLIS clippy fixed (unsafe_op_in_unsafe_fn, wgsl_forward). Gate debt cleared across realizr + trueno. |
+| 9.1.0 | 2026-04-05 | Tooling upgrade: `cgp` (trueno) + `apr bench` (load testing) integrated into spec. Workflow updated: `apr check` → `apr profile` → `apr bench` → `cgp contract verify`. 14 tools in Section 12 (was 8). |
