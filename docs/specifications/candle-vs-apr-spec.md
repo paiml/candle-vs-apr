@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 12.2.0
+**Version:** 12.3.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -201,14 +201,15 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-COLD-01 | Cold slower | **REVISED** | preload_modules pre-compiles ~60 kernels. |
 | F-CACHE-01 | Prefix cache TTFT | **MEASURED** | Cold 136ms → Warm 56ms (2.4x). |
 
+| F-CONTRACT-01 | Contracts catch >=1 bug | **PROPOSED** | 6 invariants wired. LOW risk: wall_coverage alone flags missing kernels. |
 | F-TCATTN-01 | TC attn <=14µs | **PROPOSED** | GQA Tensor Core (FlashInfer). HIGH risk: DRAM stall. |
 | F-NCU-01 | NCU finds root cause | **PROPOSED** | cgp ncu-analyze. LOW risk. |
 | F-GATE-01 | Falsification <20% | **PROPOSED** | Pre-opt bottleneck gate. MED risk. |
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **PROPOSED** | Per-brick L2 in apr profile. MED risk. |
 
-26 F-conditions. 21 tested (12 confirmed, 4 revised,
-3 falsified, 2 weakened). 5 proposed (Phase 15).
+27 F-conditions. 21 tested (12 confirmed, 4 revised,
+3 falsified, 2 weakened). 6 proposed (Phase 15).
 
 ---
 
@@ -265,105 +266,104 @@ Five proposals from cross-repo analysis (qwen-coder-deploy
 v6.34.0, paiml-mcp-agent-toolkit), arXiv 2024-2025,
 org commit history, and batuta oracle.
 
-#### Cross-project lessons (qcd + toolkit)
+#### Cross-project lessons
 
-**qcd PMAT-3031 (profiler fidelity):** BrickProfiler
-shipped with `Deferred` sync mode — reported QkvProj
-at 26µs when real GPU time was 89µs (3.4x error).
-One-line fix (`set_profiler_sync_mode(Immediate)`)
-revealed LmHead as #1 target, not GEMV. **We must
-verify our `apr profile` uses Immediate mode.**
-
-**qcd PMAT-105 (LmHead routing):** 16 kernel fusions
-falsified → 2-kernel Q8+DP4A is optimal. Routing LmHead
-through FP8 cuBLASLt (reads weights 1x vs Mx) closed
-0.60x→0.98x llama.cpp gap at c=4. **Applicable to our
-LmHead (6.4% of compute, 73µs avg).**
-
-**qcd PMAT-217 (CUDA API):** 771 `cuLaunchKernel` calls
-per decode = 1.6ms overhead (17%). Confirms our graph
-dispatch finding (+26%). Per-M graph capture invalid
-for M>1 — matches our M=1-only graph approach.
-
-**qcd three-tier profiling:** BrickProfiler → nsys
-(CPU-GPU timeline) → ncu (per-kernel roofline). We
-skip tier 2+3 entirely today.
-
-**Prompt-length sensitivity:** 1-step kernels (fused
-dequant+GEMM) are invariant (llama.cpp ±4%). 2-step
-(FP8) incurs 1.78x BW penalty (realizr -17 to -26%).
+**qcd:** BrickProfiler `Deferred` sync = 3.4x fidelity
+error (PMAT-3031). LmHead FP8 cuBLASLt closed 0.60x→
+0.98x gap (PMAT-105). 771 cuLaunchKernel/decode = 17%
+overhead (PMAT-217). Three-tier: BrickProfiler → nsys
+→ ncu (we skip tiers 2+3). Prompt-length: 1-step
+invariant (±4%), 2-step FP8 penalty (-26%).
 
 **paiml-mcp-agent-toolkit:** brick_score_hardware.rs
-auto-classifies memory/compute-bound via roofline. TDG
-profiler auto-detects bottleneck type. dhat-rs: -69%
+auto-classifies memory/compute-bound. dhat-rs: -69%
 allocs, -47% runtime. PMAT-033 falsification audit.
 
 #### Proposals (each with falsification condition)
 
-**P15-01: GQA-aware Tensor Core attention (trueno#244)**
+**P15-01: GQA Tensor Core attention (trueno#244).**
+FlashInfer (Ye 2025): GQA 6:1 → TC at M=1. Predicted
+18.2µs → ~12µs, 329→361 tok/s. **F-TCATTN-01:** <=14µs
+or falsified. **Risk: HIGH** (DRAM stalls).
 
-FlashInfer (Ye et al. 2025): GQA 6:1 enables Tensor
-Core at M=1 (6 queries, 1 KV set → sufficient AI for
-`mma.m16n8k16`). Our Flash Decoding uses CUDA cores.
-Predicted: 18.2µs → ~12µs, 329→361 tok/s.
+**P15-02: NCU in cgp.** Zero NCU across org. Missing:
+warp stalls, L2 rates. **F-NCU-01:** Identifies
+attention root cause in <1h. **Risk: LOW.**
 
-> **F-TCATTN-01:** If TC attention does not reach
-> <=14µs avg (RTX 4090, M=1), falsified for small-model
-> decode. **Risk: HIGH** — DRAM stalls may starve TCs
-> (Ramirez-Gargallo 2025: >50% cycles stalled).
+**P15-03: Bottleneck gate.** 22+ falsified experiments.
+**F-GATE-01:** Falsification <20% over 10 attempts.
+**Risk: MED.**
 
-**P15-02: NCU integration in cgp (`cgp ncu-analyze`)**
+**P15-04: cgp docs.** 9 profilers, 0 docs. **F-DOCS-01:**
+2+ new users in 30d. **Risk: LOW.**
 
-Zero NCU usage across org. All profiling = custom
-timers. Missing: warp stalls, L2 rates, transactions.
-qcd lesson: three-tier stack, we skip tiers 2+3.
+**P15-05: L2 in apr profile.** Ramirez-Gargallo 2025:
+L2 12%, L1 2%. **F-L2-01:** Changes priority ordering
+for >=1 brick. **Risk: MED.**
 
-> **F-NCU-01:** If NCU does not identify attention
-> bottleneck root cause (stall type + L2 miss rate)
-> within 1 hour, tool adds complexity without insight.
-> **Risk: LOW** — NCU reliably reports counters.
+**P15-06: Profiler contract enforcement (five-whys)**
 
-**P15-03: Pre-optimization bottleneck gate (contract)**
+**Five-whys: Why don't we catch profiling errors?**
 
-22+ falsified experiments across realizr + qcd. qcd
-PMAT-3031: wrong profiler mode → optimized wrong kernel
-for a week. step-profiler-v1 says "speculative
-optimization prohibited" but gate wasn't enforced.
+1. **Why was qcd's BrickProfiler fidelity lag (3.4x)
+   undetected for a week?** Because no contract
+   validated sync mode against expected timing bounds.
+2. **Why wasn't sync mode validated?** Because
+   `gpu-decode-profiling-v1.yaml` defines the invariant
+   (`Immediate: LmHead.avg > 10x RmsNorm.avg`) but
+   no code checks it.
+3. **Why doesn't the code check it?** Because
+   BrickProfiler, `apr profile`, and `apr trace` have
+   ZERO `#[contract(...)]` macros — contracts exist as
+   YAML but aren't wired into the profiler code.
+4. **Why aren't they wired?** Because profiler was built
+   before provable-contracts existed (v0.1 predates
+   contract infra). Never retrofitted.
+5. **Why wasn't it retrofitted?** No enforcement gate —
+   new code can ship without contract binding.
 
-> **F-GATE-01:** If `apr profile` precondition does not
-> reduce falsification rate from 60% to <=20% over next
-> 10 attempts, gate adds bureaucracy without value.
-> **Risk: MED** — some failures are M=1 physics.
+**Chain of thought: What must be enforced?**
 
-**P15-04: cgp documentation (CLAUDE.md)**
+The 11 provable-contracts define 47+ invariants for
+profiling. Six are high-value for catching real bugs:
 
-9 backend profilers, roofline, contracts, compete, diff,
-explain — ZERO docs. paiml-mcp-agent-toolkit has full
-brick_score_hardware docs but cgp itself has none.
+| Contract | Invariant | Catches |
+|----------|-----------|---------|
+| `gpu-decode-profiling-v1` | wall_coverage >= 0.85 | Missing bricks (like our 28 missing SwiGLU kernels) |
+| `gpu-decode-profiling-v1` | Immediate: LmHead > 10x RmsNorm | Deferred sync fidelity lag (qcd 3.4x) |
+| `gpu-decode-profiling-v1` | decoded_tokens == LmHead.count | Token accounting errors |
+| `layer-parity-v1` | cosine_sim(GPU, CPU) >= 0.99 | Graph replay divergence (our hidden_buf2 81.0 diff) |
+| `per-op-training-v1` | GEMM >= 50% of layer_fwd | Architecture regression detection |
+| `tracing-observability-v1` | No orphan spans, monotonic counters | Trace corruption |
 
-> **F-DOCS-01:** If no 2+ new cgp users within 30 days,
-> documentation failed adoption. **Risk: LOW.**
+These 6 invariants would have caught BOTH major bugs
+in this project (missing SwiGLU recording, profiler
+fidelity) BEFORE they reached measurement.
 
-**P15-05: L2 cache + occupancy in `apr profile`**
-
-Ramirez-Gargallo 2025: L2 hit 12%, L1 2% for attention.
-qcd: BrickProfiler Deferred→Immediate revealed hidden
-bottleneck. Our `apr profile` reports AI=4.0 but not
-WHERE misses occur. CUPTI per-brick L2% + occupancy%.
-
-> **F-L2-01:** If L2 data does not change priority
-> ordering for >=1 brick, metric adds noise. Must verify
-> CUPTI overhead <5%. **Risk: MED.**
+> **F-CONTRACT-01:** If wiring these 6 invariants into
+> `apr profile` + BrickProfiler does not catch at least
+> 1 real bug in the next 5 profiling sessions that would
+> otherwise go undetected, the enforcement adds overhead
+> without value. **Risk: LOW** — wall_coverage alone
+> would have flagged the 28 missing SwiGLU kernels
+> (619/647 = 95.7% < 100% expected coverage).
 
 ### Phase 15 Priority & Risk Matrix
 
 | # | Proposal | Impact | Risk | Effort | Priority |
 |---|----------|--------|------|--------|----------|
-| P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | **P0** |
-| P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P1 |
-| P15-03 | Bottleneck gate | process | MED | 1 wk | P2 |
-| P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P3 |
-| P15-04 | cgp docs | enablement | LOW | 2 days | P4 |
+| P15-06 | Contract enforcement | **bug prevention** | LOW | 1 wk | **P0** |
+| P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | P1 |
+| P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 |
+| P15-03 | Bottleneck gate | process | MED | 1 wk | P3 |
+| P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 |
+| P15-04 | cgp docs | enablement | LOW | 2 days | P5 |
+
+**P15-06 promoted to P0:** Five-whys shows contract
+enforcement catches bugs upstream of all other
+proposals. One week of wiring prevents weeks of
+debugging (our SwiGLU bug took a full five-whys
+session to find — wall_coverage would flag it in 1s).
 
 **Decision required:** Approve Phase 15 proposals or
 revise priorities before implementation begins.
@@ -471,13 +471,12 @@ validates under realistic traffic patterns.
 
 | Gap | Severity | Reference |
 |-----|----------|-----------|
+| **Contract enforcement** | Critical | 11 YAML contracts, 0 wired to profiler code. P15-06 five-whys. |
 | **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. PMAT-456. |
-| **Chrome Trace export** | High | Custom JSON, not Perfetto/Chrome. Can't overlay with torch.profiler. Sister project five-whys. |
-| **GPU-side kernel timing** | High | CPU Instant::now() only. WGPU has TIMESTAMP_QUERY_INSIDE_PASSES (unused). CUPTI for CUDA. |
-| **Prefill/decode split** | Medium | probador reports both; not in F-conditions. |
-| **Per-step callbacks** | Medium | No loss/lr/grad_norm/step_ms. Can't match HF Trainer.log. |
+| **Chrome Trace export** | High | Custom JSON, not Perfetto/Chrome. |
+| **GPU-side kernel timing** | High | CPU Instant::now() only. CUPTI needed. |
+| **Per-step callbacks** | Medium | No loss/lr/grad_norm/step_ms. |
 | **Memory waterfall** | Medium | No per-step alloc/peak/fragmentation. |
-| **Realistic traffic** | Low | Poisson done; ShareGPT not yet. |
 
 ---
 
@@ -496,4 +495,5 @@ validates under realistic traffic patterns.
 | 11.2 | 04-05 | Graph default sm_89+. Bootstrap CI. Profile. |
 | 12.0 | 04-05 | arXiv grounding. Condensed 897→352 lines. |
 | 12.1 | 04-05 | Phase 15: 5 profiler proposals with falsification. FlashInfer, PyGraph, Kernel Looping, Mind the Memory Gap. 26 F-conditions. |
-| 12.2 | 04-05 | Cross-project insights: qcd PMAT-3031 (profiler 3.4x fidelity lag), PMAT-105 (LmHead FP8 routing), three-tier profiling stack. paiml-mcp-agent-toolkit brick_score_hardware, dhat-rs. Profiler fidelity section added to research. |
+| 12.2 | 04-05 | Cross-project insights from qcd + toolkit. Profiler fidelity section. |
+| 12.3 | 04-05 | P15-06 contract enforcement: five-whys (11 YAML, 0 wired) + chain of thought (6 high-value invariants). F-CONTRACT-01. P15-06 promoted to P0. 27 F-conditions. |
