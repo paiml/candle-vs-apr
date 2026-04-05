@@ -486,11 +486,12 @@ fidelity) BEFORE they reached measurement.
 | # | Proposal | Impact | Risk | Effort | Priority | Status |
 |---|----------|--------|------|--------|----------|--------|
 | P15-06 | Contract enforcement | **bug prevention** | LOW | 1 wk | **P0** | **DONE** |
-| P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | P1 | TODO |
+| P15-01 | TC attention (multi-warp) | **+32 tok/s** | HIGH | 4-6 wk | P1 | **FALSIFIED** |
+| P15-01b | TC attention (FlashInfer/persistent) | +32 tok/s | HIGH | 4-6 wk | P1 | TODO |
 | P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 | **DONE** |
 | P15-03 | Bottleneck gate | process | MED | 1 wk | P3 | **DONE** |
 | P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 | **DONE** |
-| P15-04 | cgp docs | enablement | LOW | 2 days | P5 | TODO |
+| P15-04 | cgp docs | enablement | LOW | 2 days | P5 | **BLOCKED** (no cgp repo) |
 
 **P15-06 IMPLEMENTED:** 6/6 invariants wired into realizr
 profiler, tracer, and inference trace (realizr `1a05516`):

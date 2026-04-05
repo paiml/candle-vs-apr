@@ -19,7 +19,7 @@ metadata:
   created: "2026-04-04"
   model: "Qwen2.5-Coder-1.5B-Instruct Q4_K_M GGUF"
   methodology: "probador llm load, 30s, 5s warmup, temp=0, locked clocks"
-  spec_ref: "candle-vs-apr-spec.md section 12, PMAT-445"
+  spec_ref: "candle-vs-apr-spec.md §5 Phase 3 / §8 Phase 13, PMAT-445"
 
 model:
   path: "/home/noah/models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
