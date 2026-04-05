@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.3.0
+**Version:** 9.4.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -803,13 +803,17 @@ been falsified for small-dim M=1 decode.
 **DRIVER BLOCKED (realizr#197):** CUDA graph capture
 fails with code 901 on driver 570.207 (Ada Lovelace).
 Tested both `CaptureMode::Global` AND `ThreadLocal` —
-same failure (realizr 02854aee). Bug is in the capture
-mechanism itself, not the mode. Graph infrastructure
-exists in realizr (PAR-054) but poisons CUDA context
-on capture attempt. Profiled: 85.9% launch overhead →
-graphs would reduce to <20%. Need driver >= 575 or
-manual graph construction via `cuGraphAddKernelNode`
-(bypass stream capture entirely).
+same failure (realizr 02854aee). Bug is NOT in capture
+API (empty capture succeeds) but in a specific kernel
+being captured. Even `--no-fp8-cache` doesn't help.
+
+**Manual graph API (trueno#243, 4ba00082): VERIFIED.**
+`cuGraphCreate`, `cuGraphAddKernelNode`,
+`cuGraphInstantiateWithFlags`, `cuGraphLaunch` all
+succeed on driver 570.207. Manual construction bypasses
+stream capture entirely — viable path to eliminate
+85.9% launch overhead. Requires refactoring decode path
+to record kernel params instead of launching directly.
 
 ## 13. Revision History
 
@@ -844,3 +848,4 @@ manual graph construction via `cuGraphAddKernelNode`
 | 9.1.0 | 2026-04-05 | Tooling upgrade: `cgp` (trueno) + `apr bench` (load testing) integrated into spec. Workflow updated: `apr check` → `apr profile` → `apr bench` → `cgp contract verify`. 14 tools in Section 12 (was 8). |
 | 9.2.0 | 2026-04-05 | **PMAT-452 FALSIFIED:** Fused K+V kernel -3.1% regression at kv_dim=256. Reverted to Phase 1. |
 | 9.3.0 | 2026-04-05 | **PROFILED:** 85.9% launch overhead. PMAT-453 stream capture blocked (code 901 on 570.207, both Global + ThreadLocal). **trueno#243 SHIPPED:** `cuGraphAddKernelNode` manual graph API — bypasses stream capture. Wiring into decode path next. |
+| 9.4.0 | 2026-04-05 | **VERIFIED:** Manual graph API works on driver 570.207 (Python driver test). `cuGraphCreate`+`cuGraphAddKernelNode`+`cuGraphLaunch` all succeed. Stream capture bug is kernel-specific (empty capture works, `--no-fp8-cache` still fails). Manual construction is the viable path to eliminate 85.9% overhead. |
