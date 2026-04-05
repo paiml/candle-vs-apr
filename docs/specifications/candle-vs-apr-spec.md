@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.6.4
+**Version:** 14.6.5
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -144,7 +144,9 @@ RTX 4090 at c=4 (unlike Yoga 2.3x). Per-request ITL jumps 2.8ms →
 suggests each request is serialized through decode at M=1 rather
 than batched at M=4.
 
-Falsifies F-PARITY-02 prior evidence. realizr#TBD filed upstream.
+Falsifies F-PARITY-02 prior evidence. Filed upstream as realizr#211
+with five-whys + provable-contract (continuous-batching-v1.yaml
+proposed).
 
 ### Phase 2b: Context-Length Scaling (RTX 4090)
 
@@ -296,8 +298,8 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
-27 F-conditions. 25 tested (12 confirmed, 5 revised,
-3 falsified, 2 weakened, 1 fixed, 1 measured, 1 wired).
+27 F-conditions. 25 tested (11 confirmed, 5 revised,
+4 falsified, 2 weakened, 1 fixed, 1 measured, 1 wired).
 2 proposed (F-GATE-01, F-DOCS-01).
 
 ---
@@ -688,3 +690,4 @@ validates under realistic traffic patterns.
 | 14.6 | 04-05 | **Fair apples-to-apples:** probador bootstrap llama.cpp b7746 = 431.1 [429.5, 432.2] CV 0.4%. Gap 1.218x. Corrects methodology: spec's 433.8 was native eval_time, not probador. F-condition counts corrected (25 tested, not 26). |
 | 14.6.1-3 | 04-05 | Audit pass: propagated chunk=16 numbers to F-SUMMARY/PARITY/PARITY-04 (329→353.9), expanded Phase 14 task table with trueno#244/245/246/realizr#203 actual states, corrected P15-01 to FALSIFIED and P15-04 to BLOCKED, fixed AttentionScore bottleneck label (Memory BW → Occupancy, per F-L2-01), fixed configs/showdown.yaml spec_ref (non-existent §12 → §5/§8). README updated v8.8 → v14.6. |
 | 14.6.4 | 04-05 | **Phase 2b medium chunk=16 filled:** 357.7 tok/s (+24.1% vs chunk=32). Verified all 4 prompt profiles reproduce within 2.4% of spec. Binary version fingerprint preflight added to bootstrap-ci.sh (catches apr 0.4.11 vs 0.4.12 PATH regressions, 36% delta). |
+| 14.6.5 | 04-05 | **F-PARITY-02 FALSIFIED:** RTX 4090 c=4 comparison shows realizr scales only 1.03x (367.7 agg) while llama.cpp b7746 scales 2.09x (902.3 agg). realizr#211 filed upstream with five-whys + continuous-batching-v1.yaml proposed contract. New Phase 2c section. |
