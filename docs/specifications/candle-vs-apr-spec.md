@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 12.1.0
+**Version:** 12.2.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -261,97 +261,99 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 
 ### Phase 15: Profiler + Kernel Sprint (PROPOSED)
 
-Five proposals from cross-repo analysis, arXiv research
-(2024-2025), org commit history, and batuta oracle.
-Each carries a falsification condition.
+Five proposals from cross-repo analysis (qwen-coder-deploy
+v6.34.0, paiml-mcp-agent-toolkit), arXiv 2024-2025,
+org commit history, and batuta oracle.
+
+#### Cross-project lessons (qcd + toolkit)
+
+**qcd PMAT-3031 (profiler fidelity):** BrickProfiler
+shipped with `Deferred` sync mode — reported QkvProj
+at 26µs when real GPU time was 89µs (3.4x error).
+One-line fix (`set_profiler_sync_mode(Immediate)`)
+revealed LmHead as #1 target, not GEMV. **We must
+verify our `apr profile` uses Immediate mode.**
+
+**qcd PMAT-105 (LmHead routing):** 16 kernel fusions
+falsified → 2-kernel Q8+DP4A is optimal. Routing LmHead
+through FP8 cuBLASLt (reads weights 1x vs Mx) closed
+0.60x→0.98x llama.cpp gap at c=4. **Applicable to our
+LmHead (6.4% of compute, 73µs avg).**
+
+**qcd PMAT-217 (CUDA API):** 771 `cuLaunchKernel` calls
+per decode = 1.6ms overhead (17%). Confirms our graph
+dispatch finding (+26%). Per-M graph capture invalid
+for M>1 — matches our M=1-only graph approach.
+
+**qcd three-tier profiling:** BrickProfiler → nsys
+(CPU-GPU timeline) → ncu (per-kernel roofline). We
+skip tier 2+3 entirely today.
+
+**Prompt-length sensitivity:** 1-step kernels (fused
+dequant+GEMM) are invariant (llama.cpp ±4%). 2-step
+(FP8) incurs 1.78x BW penalty (realizr -17 to -26%).
+
+**paiml-mcp-agent-toolkit:** brick_score_hardware.rs
+auto-classifies memory/compute-bound via roofline. TDG
+profiler auto-detects bottleneck type. dhat-rs: -69%
+allocs, -47% runtime. PMAT-033 falsification audit.
+
+#### Proposals (each with falsification condition)
 
 **P15-01: GQA-aware Tensor Core attention (trueno#244)**
 
-FlashInfer (Ye et al. 2025) shows GQA 6:1 enables
-Tensor Core usage at M=1 by treating decode as thin
-prefill (6 queries, 1 KV set). Our Flash Decoding uses
-CUDA cores. llama.cpp FA2 exploits GQA for Tensor Cores.
-Predicted: 18.2µs → ~12µs attention, 329→361 tok/s.
+FlashInfer (Ye et al. 2025): GQA 6:1 enables Tensor
+Core at M=1 (6 queries, 1 KV set → sufficient AI for
+`mma.m16n8k16`). Our Flash Decoding uses CUDA cores.
+Predicted: 18.2µs → ~12µs, 329→361 tok/s.
 
-> **F-TCATTN-01:** If GQA-aware Tensor Core attention
-> does not reduce AttentionScore from 18.2µs to <=14µs
-> avg on RTX 4090 (Qwen2.5-1.5B, M=1), the technique
-> is falsified for small-model decode. Action: profile
-> `mma.m16n8k16` occupancy vs CUDA core throughput.
-> **Falsification risk: HIGH.** FA2's win may depend on
-> register file size at head_dim=128. Ramirez-Gargallo
-> 2025 shows >50% cycles stalled on DRAM even with FA —
-> Tensor Cores may starve waiting for data.
+> **F-TCATTN-01:** If TC attention does not reach
+> <=14µs avg (RTX 4090, M=1), falsified for small-model
+> decode. **Risk: HIGH** — DRAM stalls may starve TCs
+> (Ramirez-Gargallo 2025: >50% cycles stalled).
 
 **P15-02: NCU integration in cgp (`cgp ncu-analyze`)**
 
-Zero NSight/NCU usage across entire org (verified by
-commit search). All profiling uses custom timers.
-Missing: warp stall reasons, L2 hit rates, memory
-transaction counts. 6+ realizr experiments falsified
-without hardware counter pre-analysis.
+Zero NCU usage across org. All profiling = custom
+timers. Missing: warp stalls, L2 rates, transactions.
+qcd lesson: three-tier stack, we skip tiers 2+3.
 
-> **F-NCU-01:** If `cgp ncu-analyze` does not identify
-> the root cause of the 18.2µs attention bottleneck
-> (stall type + L2 miss rate) within 1 hour of
-> implementation, the tool adds complexity without
-> insight. Action: compare NCU diagnosis vs manual
-> five-whys — does NCU find the answer faster?
-> **Falsification risk: LOW.** NCU reliably reports
-> hardware counters. The risk is implementation time
-> vs value — may take weeks to wrap NCU properly.
+> **F-NCU-01:** If NCU does not identify attention
+> bottleneck root cause (stall type + L2 miss rate)
+> within 1 hour, tool adds complexity without insight.
+> **Risk: LOW** — NCU reliably reports counters.
 
 **P15-03: Pre-optimization bottleneck gate (contract)**
 
-step-profiler-v1 contract says "speculative optimization
-is prohibited." But 6+ realizr experiments (RMSNorm+GEMV,
-fused K+V, DP4A inline, f16 conv, shared Q8K, 16 qcd
-fusions) were falsified — the gate wasn't enforced.
+22+ falsified experiments across realizr + qcd. qcd
+PMAT-3031: wrong profiler mode → optimized wrong kernel
+for a week. step-profiler-v1 says "speculative
+optimization prohibited" but gate wasn't enforced.
 
-> **F-GATE-01:** If adding `apr profile` JSON as a
-> required precondition for perf tickets does not reduce
-> the falsification rate of optimization experiments from
-> 6/10 (60%) to <=2/10 (20%) over the next 10 attempts,
-> the gate adds bureaucracy without improving hit rate.
-> **Falsification risk: MEDIUM.** Some falsifications
-> are inherent to M=1 decode physics (small dims defeat
-> fusion). The gate would prevent obviously wrong
-> attempts but not physics-limited ones.
+> **F-GATE-01:** If `apr profile` precondition does not
+> reduce falsification rate from 60% to <=20% over next
+> 10 attempts, gate adds bureaucracy without value.
+> **Risk: MED** — some failures are M=1 physics.
 
 **P15-04: cgp documentation (CLAUDE.md)**
 
-cgp has 9 backend profilers, roofline, regression
-detection, performance contracts, `compete`, `diff`,
-`explain` — but ZERO documentation. No CLAUDE.md, no
-README.md. Blocks onboarding and discovery.
+9 backend profilers, roofline, contracts, compete, diff,
+explain — ZERO docs. paiml-mcp-agent-toolkit has full
+brick_score_hardware docs but cgp itself has none.
 
-> **F-DOCS-01:** If cgp CLAUDE.md does not result in at
-> least 2 new uses of `cgp` commands (by contributors
-> other than the author) within 30 days, the
-> documentation failed to enable adoption. Action:
-> track `cgp` usage in commit messages.
-> **Falsification risk: LOW.** Documentation is
-> inherently low-risk. Only risk is effort vs adoption
-> if the org is too small for external contributors.
+> **F-DOCS-01:** If no 2+ new cgp users within 30 days,
+> documentation failed adoption. **Risk: LOW.**
 
 **P15-05: L2 cache + occupancy in `apr profile`**
 
-Ramirez-Gargallo 2025: >50% attention cycles stalled
-on DRAM, L2 hit rate avg 12%, L1 avg 2%. Our `apr
-profile --granular` reports AI=4.0 but not WHERE cache
-misses occur. Adding per-brick L2 hit% and occupancy%
-via CUPTI events makes roofline actionable.
+Ramirez-Gargallo 2025: L2 hit 12%, L1 2% for attention.
+qcd: BrickProfiler Deferred→Immediate revealed hidden
+bottleneck. Our `apr profile` reports AI=4.0 but not
+WHERE misses occur. CUPTI per-brick L2% + occupancy%.
 
-> **F-L2-01:** If per-brick L2 hit rate data does not
-> change the optimization priority ordering (currently:
-> attention > QKV > RMSNorm) for at least one brick,
-> the metric adds noise without insight. Action:
-> compare priority ordering before/after L2 data.
-> **Falsification risk: MEDIUM.** L2 data might confirm
-> existing priorities without changing them — useful for
-> confidence but not for new insights. Risk increases
-> if CUPTI event collection adds >5% overhead to the
-> profiling pass itself.
+> **F-L2-01:** If L2 data does not change priority
+> ordering for >=1 brick, metric adds noise. Must verify
+> CUPTI overhead <5%. **Risk: MED.**
 
 ### Phase 15 Priority & Risk Matrix
 
@@ -446,6 +448,15 @@ serving overhead dominates for small models. Our 4.6ms
 TTFT-ITL overhead is consistent with lightweight Rust
 HTTP serving (no Python GIL, no torch overhead).
 
+### Profiler Fidelity (qcd PMAT-3031)
+
+BrickProfiler `Deferred` sync reports CPU-side launch
+latency, not actual GPU execution time (3.4x error on
+QkvProjection: 26µs reported vs 89µs real). `Immediate`
+sync mode is mandatory for accurate profiling. This is
+a known pitfall in CUDA profiling — nsys/ncu use
+event-based collection to avoid this class of error.
+
 ### Benchmark Methodology
 
 Follows MLPerf Inference v4.0 requirements: locked
@@ -460,14 +471,13 @@ validates under realistic traffic patterns.
 
 | Gap | Severity | Reference |
 |-----|----------|-----------|
-| **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. PMAT-456 (FP8 path). |
-| **Prefill/decode split** | Medium | probador reports both; not in F-conditions. Splitwise (Patel 2024). |
-| **Realistic traffic** | Medium | Poisson done; ShareGPT traces not yet. Vidur (2024). |
-| **VRAM fragmentation** | Low | nvidia-smi polling; no CUDA allocator hook. Alizadeh 2024. |
-
-**Tooling:** probador (load), apr (profile/bench/check),
-cgp (kernel/roofline/contract), batuta (PPL), llama.cpp
-(perplexity), lm-evaluation-harness (correctness).
+| **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. PMAT-456. |
+| **Chrome Trace export** | High | Custom JSON, not Perfetto/Chrome. Can't overlay with torch.profiler. Sister project five-whys. |
+| **GPU-side kernel timing** | High | CPU Instant::now() only. WGPU has TIMESTAMP_QUERY_INSIDE_PASSES (unused). CUPTI for CUDA. |
+| **Prefill/decode split** | Medium | probador reports both; not in F-conditions. |
+| **Per-step callbacks** | Medium | No loss/lr/grad_norm/step_ms. Can't match HF Trainer.log. |
+| **Memory waterfall** | Medium | No per-step alloc/peak/fragmentation. |
+| **Realistic traffic** | Low | Poisson done; ShareGPT not yet. |
 
 ---
 
@@ -486,3 +496,4 @@ cgp (kernel/roofline/contract), batuta (PPL), llama.cpp
 | 11.2 | 04-05 | Graph default sm_89+. Bootstrap CI. Profile. |
 | 12.0 | 04-05 | arXiv grounding. Condensed 897→352 lines. |
 | 12.1 | 04-05 | Phase 15: 5 profiler proposals with falsification. FlashInfer, PyGraph, Kernel Looping, Mind the Memory Gap. 26 F-conditions. |
+| 12.2 | 04-05 | Cross-project insights: qcd PMAT-3031 (profiler 3.4x fidelity lag), PMAT-105 (LmHead FP8 routing), three-tier profiling stack. paiml-mcp-agent-toolkit brick_score_hardware, dhat-rs. Profiler fidelity section added to research. |
