@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 13.2.0
+**Version:** 13.3.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -328,9 +328,22 @@ Occupancy 2.15% vs theoretical 50%. Scheduler is starved
 variant (PAR-070) or FlashInfer GQA TC (trueno#244).
 **Risk: LOW** confirmed.
 
-**P15-03: Bottleneck gate.** 22+ falsified experiments.
-**F-GATE-01:** Falsification <20% over 10 attempts.
-**Risk: MED.**
+**P15-03: Bottleneck gate. DONE.**
+`scripts/bottleneck-gate.sh` checks roofline bounds
+before experiments. Encodes hardware constants (RTX 4090
+1,008 GB/s, 128 SMs), model constants (1 GB Q4_K_M),
+and Phase 12 evidence (16 fusion falsifications).
+
+Verified gate accuracy on known cases:
+- FALSIFIES: RSS < 500 MB (irreducible 2.5 GB+) ✓
+- FALSIFIES: decode > 1,008 tok/s (BW ceiling) ✓
+- FALSIFIES: attention < 0.26µs (roofline floor) ✓
+- WARNS: kernel fusion for >5% at M=1 (Phase 12) ✓
+- PASSES: decode 340 tok/s (within reach) ✓
+
+**F-GATE-01:** Falsification < 20% over 10 attempts.
+Track via `results/bottleneck-gate-log.json`.
+**Risk: MED** (gate might be too conservative).
 
 **P15-04: cgp docs.** 9 profilers, 0 docs. **F-DOCS-01:**
 2+ new users in 30d. **Risk: LOW.**
@@ -393,7 +406,7 @@ fidelity) BEFORE they reached measurement.
 | P15-06 | Contract enforcement | **bug prevention** | LOW | 1 wk | **P0** | **DONE** |
 | P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | P1 | TODO |
 | P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 | **DONE** |
-| P15-03 | Bottleneck gate | process | MED | 1 wk | P3 | TODO |
+| P15-03 | Bottleneck gate | process | MED | 1 wk | P3 | **DONE** |
 | P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 | TODO |
 | P15-04 | cgp docs | enablement | LOW | 2 days | P5 | TODO |
 
@@ -545,3 +558,4 @@ validates under realistic traffic patterns.
 | 13.0 | 04-05 | **P15-06 DONE:** 6/6 contracts wired upstream (realizr 1a05516). GPU verified 328.2 tok/s (within CI). PMAT-456 filed (realizr#203). Phase 15 ACTIVE. |
 | 13.1 | 04-05 | **P15-02 DONE:** NCU on flash_decoding_chunk. Root cause: 2.15% occupancy, 96.6% scheduler stalls. Grid (108 blocks) too small for 128 SMs at M=1. F-NCU-01 CONFIRMED. |
 | 13.2 | 04-05 | P15-01 analysis: multi-warp (PAR-070) ready but unwired. trueno#245 filed. NCU confirms kernel fast (2.9µs) but GPU idle (99%). |
+| 13.3 | 04-05 | **P15-03 DONE:** Bottleneck gate (roofline pre-check). Catches BW ceiling, occupancy, Amdahl's law. Verified on 5 known cases. |
