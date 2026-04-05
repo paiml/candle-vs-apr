@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 13.5.0
+**Version:** 13.6.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -132,7 +132,15 @@ Candle has no server — cannot demonstrate c>1.
 realizr DP4A PPL: **24.2** (weighted, WikiText-2).
 llama.cpp FP32: **12.97**. Gap = DP4A int8→int32
 accumulation vs FP32 dequant (Micikevicius et al. 2018).
-PMAT-456 (batched FP8 GEMM path) will close this.
+
+**PMAT-456 analysis (realizr#203):** FP8 E4M3 cuBLASLt
+infrastructure already exists for prefill (M>=5) but
+perplexity uses M=1 incremental forwards (bypasses FP8
+threshold). Fix: batched teacher-forcing — process all
+N prompt tokens in one prefill forward, extract
+per-position logits, score against ground truth.
+FP8 E4M3 has 3-bit mantissa (vs DP4A int8) — expected
+to close precision gap significantly.
 
 ---
 
@@ -263,7 +271,7 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | ID | Task | Status |
 |----|------|--------|
 | PMAT-453 | Graph dispatch | **FIXED** (329 tok/s) |
-| PMAT-456 | Batched prefill PPL | **FILED** (realizr#203) |
+| PMAT-456 | Batched prefill PPL | **ANALYZED** (realizr#203) |
 | trueno#244 | Attention kernel opt | FILED |
 | realizr#201 | Graph default sm_89+ | **SHIPPED** |
 
@@ -582,3 +590,4 @@ validates under realistic traffic patterns.
 | 13.3 | 04-05 | **P15-03 DONE:** Bottleneck gate (roofline pre-check). Catches BW ceiling, occupancy, Amdahl's law. Verified on 5 known cases. |
 | 13.4 | 04-05 | **P15-05 DONE:** L2 cache from NCU. Attention 82% L2 (occupancy problem), GEMV 14% L2 (BW problem). Reversed naive priority. F-L2-01 CONFIRMED. |
 | 13.5 | 04-05 | Phase 15: 5/6 done (P15-04 blocked: no cgp repo). Methodology gaps updated. 25/27 F-conditions tested. |
+| 13.6 | 04-05 | PMAT-456 analyzed: FP8 infra exists, perplexity needs batched teacher-forcing. realizr#208 filed (cargo fmt workspace fix). |
