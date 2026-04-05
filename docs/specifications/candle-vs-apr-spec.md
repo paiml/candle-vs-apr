@@ -127,6 +127,25 @@ reduce relative overhead.
 Validates continuous batching (Orca, Yu et al. 2022).
 Candle has no server — cannot demonstrate c>1.
 
+### Phase 2c: Scaling Regression on RTX 4090 (NEW)
+
+| c | realizr chunk=16 | llama.cpp b7746 | gap |
+|---|------------------|------------------|-----|
+| 1 | 353.9 agg | 431.1 agg | 0.82x |
+| 4 | **367.7 agg** (91.9/req) | **902.3 agg** (228.2/req) | **0.41x** |
+
+**Scaling factor c=1 → c=4:**
+- realizr: **1.03x** (near-flat)
+- llama.cpp: **2.09x**
+
+**Finding:** realizr's continuous batch scheduler scales poorly on
+RTX 4090 at c=4 (unlike Yoga 2.3x). Per-request ITL jumps 2.8ms →
+10.88ms (3.9x) whereas llama.cpp 2.3ms → 4.38ms (1.9x). Strongly
+suggests each request is serialized through decode at M=1 rather
+than batched at M=4.
+
+Falsifies F-PARITY-02 prior evidence. realizr#TBD filed upstream.
+
 ### Phase 2b: Context-Length Scaling (RTX 4090)
 
 Decode tok/s vs prompt length (c=1, 256 gen tokens):
@@ -259,7 +278,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-SERVING-01 | Overhead <5ms | **CONFIRMED** | 4.6ms (TTFT-ITL). |
 | F-FMTPARITY-01 | 3 formats +/-10% | **REVISED** | Yoga: GGUF 132.5, FP16 151.6, Q4K 132.3. |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | 0.0% GGUF, 1.4% Q4K. |
-| F-PARITY-02 | c=4 <=1.5x slower | **CONFIRMED** | 274.5 (1.22x FASTER). |
+| F-PARITY-02 | c=4 <=1.5x slower | **FALSIFIED** (4090 chunk=16) | realizr c=4 agg 367.7 vs llama.cpp 902.3 = 2.45x SLOWER. realizr scales only 1.03x from c=1 (357→367). llama.cpp 2.09x (431→902). Batch scheduler gap. Prior CONFIRMED (274.5, 1.22x) was pre-FA-fix llama.cpp. |
 | F-PARITY-04 | realizr >= llama.cpp | **REVISED** | chunk=16 353.9 vs llama.cpp b7746 431.1 (0.82x). FA gap. |
 | F-CLIPARITY-01 | apr = Candle CLI | **CONFIRMED** | 6/6 features. |
 | F-1.5X-01 | >=341 (1.5x Candle) | **CONFIRMED** | 353.9 [352.7, 355.1] with chunk_size=16. 1.56x Candle. |
