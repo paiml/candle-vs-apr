@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.0.0
+**Version:** 9.0.1
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -750,7 +750,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | PMAT-452 | Fused K+V kernel (single launch) | **KERNEL DONE** | trueno 9d99e18c | -1 launch/layer (28/token). Wiring into realizr dispatch TODO. |
 | PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | TODO | trueno#238 infra done | -85% kernel launches, +20-40% |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
-| PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 7c7abb83 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. |
+| PMAT-455 | Perplexity graph poison fix | **LOCAL** | realizr#194, b42253a4 | KV overflow validation + error recovery. Push blocked by pre-existing clippy debt (realizr#195). |
 | PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
 
 > **F-CACHE-01 (proposed):** If realizr with KV prefix
@@ -803,3 +803,4 @@ Remaining Phase 12 path: tensor graph dispatch
 | 8.8.0 | 2026-04-04 | **F-QUALITY-01 FALSIFIED:** `/v1/perplexity` SHIPPED. WikiText-2 PPL: realizr 17.40 vs llama.cpp 12.97 (+4.4). DP4A int8 vs FP32. All 21 F-conditions tested. |
 | 8.9.0 | 2026-04-04 | 3-way showdown: llama.cpp 289.3 > realizr 268.5 > ollama 241.7 > Candle 227.4. trueno#241 filed (DP4A precision). README updated with full competitive picture. |
 | 9.0.0 | 2026-04-04 | **realizr#194 SHIPPED** (graph poison fix). Fresh showdown: realizr 281.2 vs llama.cpp 336.7 (16.5% gap). DP4A PPL re-measured: 20.4-31.3 (text-dependent). **Fused K+V kernel IMPLEMENTED** (trueno 9d99e18c, -28 launches/token). F-QUALITY-01 updated: batched FP8 PPL path needed. |
+| 9.0.1 | 2026-04-05 | realizr#194 push progress: format ✅, cargo check ✅, tests 15096/0 ✅. Blocked on pre-existing clippy debt in 11 old examples (realizr#195 filed). 12 examples fixed (field accessor migration). |
