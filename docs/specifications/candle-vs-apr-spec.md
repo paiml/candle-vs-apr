@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.2.0
+**Version:** 9.3.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -560,10 +560,17 @@ at c=1 on RTX 4090. (1.5x Candle's 227.4 / 449 MB.)
 > **F-RSS-02:** If realizr RSS >673 MB at c=1, the
 > memory parity claim is falsified. Action: audit allocs.
 
-**Root cause analysis (decode):**
-- GPU utilization: 20.1% BW (202.5/1,008 GB/s)
-- 83.2% kernel launch overhead at M=1
-- DP4A GEMV compute ceiling: 412 tok/s (we're at 66%)
+**Root cause analysis (decode, `apr profile --granular`):**
+- **85.9% kernel launch overhead** at M=1 (430 launches/token)
+- Compute breakdown (14.1% of time):
+  - AttentionScore: 39.9% (6.0ms, 14.3µs avg)
+  - QkvProjection: 15.6% (2.3ms, 5.6µs avg)
+  - RmsNorm: 8.2%, OutputProjection: 8.0%
+  - DownProjection: 7.8%, RopeEmbedding: 7.7%
+  - LmHead: 5.7%, Residuals: 7.3%
+- Compute efficiency: 6.6% (per-kernel)
+- **CUDA graph BLOCKED** on driver 570.207 (code 901,
+  realizr#197). Poisons context on capture attempt.
 - Candle weaknesses: no CUDA graphs, no FlashAttn for
   quantized, 2-kernel QMatMul, ~640 launches/token,
   per-call KV alloc, no memory pooling
@@ -763,7 +770,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
-| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | TODO | trueno#238 infra done | -85% kernel launches, +20-40% |
+| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **DRIVER BLOCKED** | trueno#238 infra done, realizr#197 | Driver 570.207 code 901. Infra exists but graph capture poisons context. Need driver >= 575. |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
 | PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 1f527a89 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. Gate debt cleared (realizr#195). |
 | PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
@@ -792,6 +799,14 @@ Remaining Phase 12 path: tensor graph dispatch
 (PMAT-435/453) is the only technique that survived
 validation in qcd. All kernel fusion approaches have
 been falsified for small-dim M=1 decode.
+
+**DRIVER BLOCKED (realizr#197):** CUDA graph capture
+fails with code 901 on driver 570.207 (Ada Lovelace).
+Graph infrastructure exists in realizr (PAR-054) but
+poisons CUDA context on capture attempt. Profiled:
+85.9% launch overhead → graphs would reduce to <20%.
+Need driver >= 575 or manual graph construction via
+`cuGraphAddKernelNode` (bypass stream capture).
 
 ## 13. Revision History
 
@@ -824,4 +839,5 @@ been falsified for small-dim M=1 decode.
 | 9.0.0 | 2026-04-04 | **realizr#194 SHIPPED** (graph poison fix). Fresh showdown: realizr 281.2 vs llama.cpp 336.7 (16.5% gap). DP4A PPL re-measured: 20.4-31.3 (text-dependent). **Fused K+V kernel IMPLEMENTED** (trueno 9d99e18c, -28 launches/token). F-QUALITY-01 updated: batched FP8 PPL path needed. |
 | 9.0.1 | 2026-04-05 | **realizr#194 PUSHED** (all 4 gates ✅). Fixed 30+ examples/tests/benches (field accessors, clippy). trueno BLIS clippy fixed (unsafe_op_in_unsafe_fn, wgsl_forward). Gate debt cleared across realizr + trueno. |
 | 9.1.0 | 2026-04-05 | Tooling upgrade: `cgp` (trueno) + `apr bench` (load testing) integrated into spec. Workflow updated: `apr check` → `apr profile` → `apr bench` → `cgp contract verify`. 14 tools in Section 12 (was 8). |
-| 9.2.0 | 2026-04-05 | **PMAT-452 FALSIFIED:** Fused K+V kernel -3.1% regression at kv_dim=256. Launch overhead savings < compute overhead. Same pattern as qcd PMAT-280..289. Reverted to Phase 1 (Q8 cache). Only tensor graph dispatch remains viable for 1.5x target. |
+| 9.2.0 | 2026-04-05 | **PMAT-452 FALSIFIED:** Fused K+V kernel -3.1% regression at kv_dim=256. Reverted to Phase 1. |
+| 9.3.0 | 2026-04-05 | **PROFILED:** `apr profile --granular` → 85.9% launch overhead on 430 launches/token. **PMAT-453 DRIVER BLOCKED:** CUDA graph code 901 on driver 570.207 (realizr#197). Graph infra exists but poisons context. Only path to 1.5x requires driver >= 575 or manual graph construction. |
