@@ -145,21 +145,27 @@ coalescing. Expected M=N decode would give ITL ratio ~1.0-1.5x.
 
 **vs llama.cpp b7746 (c=1 and c=4 measured):**
 
-| c | realizr | llama.cpp | gap |
-|---|---------|-----------|-----|
-| 1 | 353.9 | 431.1 | 0.82x |
-| 4 | **367.7** | **902.3** | **0.41x** |
+| c | realizr (stream=false) | realizr (stream=true) | llama.cpp | gap vs llama |
+|---|------------------------|----------------------|-----------|--------------|
+| 1 | 353.9 | 353.9 | 431.1 | 0.82x |
+| 4 | **367.7** | **671.8** | **902.3** | 0.41x / **0.74x** |
 
-llama.cpp c=1 → c=4 scaling: **2.09x**. realizr: **1.03x**.
+llama.cpp c=1 → c=4 scaling: **2.09x**. realizr: **1.03x (serialized)** or **1.90x (batched)**.
 
-**Finding:** realizr's continuous batch scheduler on 4090 queues
-requests but decodes them sequentially at M=1 rather than batching
-to M=4. Yoga (4060, 24 SMs) shows 2.3x scaling at c=4 — the
-regression is 4090-specific.
+**Finding:** realizr has a **dual-path architecture**:
+- `stream=true` → batch scheduler (continuous batching): scales **1.90x** at c=4 (671.8 agg)
+- `stream=false` → write-lock serialization: scales **1.03x** at c=4 (367.7 agg)
 
-Falsifies F-PARITY-02 prior evidence. Filed upstream as realizr#211
-with five-whys + provable-contract (continuous-batching-v1.yaml
-proposed).
+The probador `--stream false` default hits the serialized path in
+`try_cuda_backend` (src/api/cuda_chat_backend.rs:167, `cuda_model_lock.write()`).
+llama.cpp has no equivalent dual-path; its scheduler serves both modes.
+
+With stream=true, realizr's c=4 scaling is healthy (1.90x vs llama.cpp 2.09x).
+
+F-PARITY-02 remains **FALSIFIED** for the stream=false path (spec target
+was >=1.5x slower; measured 2.45x slower). Stream=true path re-confirms
+the original prediction. Filed upstream as realizr#211 with root cause
+analysis + proposed fix to route non-stream through batch scheduler.
 
 ### Phase 2b: Context-Length Scaling (RTX 4090)
 
