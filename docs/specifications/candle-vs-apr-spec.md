@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 13.0.0
+**Version:** 13.1.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -161,6 +161,13 @@ PMAT-456 (batched FP8 GEMM path) will close this.
 Roofline: AI=4.0, achieved 1,235 GB/s (122% of spec
 due to L2 hits). Memory-bound per Williams et al. 2009.
 
+**NCU Root Cause (flash_decoding_chunk, P15-02):**
+Occupancy 2.15% (theoretical 50%). Grid 108 blocks on
+128 SMs = <1 block/SM. Scheduler starved 96.6% of cycles.
+Memory BW 8.33 GB/s (0.83% of peak). The attention kernel
+isn't slow — the GPU is 99% idle during it. Multi-warp
+or TC dispatch needed to increase occupancy.
+
 ### GGUF Quant Coverage
 
 Fused DP4A GPU: Q4K, Q5K, Q6K. cuBLAS fallback: Q4_0,
@@ -203,13 +210,13 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 
 | F-CONTRACT-01 | Contracts catch >=1 bug | **WIRED** | 6/6 invariants wired (realizr 1a05516). Awaiting 5 profiling sessions. |
 | F-TCATTN-01 | TC attn <=14µs | **PROPOSED** | GQA Tensor Core (FlashInfer). HIGH risk: DRAM stall. |
-| F-NCU-01 | NCU finds root cause | **PROPOSED** | cgp ncu-analyze. LOW risk. |
+| F-NCU-01 | NCU finds root cause | **CONFIRMED** | Occupancy 2.15%, scheduler starved 96.6%. Attention grid too small for 128 SMs. |
 | F-GATE-01 | Falsification <20% | **PROPOSED** | Pre-opt bottleneck gate. MED risk. |
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **PROPOSED** | Per-brick L2 in apr profile. MED risk. |
 
-27 F-conditions. 21 tested (12 confirmed, 4 revised,
-3 falsified, 2 weakened). 1 wired (P15-06). 5 proposed.
+27 F-conditions. 23 tested (13 confirmed, 4 revised,
+3 falsified, 2 weakened). 1 wired (P15-06). 4 proposed.
 
 ---
 
@@ -286,9 +293,30 @@ FlashInfer (Ye 2025): GQA 6:1 → TC at M=1. Predicted
 18.2µs → ~12µs, 329→361 tok/s. **F-TCATTN-01:** <=14µs
 or falsified. **Risk: HIGH** (DRAM stalls).
 
-**P15-02: NCU in cgp.** Zero NCU across org. Missing:
-warp stalls, L2 rates. **F-NCU-01:** Identifies
-attention root cause in <1h. **Risk: LOW.**
+**P15-02: NCU on attention kernel. DONE.**
+`flash_decoding_chunk` profiled (RTX 4090, 2520 MHz):
+
+| Metric | Value | Assessment |
+|--------|-------|------------|
+| Duration | 2.9µs | Fast per-launch |
+| Achieved Occupancy | **2.15%** | CATASTROPHIC |
+| SM Busy | 0.88% | 99% idle |
+| No Eligible (stalls) | 96.6% | Scheduler starved |
+| Memory BW | 8.33 GB/s | 0.83% of peak |
+| L2 Hit Rate | 82% | Good |
+| L1 Hit Rate | 17% | Poor |
+| Grid | (12,1,9)×(32,1,1) | 108 blocks/128 SMs |
+
+**Root cause:** At M=1 with seq_len~9, grid of 108 blocks
+(12 heads × 9 chunks, 1 warp each) cannot fill 128 SMs.
+Occupancy 2.15% vs theoretical 50%. Scheduler is starved
+96.6% of cycles. This is the "Mind the Memory Gap"
+(Ramirez-Gargallo 2025) prediction confirmed empirically.
+
+**F-NCU-01: CONFIRMED** — NCU identified root cause
+(occupancy starvation) in <1h. Actionable: multi-warp
+variant (PAR-070) or FlashInfer GQA TC (trueno#244).
+**Risk: LOW** confirmed.
 
 **P15-03: Bottleneck gate.** 22+ falsified experiments.
 **F-GATE-01:** Falsification <20% over 10 attempts.
@@ -354,7 +382,7 @@ fidelity) BEFORE they reached measurement.
 |---|----------|--------|------|--------|----------|--------|
 | P15-06 | Contract enforcement | **bug prevention** | LOW | 1 wk | **P0** | **DONE** |
 | P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | P1 | TODO |
-| P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 | TODO |
+| P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 | **DONE** |
 | P15-03 | Bottleneck gate | process | MED | 1 wk | P3 | TODO |
 | P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 | TODO |
 | P15-04 | cgp docs | enablement | LOW | 2 days | P5 | TODO |
@@ -505,3 +533,4 @@ validates under realistic traffic patterns.
 | 12.2 | 04-05 | Cross-project insights from qcd + toolkit. Profiler fidelity section. |
 | 12.3 | 04-05 | P15-06 contract enforcement: five-whys (11 YAML, 0 wired) + chain of thought (6 high-value invariants). F-CONTRACT-01. P15-06 promoted to P0. 27 F-conditions. |
 | 13.0 | 04-05 | **P15-06 DONE:** 6/6 contracts wired upstream (realizr 1a05516). GPU verified 328.2 tok/s (within CI). PMAT-456 filed (realizr#203). Phase 15 ACTIVE. |
+| 13.1 | 04-05 | **P15-02 DONE:** NCU on flash_decoding_chunk. Root cause: 2.15% occupancy, 96.6% scheduler stalls. Grid (108 blocks) too small for 128 SMs at M=1. F-NCU-01 CONFIRMED. |
