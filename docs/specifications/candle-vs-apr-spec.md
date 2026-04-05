@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.2.0
+**Version:** 14.3.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -20,11 +20,11 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML)
 vs **realizr** (Sovereign AI Stack) on same model, same
 GPU, same methodology. Pure Rust-vs-Rust comparison.
 
-**v14.2 Showdown (RTX 4090, 2520 MHz, chunk_size=16):**
+**v14.2 Showdown (RTX 4090, 2520 MHz, same run):**
 
 | Engine | Decode tok/s | vs Candle | ITL P50 | µs/layer |
 |--------|-------------|-----------|---------|----------|
-| llama.cpp b7746 | **425.0** | 1.87x | 2.4ms | 84 |
+| llama.cpp | **433.8** | 1.91x | 2.3ms | -- |
 | realizr (chunk=16) | **353.9** | **1.56x** | 2.8ms | 100.5 |
 | realizr (chunk=32) | 329.4 | 1.45x | 3.0ms | 107 |
 | realizr (eager) | 264.6 | 1.16x | 3.8ms | 135 |
@@ -32,7 +32,7 @@ GPU, same methodology. Pure Rust-vs-Rust comparison.
 
 Bootstrap CI (N=5, chunk=16): **353.9** [352.7, 355.1]
 CV=0.4%. GPU util 98%. trueno#246 shipped.
-Gap to llama.cpp: 1.20x (was 1.29x).
+Gap to llama.cpp: **1.23x** (was 1.29x).
 
 **Key findings:**
 1. Graph dispatch: +26% decode (647 kernels → 1 launch)
@@ -138,6 +138,9 @@ fills the 128-SM GPU better.
 
 chunk=8 tested but no better (overhead dominates).
 Sweet spot is chunk=16. Upstream fix: trueno#246.
+
+Long ctx verified stable (N=3): 342.4 mean, range
+[340.2, 345.2] tok/s, CV 0.7%. +47% vs chunk=32.
 
 ### Phase 3: Format Parity (Yoga)
 
@@ -625,3 +628,4 @@ validates under realistic traffic patterns.
 | 14.0 | 04-05 | **P15-01 FALSIFIED:** Multi-warp A/B: 284 vs 329 tok/s (-13.7%). 12 blocks on 128 SMs. Flash decode wins. F-TCATTN-01 falsified. 26/27 F-conditions tested. |
 | 14.1 | 04-05 | **Context scaling:** decode tok/s inversely scales with ctx (350→232 tok/s, -29% at ~420 ctx). 329 is best-case. Production at 1K+ ctx needs derating. |
 | 14.2 | 04-05 | **chunk_size=16 BREAKTHROUGH:** trueno#246, 353.9 tok/s [352.7, 355.1]. +7.4% short ctx / +45.8% long ctx. 1.56x Candle. F-1.5X-01 CONFIRMED. |
+| 14.3 | 04-05 | Fresh showdown: llama.cpp 433.8 vs realizr 353.9. Gap closed 1.29x→1.23x. Long ctx verified 342.4 [340,345]. |
