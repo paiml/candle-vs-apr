@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.6.0
+**Version:** 9.7.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -770,7 +770,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
-| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **590 KERNELS RECORDED** | trueno#243, realizr 82512d66, realizr#198 | All decode-path kernels wired: RMSNorm, DP4A GEMV, RoPE, attention, KV scatter, flash decoding, SwiGLU, Q8 quantize, residual add. Graph builds (590 nodes). Replay correctness bug (realizr#198). |
+| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **619 KERNELS, LOGITS CHANGING** | trueno#243, realizr c4ac6f15, realizr#198 | All decode-path kernels wired including Q6K LM head. 619 nodes. Logits now CHANGE per position (was identical — Q6K GEMV had no recording). Remaining: output quality differs from eager path. |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
 | PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 1f527a89 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. Gate debt cleared (realizr#195). |
 | PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
@@ -820,17 +820,23 @@ scatter indirect (K + V), incremental attention
 reduce), fused SwiGLU, residual add. Graph builds
 successfully and instantiates.
 
-**Replay correctness bug (realizr#198):** Graph replay
-via `cuGraphLaunch` produces identical logits at all
-positions despite position_buf/seq_len_buf being
-correctly updated (verified via D2H readback). Five-
-whys: `cuGraphAddKernelNode` captures kernel params at
-creation → pointer values are correct → BUT graph's
-`ld.global` loads appear to use captured device memory
-state, not runtime content. Fix: switch to
-`cuGraphExecKernelNodeSetParams` per-replay (llama.cpp
-approach) or investigate CUDA graph memory semantics.
-Benchmark deferred until fix.
+**Replay correctness (realizr#198 PARTIAL FIX):**
+Five-whys root cause #1 FOUND: LM head uses Q6K but
+only Q4K GEMV had recording → graph never wrote logits
+→ stale logits on replay. Fixed: all 10 GEMV quant
+variants now have recording (619 kernels, was 590).
+Logits now CHANGE per position (verified D2H readback).
+
+Five-whys root cause #2: model init warmup triggers
+graph capture at pos=0 before actual request. Warmup
+graph cleared by prefill (CORRECTNESS-014). Actual
+decode graph (pos=9) has correct buffer pointers
+(logits_buf, input_buf match).
+
+Remaining: output quality still differs from eager path.
+Logits are plausible but produce different tokens.
+Needs A/B comparison at per-kernel level to isolate
+which kernel's graph replay diverges from eager.
 
 ## 13. Revision History
 
@@ -868,3 +874,4 @@ Benchmark deferred until fix.
 | 9.4.0 | 2026-04-05 | **VERIFIED:** Manual graph API works on driver 570.207 (Python test). Stream capture bug is kernel-specific. Manual construction viable. |
 | 9.5.0 | 2026-04-05 | **Manual graph infrastructure IMPLEMENTED** in realizr (6ae0703d): RecordedKernel struct, begin/end_graph_recording, record_kernel_launch. Wired into graphed_capture.rs (skips stream capture, uses eager+record). HW DP4A GEMV recording wired. Full kernel coverage needed (RMSNorm, attention, RoPE, etc.) before benchmark. |
 | 9.6.0 | 2026-04-05 | **ALL decode-path kernels wired** (realizr 82512d66): 590 kernel nodes recorded (was 0). Graph builds + instantiates on driver 570.207. Replay correctness bug (realizr#198): identical logits despite updated position_buf. Five-whys: graph's ld.global loads not reading updated device memory. Fix: cuGraphExecKernelNodeSetParams. |
+| 9.7.0 | 2026-04-05 | **Q6K GEMV recording fix** (realizr c4ac6f15): Root cause of identical logits = LM head Q6K had no recording. Fixed all 10 GEMV variants. 619 kernels (was 590). Logits now CHANGE per position. Warmup graph at pos=0 identified (model init, cleared by prefill). Output quality still differs from eager — needs per-kernel divergence analysis. |
