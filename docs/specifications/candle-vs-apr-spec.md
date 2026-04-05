@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.5.0
+**Version:** 14.6.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -20,19 +20,24 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML)
 vs **realizr** (Sovereign AI Stack) on same model, same
 GPU, same methodology. Pure Rust-vs-Rust comparison.
 
-**v14.2 Showdown (RTX 4090, 2520 MHz, same run):**
+**v14.6 Showdown (RTX 4090, 2520 MHz, probador bootstrap N=5):**
 
-| Engine | Decode tok/s | vs Candle | ITL P50 | µs/layer |
-|--------|-------------|-----------|---------|----------|
-| llama.cpp | **433.8** | 1.91x | 2.3ms | -- |
-| realizr (chunk=16) | **353.9** | **1.56x** | 2.8ms | 100.5 |
-| realizr (chunk=32) | 329.4 | 1.45x | 3.0ms | 107 |
-| realizr (eager) | 264.6 | 1.16x | 3.8ms | 135 |
-| Candle | 227.4 | 1.00x | -- | -- |
+| Engine | Decode tok/s | 95% CI | vs Candle | ITL P50 | µs/layer |
+|--------|-------------|--------|-----------|---------|----------|
+| llama.cpp b7746 | **431.1** | [429.5, 432.2] | 1.90x | 2.3ms | 82.8 |
+| realizr (chunk=16) | **353.9** | [352.7, 355.1] | **1.56x** | 2.8ms | 100.5 |
+| realizr (chunk=32) | 329.4 | -- | 1.45x | 3.0ms | 107 |
+| realizr (eager) | 264.6 | -- | 1.16x | 3.8ms | 135 |
+| Candle | 227.4 | -- | 1.00x | -- | -- |
 
-Bootstrap CI (N=5, chunk=16): **353.9** [352.7, 355.1]
-CV=0.4%. GPU util 98%. trueno#246 shipped.
-Gap to llama.cpp: **1.23x** (was 1.29x).
+Both bootstrap CIs CV=0.4% (N=5 runs × 30s each, probador stream=false).
+Gap to llama.cpp: **1.218x** (was 1.29x with chunk=32).
+GPU util: realizr 98%, llama.cpp 91%. trueno#246 shipped.
+
+Methodology: probador `llm load` wall-clock for both runtimes (fair
+apples-to-apples). llama.cpp native eval_time reports 433.8 tok/s — agrees
+with probador 431.1 to 0.6% (server overhead minimal at 1.7 req/s).
+Candle 227.4 is CLI-native decode (no HTTP server available).
 
 **Key findings:**
 1. Graph dispatch: +26% decode (647 kernels → 1 launch)
@@ -98,13 +103,13 @@ realizr#190 false regression from GPU contention).
 
 ### Phase 1: Single-Request (c=1)
 
-| Metric | v14 graph (c=16) | v14 eager (c=16) | v11 graph | v11 eager | Candle | llama.cpp |
-|--------|------------------|------------------|-----------|-----------|--------|-----------|
-| Decode tok/s | **353.9** | 307.2 | 329.4 | 264.6 | 227.4 | 433.8 |
+| Metric | v14 graph (c=16) | v14 eager (c=16) | v11 graph | v11 eager | Candle | llama.cpp b7746 |
+|--------|------------------|------------------|-----------|-----------|--------|-----------------|
+| Decode tok/s | **353.9** | 307.2 | 329.4 | 264.6 | 227.4 | **431.1** |
 | ITL P50 | 2.8ms | -- | 3.0ms | 3.8ms | -- | 2.3ms |
-| µs/layer | 100.5 | -- | 107 | 135 | -- | -- |
-| GPU util | 98% | -- | -- | -- | -- | -- |
-| Delta | +7.4% | +16.1% | base | base | base | +2.1% |
+| µs/layer | 100.5 | -- | 107 | 135 | -- | 82.8 |
+| GPU util | 98% | -- | -- | -- | -- | 91% |
+| Delta | +7.4% | +16.1% | base | base | base | +2.2% |
 
 v14: chunk_size=16 (trueno#246). Eager benefits MORE
 (+16.1%) than graph (+7.4%) because eager has full
@@ -260,8 +265,9 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
-27 F-conditions. 26 tested (16 confirmed, 4 revised,
-4 falsified, 2 weakened). 1 wired (P15-06). 1 proposed.
+27 F-conditions. 25 tested (12 confirmed, 5 revised,
+3 falsified, 2 weakened, 1 fixed, 1 measured, 1 wired).
+2 proposed (F-GATE-01, F-DOCS-01).
 
 ---
 
@@ -643,3 +649,4 @@ validates under realistic traffic patterns.
 | 14.3 | 04-05 | Fresh showdown: llama.cpp 433.8 vs realizr 353.9. Gap closed 1.29x→1.23x. Long ctx verified 342.4 [340,345]. |
 | 14.4 | 04-05 | NCU verified chunk=16: occupancy 2.15%→3.09% (+44%), L2 hit 82%→91% (+9pp), SM busy 0.88%→1.33% (+51%). |
 | 14.5 | 04-05 | Full chunk_size sweep {8,12,16,20,24,32}. chunk=16 wins both MICRO and LONG. Non-monotonic (chunk=12 worse). Eager +16% too. |
+| 14.6 | 04-05 | **Fair apples-to-apples:** probador bootstrap llama.cpp b7746 = 431.1 [429.5, 432.2] CV 0.4%. Gap 1.218x. Corrects methodology: spec's 433.8 was native eval_time, not probador. F-condition counts corrected (25 tested, not 26). |
