@@ -821,11 +821,16 @@ reduce), fused SwiGLU, residual add. Graph builds
 successfully and instantiates.
 
 **Replay correctness bug (realizr#198):** Graph replay
-via `cuGraphLaunch` produces garbled output — first
-token correct (eager), subsequent tokens degenerate.
-Root cause under investigation: likely arg encoding
-(u32-as-u64) or KV cache state management during
-replay. Benchmark deferred until fix.
+via `cuGraphLaunch` produces identical logits at all
+positions despite position_buf/seq_len_buf being
+correctly updated (verified via D2H readback). Five-
+whys: `cuGraphAddKernelNode` captures kernel params at
+creation → pointer values are correct → BUT graph's
+`ld.global` loads appear to use captured device memory
+state, not runtime content. Fix: switch to
+`cuGraphExecKernelNodeSetParams` per-replay (llama.cpp
+approach) or investigate CUDA graph memory semantics.
+Benchmark deferred until fix.
 
 ## 13. Revision History
 
@@ -862,4 +867,4 @@ replay. Benchmark deferred until fix.
 | 9.3.0 | 2026-04-05 | **PROFILED:** 85.9% launch overhead. PMAT-453 stream capture blocked (code 901 on 570.207, both Global + ThreadLocal). **trueno#243 SHIPPED:** `cuGraphAddKernelNode` manual graph API — bypasses stream capture. Wiring into decode path next. |
 | 9.4.0 | 2026-04-05 | **VERIFIED:** Manual graph API works on driver 570.207 (Python test). Stream capture bug is kernel-specific. Manual construction viable. |
 | 9.5.0 | 2026-04-05 | **Manual graph infrastructure IMPLEMENTED** in realizr (6ae0703d): RecordedKernel struct, begin/end_graph_recording, record_kernel_launch. Wired into graphed_capture.rs (skips stream capture, uses eager+record). HW DP4A GEMV recording wired. Full kernel coverage needed (RMSNorm, attention, RoPE, etc.) before benchmark. |
-| 9.6.0 | 2026-04-05 | **ALL decode-path kernels wired** (realizr 82512d66): 590 kernel nodes recorded (was 0). Graph builds + instantiates on driver 570.207. Replay correctness bug (realizr#198): garbled output after first token. Benchmark deferred until fix. |
+| 9.6.0 | 2026-04-05 | **ALL decode-path kernels wired** (realizr 82512d66): 590 kernel nodes recorded (was 0). Graph builds + instantiates on driver 570.207. Replay correctness bug (realizr#198): identical logits despite updated position_buf. Five-whys: graph's ld.global loads not reading updated device memory. Fix: cuGraphExecKernelNodeSetParams. |
