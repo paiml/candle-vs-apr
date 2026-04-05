@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 13.3.0
+**Version:** 13.4.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -213,10 +213,10 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-NCU-01 | NCU finds root cause | **CONFIRMED** | Occupancy 2.15%, scheduler starved 96.6%. Attention grid too small for 128 SMs. |
 | F-GATE-01 | Falsification <20% | **PROPOSED** | Pre-opt bottleneck gate. MED risk. |
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
-| F-L2-01 | L2 changes priorities | **PROPOSED** | Per-brick L2 in apr profile. MED risk. |
+| F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
-27 F-conditions. 23 tested (13 confirmed, 4 revised,
-3 falsified, 2 weakened). 1 wired (P15-06). 4 proposed.
+27 F-conditions. 25 tested (15 confirmed, 4 revised,
+3 falsified, 2 weakened). 1 wired (P15-06). 2 proposed.
 
 ---
 
@@ -348,9 +348,28 @@ Track via `results/bottleneck-gate-log.json`.
 **P15-04: cgp docs.** 9 profilers, 0 docs. **F-DOCS-01:**
 2+ new users in 30d. **Risk: LOW.**
 
-**P15-05: L2 in apr profile.** Ramirez-Gargallo 2025:
-L2 12%, L1 2%. **F-L2-01:** Changes priority ordering
-for >=1 brick. **Risk: MED.**
+**P15-05: L2 cache analysis. MEASURED via NCU.**
+Per-brick L2 hit rates from ncu (RTX 4090):
+
+| Brick | L2 Hit Rate | L1 Hit Rate | DRAM % |
+|-------|-------------|-------------|--------|
+| flash_decoding_chunk | **82%** | 17% | 0.84% |
+| hw_dp4a_q4k_gemv | **~14%** | ~8% | 33.2% |
+
+**F-L2-01:** L2 data DOES change priorities. Attention
+has 82% L2 hit rate (KV cache fits in L2) but only
+0.84% DRAM throughput (occupancy-starved, not BW-starved).
+GEMV has 14% L2 (weights don't fit) and 33% DRAM.
+
+Implication: Attention optimization should target
+OCCUPANCY not memory. GEMV is the true BW bottleneck.
+This reverses naive priority ordering (attention looked
+like the bottleneck at 44% of time, but it's
+occupancy-limited not BW-limited).
+
+**F-L2-01: CONFIRMED** — L2 data changed priority
+for attention brick (from "optimize BW" to "optimize
+occupancy"). **Risk: MED** confirmed.
 
 **P15-06: Profiler contract enforcement (five-whys)**
 
@@ -407,7 +426,7 @@ fidelity) BEFORE they reached measurement.
 | P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | P1 | TODO |
 | P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 | **DONE** |
 | P15-03 | Bottleneck gate | process | MED | 1 wk | P3 | **DONE** |
-| P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 | TODO |
+| P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 | **DONE** |
 | P15-04 | cgp docs | enablement | LOW | 2 days | P5 | TODO |
 
 **P15-06 IMPLEMENTED:** 6/6 invariants wired into realizr
@@ -559,3 +578,4 @@ validates under realistic traffic patterns.
 | 13.1 | 04-05 | **P15-02 DONE:** NCU on flash_decoding_chunk. Root cause: 2.15% occupancy, 96.6% scheduler stalls. Grid (108 blocks) too small for 128 SMs at M=1. F-NCU-01 CONFIRMED. |
 | 13.2 | 04-05 | P15-01 analysis: multi-warp (PAR-070) ready but unwired. trueno#245 filed. NCU confirms kernel fast (2.9µs) but GPU idle (99%). |
 | 13.3 | 04-05 | **P15-03 DONE:** Bottleneck gate (roofline pre-check). Catches BW ceiling, occupancy, Amdahl's law. Verified on 5 known cases. |
+| 13.4 | 04-05 | **P15-05 DONE:** L2 cache from NCU. Attention 82% L2 (occupancy problem), GEMV 14% L2 (BW problem). Reversed naive priority. F-L2-01 CONFIRMED. |
