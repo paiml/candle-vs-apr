@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.5.0
+**Version:** 9.6.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -770,7 +770,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
-| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **MANUAL API SHIPPED** | trueno#243 (4ba00082), realizr#197 | Stream capture blocked (code 901). Manual `cuGraphAddKernelNode` API shipped. Wiring into decode path next. |
+| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **590 KERNELS RECORDED** | trueno#243, realizr 82512d66, realizr#198 | All decode-path kernels wired: RMSNorm, DP4A GEMV, RoPE, attention, KV scatter, flash decoding, SwiGLU, Q8 quantize, residual add. Graph builds (590 nodes). Replay correctness bug (realizr#198). |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
 | PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 1f527a89 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. Gate debt cleared (realizr#195). |
 | PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
@@ -800,20 +800,32 @@ Remaining Phase 12 path: tensor graph dispatch
 validation in qcd. All kernel fusion approaches have
 been falsified for small-dim M=1 decode.
 
-**DRIVER BLOCKED (realizr#197):** CUDA graph capture
-fails with code 901 on driver 570.207 (Ada Lovelace).
-Tested both `CaptureMode::Global` AND `ThreadLocal` —
-same failure (realizr 02854aee). Bug is NOT in capture
-API (empty capture succeeds) but in a specific kernel
-being captured. Even `--no-fp8-cache` doesn't help.
+**DRIVER BLOCKED (realizr#197):** CUDA graph stream
+capture fails with code 901 on driver 570.207 (Ada
+Lovelace). Both `CaptureMode::Global` AND `ThreadLocal`
+fail. Bug is kernel-specific (empty capture succeeds).
 
-**Manual graph API (trueno#243, 4ba00082): VERIFIED.**
+**Manual graph API (trueno#243): VERIFIED + WIRED.**
 `cuGraphCreate`, `cuGraphAddKernelNode`,
 `cuGraphInstantiateWithFlags`, `cuGraphLaunch` all
 succeed on driver 570.207. Manual construction bypasses
-stream capture entirely — viable path to eliminate
-85.9% launch overhead. Requires refactoring decode path
-to record kernel params instead of launching directly.
+stream capture entirely.
+
+**ALL decode-path kernels wired (realizr 82512d66):**
+590 kernel nodes recorded during eager forward pass.
+Recording added to: RMSNorm, HW DP4A GEMV (Q4K),
+Q8 quantize, RoPE (direct + indirect + neox), KV
+scatter indirect (K + V), incremental attention
+(single-warp + multi-warp), flash decoding (chunk +
+reduce), fused SwiGLU, residual add. Graph builds
+successfully and instantiates.
+
+**Replay correctness bug (realizr#198):** Graph replay
+via `cuGraphLaunch` produces garbled output — first
+token correct (eager), subsequent tokens degenerate.
+Root cause under investigation: likely arg encoding
+(u32-as-u64) or KV cache state management during
+replay. Benchmark deferred until fix.
 
 ## 13. Revision History
 
@@ -850,3 +862,4 @@ to record kernel params instead of launching directly.
 | 9.3.0 | 2026-04-05 | **PROFILED:** 85.9% launch overhead. PMAT-453 stream capture blocked (code 901 on 570.207, both Global + ThreadLocal). **trueno#243 SHIPPED:** `cuGraphAddKernelNode` manual graph API — bypasses stream capture. Wiring into decode path next. |
 | 9.4.0 | 2026-04-05 | **VERIFIED:** Manual graph API works on driver 570.207 (Python test). Stream capture bug is kernel-specific. Manual construction viable. |
 | 9.5.0 | 2026-04-05 | **Manual graph infrastructure IMPLEMENTED** in realizr (6ae0703d): RecordedKernel struct, begin/end_graph_recording, record_kernel_launch. Wired into graphed_capture.rs (skips stream capture, uses eager+record). HW DP4A GEMV recording wired. Full kernel coverage needed (RMSNorm, attention, RoPE, etc.) before benchmark. |
+| 9.6.0 | 2026-04-05 | **ALL decode-path kernels wired** (realizr 82512d66): 590 kernel nodes recorded (was 0). Graph builds + instantiates on driver 570.207. Replay correctness bug (realizr#198): garbled output after first token. Benchmark deferred until fix. |
