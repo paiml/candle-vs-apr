@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.3.0
+**Version:** 14.4.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -346,28 +346,26 @@ intra-block parallelism but loses inter-block.
 3. Fused multi-warp+flash (N warps per chunk)
 
 **P15-02: NCU on attention kernel. DONE.**
-`flash_decoding_chunk` profiled (RTX 4090, 2520 MHz):
+`flash_decoding_chunk` A/B (RTX 4090, 2520 MHz):
 
-| Metric | Value | Assessment |
-|--------|-------|------------|
-| Duration | 2.9µs | Fast per-launch |
-| Achieved Occupancy | **2.15%** | CATASTROPHIC |
-| SM Busy | 0.88% | 99% idle |
-| No Eligible (stalls) | 96.6% | Scheduler starved |
-| Memory BW | 8.33 GB/s | 0.83% of peak |
-| L2 Hit Rate | 82% | Good |
-| L1 Hit Rate | 17% | Poor |
-| Grid | (12,1,9)×(32,1,1) | 108 blocks/128 SMs |
+| Metric | chunk=32 | chunk=16 | Delta |
+|--------|---------|---------|-------|
+| Grid | (12,1,9) = 108 | (12,1,18) = 216 | +100% |
+| Achieved Occupancy | **2.15%** | **3.09%** | +44% |
+| SM Busy | 0.88% | 1.33% | +51% |
+| Memory BW | 8.33 GB/s | 6.88 GB/s | -17% |
+| L2 Hit Rate | 82% | **91%** | +9pp |
+| L1 Hit Rate | 17% | ~17% | same |
+| Duration/kernel | 2.9µs | 2.9µs | same |
 
-**Root cause:** At M=1 with seq_len~9, grid of 108 blocks
-(12 heads × 9 chunks, 1 warp each) cannot fill 128 SMs.
-Occupancy 2.15% vs theoretical 50%. Scheduler is starved
-96.6% of cycles. This is the "Mind the Memory Gap"
-(Ramirez-Gargallo 2025) prediction confirmed empirically.
+**Root cause identified:** grid too small for 128 SMs.
+Per-kernel work is minimal (2.9µs) but attention needs
+more blocks to fill GPU. Doubling blocks (chunk=16)
+doubles SM busy time and improves L2 cache locality
+(partial chunks fit better).
 
-**F-NCU-01: CONFIRMED** — NCU identified root cause
-(occupancy starvation) in <1h. Actionable: multi-warp
-variant (PAR-070) or FlashInfer GQA TC (trueno#244).
+**F-NCU-01: CONFIRMED** — NCU identified root cause in
+<1h. Actionable fix shipped (trueno#246 chunk_size=16).
 **Risk: LOW** confirmed.
 
 **P15-03: Bottleneck gate. DONE.**
@@ -629,3 +627,4 @@ validates under realistic traffic patterns.
 | 14.1 | 04-05 | **Context scaling:** decode tok/s inversely scales with ctx (350→232 tok/s, -29% at ~420 ctx). 329 is best-case. Production at 1K+ ctx needs derating. |
 | 14.2 | 04-05 | **chunk_size=16 BREAKTHROUGH:** trueno#246, 353.9 tok/s [352.7, 355.1]. +7.4% short ctx / +45.8% long ctx. 1.56x Candle. F-1.5X-01 CONFIRMED. |
 | 14.3 | 04-05 | Fresh showdown: llama.cpp 433.8 vs realizr 353.9. Gap closed 1.29x→1.23x. Long ctx verified 342.4 [340,345]. |
+| 14.4 | 04-05 | NCU verified chunk=16: occupancy 2.15%→3.09% (+44%), L2 hit 82%→91% (+9pp), SM busy 0.88%→1.33% (+51%). |
