@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.7.0
+**Version:** 9.8.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -767,7 +767,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 
 | ID | Task | Status | Upstream | Impact |
 |----|------|--------|----------|--------|
-| PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
+| PMAT-450 | KV prefix caching (prompt reuse) | **IMPLEMENTED** | realizr#199, 045f1c2d | PrefixCache wired into generate_gpu_resident. GPU KV D2H/H2D snapshot/restore. Skip prefill on hit. Needs GPU benchmark. |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
 | PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **619 KERNELS, LOGITS CHANGING** | trueno#243, realizr c4ac6f15, realizr#198 | All decode-path kernels wired including Q6K LM head. 619 nodes. Logits now CHANGE per position (was identical — Q6K GEMV had no recording). Remaining: output quality differs from eager path. |
@@ -875,3 +875,4 @@ which kernel's graph replay diverges from eager.
 | 9.5.0 | 2026-04-05 | **Manual graph infrastructure IMPLEMENTED** in realizr (6ae0703d): RecordedKernel struct, begin/end_graph_recording, record_kernel_launch. Wired into graphed_capture.rs (skips stream capture, uses eager+record). HW DP4A GEMV recording wired. Full kernel coverage needed (RMSNorm, attention, RoPE, etc.) before benchmark. |
 | 9.6.0 | 2026-04-05 | **ALL decode-path kernels wired** (realizr 82512d66): 590 kernel nodes recorded (was 0). Graph builds + instantiates on driver 570.207. Replay correctness bug (realizr#198): identical logits despite updated position_buf. Five-whys: graph's ld.global loads not reading updated device memory. Fix: cuGraphExecKernelNodeSetParams. |
 | 9.7.0 | 2026-04-05 | **Q6K GEMV recording fix** (realizr c4ac6f15): Root cause of identical logits = LM head Q6K had no recording. Fixed all 10 GEMV variants. 619 kernels (was 590). Logits now CHANGE per position. Warmup graph at pos=0 identified (model init, cleared by prefill). Output quality still differs from eager — needs per-kernel divergence analysis. |
+| 9.8.0 | 2026-04-05 | **PMAT-450 KV prefix caching IMPLEMENTED** (realizr 045f1c2d, realizr#199). PrefixCache wired into generate_gpu_resident: lookup before prefill, GPU KV D2H snapshot after generate, H2D restore on cache hit. Skip prefill entirely for repeated prompts. Expected TTFT ~900ms → ~5ms. Needs GPU benchmark. |
