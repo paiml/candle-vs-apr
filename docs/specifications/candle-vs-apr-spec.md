@@ -129,20 +129,33 @@ Candle has no server — cannot demonstrate c>1.
 
 ### Phase 2c: Scaling Regression on RTX 4090 (NEW)
 
-| c | realizr chunk=16 | llama.cpp b7746 | gap |
-|---|------------------|------------------|-----|
-| 1 | 353.9 agg | 431.1 agg | 0.82x |
-| 4 | **367.7 agg** (91.9/req) | **902.3 agg** (228.2/req) | **0.41x** |
+**realizr c=N sweep (chunk=16, RTX 4090):**
 
-**Scaling factor c=1 → c=4:**
-- realizr: **1.03x** (near-flat)
-- llama.cpp: **2.09x**
+| c | Agg tok/s | Per-req | ITL P50 | ITL ratio | Scaling |
+|---|-----------|---------|---------|-----------|---------|
+| 1 | 357 | 357 | 2.8ms | 1.0x | 1.0x |
+| 2 | 376 | 188 | 5.3ms | **1.9x** | 1.05x |
+| 4 | 368 | 92 | 10.9ms | **3.9x** | 1.03x |
+| 8 | 376 | 47 | 21.3ms | **7.6x** | 1.05x |
 
-**Finding:** realizr's continuous batch scheduler scales poorly on
-RTX 4090 at c=4 (unlike Yoga 2.3x). Per-request ITL jumps 2.8ms →
-10.88ms (3.9x) whereas llama.cpp 2.3ms → 4.38ms (1.9x). Strongly
-suggests each request is serialized through decode at M=1 rather
-than batched at M=4.
+**Diagnostic:** ITL scales near-linearly with c (1.9x/3.9x/7.6x for
+c=2/4/8) while aggregate stays ~375 tok/s. This is the exact
+signature of serialized per-request M=1 decode — NO batching
+coalescing. Expected M=N decode would give ITL ratio ~1.0-1.5x.
+
+**vs llama.cpp b7746 (c=1 and c=4 measured):**
+
+| c | realizr | llama.cpp | gap |
+|---|---------|-----------|-----|
+| 1 | 353.9 | 431.1 | 0.82x |
+| 4 | **367.7** | **902.3** | **0.41x** |
+
+llama.cpp c=1 → c=4 scaling: **2.09x**. realizr: **1.03x**.
+
+**Finding:** realizr's continuous batch scheduler on 4090 queues
+requests but decodes them sequentially at M=1 rather than batching
+to M=4. Yoga (4060, 24 SMs) shows 2.3x scaling at c=4 — the
+regression is 4090-specific.
 
 Falsifies F-PARITY-02 prior evidence. Filed upstream as realizr#211
 with five-whys + provable-contract (continuous-batching-v1.yaml
