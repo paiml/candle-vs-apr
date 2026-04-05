@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 11.0.0
+**Version:** 11.1.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -68,13 +68,14 @@ CUDA — isolating architecture from language/runtime.
 c=1 is primary (Candle has no server). Concurrent
 benchmarks (c=4..32) show what Candle cannot provide.
 
-**Result (v10 graph replay, clean GPU, 2520 MHz):**
-realizr **331.2** vs llama.cpp **336.7** decode tok/s
-(**1.6% gap — near parity**). Graph replay: +26.3% vs
-eager (262.2). **1.46x Candle** (227.4). Root cause of
-prior garbled graph output: fused SwiGLU kernel missing
-recording (realizr 2797c878, #198). 647 kernels → 1
-graph launch. ITL 3.0ms, µs/layer 107.8.
+**Result (v11 showdown, clean GPU, 2520 MHz):**
+llama.cpp **425.0** (b7746 FA fix) > realizr graph
+**333.3** > realizr eager **264.6** > Candle **227.4**.
+realizr **1.47x Candle**, 0.78x llama.cpp. Graph replay
++26% vs eager (647 kernels → 1 launch, ITL 3.0ms,
+µs/layer 107). llama.cpp also +26% from FA register
+spill fix (5c662d21a). Both improved equally — gap
+unchanged at ~22%. 333 tok/s is GPU-compute-bound.
 See F-SUMMARY-01, F-PARITY-04, F-1.5X-01.
 
 ---
@@ -481,7 +482,7 @@ and confirmed, weakened, or retracted.
 
 | ID | Prediction | Status | Evidence |
 |----|-----------|--------|---------|
-| F-SUMMARY-01 | realizr wins >=1 at c=1 | **REVISED** | v3: 273.8. v8 clean: **289.0 vs 333.1 llama.cpp** (total). Decode-only: ~303 vs ~299 (**parity**). llama.cpp wins total via prompt caching. |
+| F-SUMMARY-01 | realizr wins >=1 at c=1 | **REVISED** | v11: realizr graph **333.3** vs llama.cpp **425.0** (0.78x). Both improved: realizr +26% (graph), llama.cpp +26% (FA fix). Gap unchanged at ~22%. realizr **1.47x Candle**. |
 | F-PARITY-01 | c=1 within +/-10% | **REVISED** | v3: 1.20x. v8: **0.87x total** (289.0 vs 333.1). But decode-only ~1.01x (parity). Delta = prompt caching, not kernel speed. |
 | F-FORMAT-01 | APR load 2-5x faster | **FIXED** | Legacy AprQ4: 60s (dequant). Current: Q4K raw passthrough (realizr#185) |
 | F-SCALE-01 | c=32 >=1,280 tok/s | **CONFIRMED** | Yoga: **1,776.5** (13.4x from c=1 132.6) |
@@ -495,7 +496,7 @@ and confirmed, weakened, or retracted.
 | F-FMTPARITY-01 | 3 formats GPU +/-10% | **REVISED** | GGUF 132.5, FP16 **151.6**, APR Q4K 132.3 (Yoga) |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.4%. Version skew was root cause |
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
-| F-PARITY-04 | realizr >= llama.cpp at c=1 | **REVISED** | Eager: 262.2 vs llama.cpp 336.7 (0.78x). **Graph: 331.2** vs llama.cpp 336.7 (**0.98x, near parity**). |
+| F-PARITY-04 | realizr >= llama.cpp at c=1 | **REVISED** | v11 showdown: llama.cpp **425.0** (FA fix), realizr graph **333.3** (0.78x). Gap widened by llama.cpp FA register fix (+26%). Realizr graph +26% vs eager. |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
 | F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **NEAR** | Graph: **331.2** (1.46x Candle 227.4). 2.9% below 341 target. ITL 3.0ms, µs/layer 107.8. |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
@@ -721,7 +722,7 @@ code changes. Candle/unsloth/PyTorch need wrappers.
 | PMAT-442 | VRAM measurement during probador runs | **MEASURED** | Peak 5,388 MiB, mean 5,288 MiB (RTX 4090) |
 | PMAT-443 | Poisson arrival: c=1..32 with `--rate` | **MEASURED** | c=1: 245-254 tok/s (rate 0.5-2.0). c=4: 151 tok/s decode, 387 agg (rate 8.0). Latency drift at c=4. |
 | PMAT-444 | Output correctness (F-PARITY-03) | **MEASURED** | 72% divergence (chat template, not dequant). F-PARITY-03 WEAKENED. |
-| PMAT-445 | Multi-framework showdown (3-way) | **MEASURED** | v8.9: llama.cpp 289.3, realizr 268.5, ollama 241.7. v9: llama.cpp **336.7**, realizr **281.2** (16.5% gap). Candle 227.4 (ref). |
+| PMAT-445 | Multi-framework showdown (3-way) | **MEASURED** | v11: llama.cpp **425.0** (FA fix b7746), realizr graph **333.3** (21.6% gap), realizr eager 264.6, Candle 227.4 (ref). v9: llama.cpp 336.7, realizr 281.2. llama.cpp +26% from FA register spill fix (5c662d21a). |
 
 > **F-QUALITY-01: FALSIFIED.** realizr WikiText-2
 > DP4A decode PPL = **20.4-31.3** (weighted avg 24.2,
@@ -892,3 +893,4 @@ correct, coherent output. **331.2 tok/s decode.**
 | 9.9.0 | 2026-04-05 | **PMAT-450 MEASURED** (realizr cb00153b). Cold 136ms → Warm 56ms (2.4x, 80ms saved). Fixed: prompt-only KV snapshot (was caching generated tokens too). Wired streaming path (server uses true streaming). Output parity limited by FP8/DP4A precision divergence at first-token boundary. |
 | 10.0.0 | 2026-04-05 | **PMAT-453 A/B TEST** (realizr 06357373). Graph replay at same position: RMSNorm IDENTICAL (diff=0.0), hidden_buf2 DIVERGED (155.1). Bug is in 28-layer Q8→GEMV→attention→FFN pipeline. 619 kernels all recorded + all launch configs correct. Need layer binary search to find first divergence point. |
 | 11.0.0 | 2026-04-05 | **GRAPH REPLAY FIXED + MEASURED** (realizr 2797c878). Five-whys: `fused_gate_up_swiglu_hw_dp4a_q4k_gemv_into` MISSING graph recording — 28 kernels/forward never captured. Fix: 647 kernels (was 619). A/B: ALL 13 buffers diff=0. **331.2 tok/s** (+26.3% vs eager 262.2, **1.46x Candle**, 0.98x llama.cpp). F-1.5X-01 NEAR (2.9% gap). F-PARITY-04 near parity. |
+| 11.1.0 | 2026-04-05 | **V11 SHOWDOWN** (3-way). llama.cpp b7746 **425.0** (+26% FA register fix), realizr graph **333.3** (+26% graph dispatch), realizr eager 264.6, Candle 227.4. Gap unchanged at ~22%. realizr 1.47x Candle. Sync removal (realizr#200, a20c3229): marginal — GPU-compute-bound at 107µs/layer. F-1.5X-01: 333 vs 341 target requires kernel improvements. |
