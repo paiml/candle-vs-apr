@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.1.0
+**Version:** 9.2.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -762,7 +762,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 |----|------|--------|----------|--------|
 | PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
-| PMAT-452 | Fused K+V kernel (single launch) | **KERNEL DONE** | trueno 9d99e18c | -1 launch/layer (28/token). Wiring into realizr dispatch TODO. |
+| PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
 | PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | TODO | trueno#238 infra done | -85% kernel launches, +20-40% |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
 | PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 1f527a89 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. Gate debt cleared (realizr#195). |
@@ -780,14 +780,18 @@ kernel was 5% slower (realizr PMAT-092). PMAT-436
 (Marlin pre-packing) **DEPRIORITIZED** — not beneficial
 for M=1 decode (trueno#239 branch 1453 behind main).
 
-PMAT-452 (Fused K+V kernel) **IMPLEMENTED** — trueno
-9d99e18c. Follows FusedGateUpSwiglu dual-accumulator
-pattern. ~170 insn/SB (21% savings vs 2×108). Wiring
-into realizr indexed_transformer.rs dispatch remaining.
+PMAT-452 (Fused K+V kernel) **FALSIFIED** — trueno
+9d99e18c kernel + realizr 84d36305 wiring. MEASURED
+272.5 vs 281.2 tok/s (-3.1% regression). Root cause:
+kv_dim=256 too small — launch overhead savings (~5μs)
+< compute overhead from dual accumulators (~10μs/row).
+Same pattern as qcd PMAT-280..289 (16 fusion failures).
+Reverted to Phase 1 (Q8 cache sharing only).
 
 Remaining Phase 12 path: tensor graph dispatch
-(PMAT-435/453) is the highest-impact single technique
-(+20-40%), but requires significant wiring work.
+(PMAT-435/453) is the only technique that survived
+validation in qcd. All kernel fusion approaches have
+been falsified for small-dim M=1 decode.
 
 ## 13. Revision History
 
@@ -820,3 +824,4 @@ Remaining Phase 12 path: tensor graph dispatch
 | 9.0.0 | 2026-04-04 | **realizr#194 SHIPPED** (graph poison fix). Fresh showdown: realizr 281.2 vs llama.cpp 336.7 (16.5% gap). DP4A PPL re-measured: 20.4-31.3 (text-dependent). **Fused K+V kernel IMPLEMENTED** (trueno 9d99e18c, -28 launches/token). F-QUALITY-01 updated: batched FP8 PPL path needed. |
 | 9.0.1 | 2026-04-05 | **realizr#194 PUSHED** (all 4 gates ✅). Fixed 30+ examples/tests/benches (field accessors, clippy). trueno BLIS clippy fixed (unsafe_op_in_unsafe_fn, wgsl_forward). Gate debt cleared across realizr + trueno. |
 | 9.1.0 | 2026-04-05 | Tooling upgrade: `cgp` (trueno) + `apr bench` (load testing) integrated into spec. Workflow updated: `apr check` → `apr profile` → `apr bench` → `cgp contract verify`. 14 tools in Section 12 (was 8). |
+| 9.2.0 | 2026-04-05 | **PMAT-452 FALSIFIED:** Fused K+V kernel -3.1% regression at kv_dim=256. Launch overhead savings < compute overhead. Same pattern as qcd PMAT-280..289. Reverted to Phase 1 (Q8 cache). Only tensor graph dispatch remains viable for 1.5x target. |
