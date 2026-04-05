@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 13.4.0
+**Version:** 13.5.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -549,11 +549,13 @@ validates under realistic traffic patterns.
 | Gap | Severity | Reference |
 |-----|----------|-----------|
 | **Contract enforcement** | **CLOSED** | 6/6 invariants wired to profiler+tracer (P15-06). |
-| **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. PMAT-456. |
-| **Chrome Trace export** | High | Custom JSON, not Perfetto/Chrome. |
-| **GPU-side kernel timing** | High | CPU Instant::now() only. CUPTI needed. |
-| **Per-step callbacks** | Medium | No loss/lr/grad_norm/step_ms. |
-| **Memory waterfall** | Medium | No per-step alloc/peak/fragmentation. |
+| **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. PMAT-456 filed (realizr#203). |
+| **NCU profiling** | **CLOSED** | P15-02: ncu on flash_decoding_chunk + hw_dp4a_q4k_gemv. Root causes identified. |
+| **L2 cache analysis** | **CLOSED** | P15-05: L2 82% (attn) / 14% (GEMV). Reversed priority ordering. |
+| **Chrome Trace export** | Medium | Custom JSON, not Perfetto/Chrome. |
+| **GPU-side kernel timing** | Medium | CPU Instant::now() + ncu for validation. CUPTI for continuous monitoring. |
+| **Per-step callbacks** | Low | No loss/lr/grad_norm/step_ms. |
+| **Memory waterfall** | Low | No per-step alloc/peak/fragmentation. |
 
 ---
 
@@ -579,3 +581,4 @@ validates under realistic traffic patterns.
 | 13.2 | 04-05 | P15-01 analysis: multi-warp (PAR-070) ready but unwired. trueno#245 filed. NCU confirms kernel fast (2.9µs) but GPU idle (99%). |
 | 13.3 | 04-05 | **P15-03 DONE:** Bottleneck gate (roofline pre-check). Catches BW ceiling, occupancy, Amdahl's law. Verified on 5 known cases. |
 | 13.4 | 04-05 | **P15-05 DONE:** L2 cache from NCU. Attention 82% L2 (occupancy problem), GEMV 14% L2 (BW problem). Reversed naive priority. F-L2-01 CONFIRMED. |
+| 13.5 | 04-05 | Phase 15: 5/6 done (P15-04 blocked: no cgp repo). Methodology gaps updated. 25/27 F-conditions tested. |
