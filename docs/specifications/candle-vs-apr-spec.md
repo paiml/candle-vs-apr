@@ -20,19 +20,20 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML)
 vs **realizr** (Sovereign AI Stack) on same model, same
 GPU, same methodology. Pure Rust-vs-Rust comparison.
 
-**v14.6 Showdown (RTX 4090, 2520 MHz, probador bootstrap N=5):**
+**v14.7 Showdown (RTX 4090, 2520 MHz, probador bootstrap N=5):**
 
 | Engine | Decode tok/s | 95% CI | vs Candle | ITL P50 | µs/layer |
 |--------|-------------|--------|-----------|---------|----------|
 | llama.cpp b7746 | **431.1** | [429.5, 432.2] | 1.90x | 2.3ms | 82.8 |
-| realizr (chunk=16) | **353.9** | [352.7, 355.1] | **1.56x** | 2.8ms | 100.5 |
+| realizr (chunk=16, #211) | **378.3** | [372.4, 382.4] | **1.66x** | 2.6ms | 94.3 |
+| realizr (chunk=16, pre-#211) | 353.9 | [352.7, 355.1] | 1.56x | 2.8ms | 100.5 |
 | realizr (chunk=32) | 329.4 | -- | 1.45x | 3.0ms | 107 |
-| realizr (eager) | 264.6 | -- | 1.16x | 3.8ms | 135 |
 | Candle | 227.4 | -- | 1.00x | -- | -- |
 
-Both bootstrap CIs CV=0.4% (N=5 runs × 30s each, probador stream=false).
-Gap to llama.cpp: **1.218x** (was 1.29x with chunk=32).
+Bootstrap CV=1.1% (N=5 × 30s, stream=false through batch scheduler).
+Gap to llama.cpp: **1.140x** (was 1.218x pre-#211).
 GPU util: realizr 98%, llama.cpp 91%. trueno#246 shipped.
+**realizr#211 fix: c=4 671 agg, c=8 1,009 agg tok/s.**
 
 Methodology: probador `llm load` wall-clock for both runtimes (fair
 apples-to-apples). llama.cpp native eval_time reports 433.8 tok/s — agrees
@@ -42,9 +43,10 @@ Candle 227.4 is CLI-native decode (no HTTP server available).
 **Key findings:**
 1. Graph dispatch: +26% decode (647 kernels → 1 launch)
 2. **chunk_size=16: +7.4% short / +45% long ctx** (trueno#246)
-3. AttentionScore: 44% of compute, 23µs/layer gap vs FA
-4. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap)
-5. Scaling: 1,776 tok/s at c=32 (Yoga, 13.4x from c=1)
+3. **realizr#211 fix: +6.9% c=1, +82% c=4, +168% c=8** (batch scheduler for all paths)
+4. AttentionScore: 44% of compute, 23µs/layer gap vs FA
+5. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap)
+6. Scaling: 1,776 tok/s at c=32 (Yoga, 13.4x from c=1)
 
 ---
 
@@ -103,13 +105,13 @@ realizr#190 false regression from GPU contention).
 
 ### Phase 1: Single-Request (c=1)
 
-| Metric | v14 graph (c=16) | v14 eager (c=16) | v11 graph | v11 eager | Candle | llama.cpp b7746 |
-|--------|------------------|------------------|-----------|-----------|--------|-----------------|
-| Decode tok/s | **353.9** | 307.2 | 329.4 | 264.6 | 227.4 | **431.1** |
-| ITL P50 | 2.8ms | -- | 3.0ms | 3.8ms | -- | 2.3ms |
-| µs/layer | 100.5 | -- | 107 | 135 | -- | 82.8 |
-| GPU util | 98% | -- | -- | -- | -- | 91% |
-| Delta | +7.4% | +16.1% | base | base | base | +2.2% |
+| Metric | v14.7 (#211 fix) | v14 graph (c=16) | v11 graph | Candle | llama.cpp b7746 |
+|--------|-------------------|------------------|-----------|--------|-----------------|
+| Decode tok/s | **378.3** | 353.9 | 329.4 | 227.4 | **431.1** |
+| ITL P50 | 2.6ms | 2.8ms | 3.0ms | -- | 2.3ms |
+| µs/layer | 94.3 | 100.5 | 107 | -- | 82.8 |
+| GPU util | 98% | 98% | -- | -- | 91% |
+| Delta vs v11 | +14.8% | +7.4% | base | base | +2.2% |
 
 v14: chunk_size=16 (trueno#246). Eager benefits MORE
 (+16.1%) than graph (+7.4%) because eager has full
@@ -288,8 +290,8 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 
 | ID | Prediction | Status | Evidence |
 |----|-----------|--------|---------|
-| F-SUMMARY-01 | realizr wins c=1 | **REVISED** | chunk=16 353.9 vs llama.cpp b7746 431.1 (0.82x). 1.56x Candle. |
-| F-PARITY-01 | c=1 within +/-10% | **REVISED** | chunk=16 353.9 vs Candle 227 (1.56x). vs llama.cpp 0.82x. |
+| F-SUMMARY-01 | realizr wins c=1 | **REVISED** | #211 fix: 378.3 vs llama.cpp 431.1 (0.88x). 1.66x Candle. |
+| F-PARITY-01 | c=1 within +/-10% | **REVISED** | #211 fix: 378.3 vs Candle 227 (1.66x). vs llama.cpp 0.88x. |
 | F-FORMAT-01 | APR load faster | **FIXED** | Q4K raw passthrough (realizr#185). |
 | F-SCALE-01 | c=32 >=1,280 | **CONFIRMED** | Yoga: **1,776.5** (13.4x). |
 | F-HW-01 | CV <5% locked | **CONFIRMED** | CV 0.8-0.9%. Bootstrap CV=1.5%. |
@@ -300,9 +302,9 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-FMTPARITY-01 | 3 formats +/-10% | **REVISED** | Yoga: GGUF 132.5, FP16 151.6, Q4K 132.3. |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | 0.0% GGUF, 1.4% Q4K. |
 | F-PARITY-02 | c=4 <=1.5x slower | **FIXED** (realizr#211) | Was FALSIFIED: c=4 stream=false 367.7 (1.03x). Fix: route non-streaming through batch scheduler. Post-fix: 671.0 (1.76x). vs llama.cpp 902.3 = 0.74x gap (matches c=1 ratio). |
-| F-PARITY-04 | realizr >= llama.cpp | **REVISED** | chunk=16 353.9 vs llama.cpp b7746 431.1 (0.82x). FA gap. |
+| F-PARITY-04 | realizr >= llama.cpp | **REVISED** | #211 fix: 378.3 vs llama.cpp 431.1 (0.88x). FA gap closing. |
 | F-CLIPARITY-01 | apr = Candle CLI | **CONFIRMED** | 6/6 features. |
-| F-1.5X-01 | >=341 (1.5x Candle) | **CONFIRMED** | 353.9 [352.7, 355.1] with chunk_size=16. 1.56x Candle. |
+| F-1.5X-01 | >=341 (1.5x Candle) | **CONFIRMED** | #211 fix: 378.3 [372.4, 382.4]. 1.66x Candle. |
 | F-RSS-02 | RSS <=673 MB | **FALSIFIED** | Min 2,930 (weights + server irreducible). |
 | F-PARITY-03 | Output div <=1% | **WEAKENED** | 72% — chat template, not dequant. |
 | F-QUALITY-01 | PPL within 0.1 | **FALSIFIED** | DP4A 24.2 vs FP32 12.97. Int8 precision. |
