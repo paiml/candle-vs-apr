@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 12.0.0
+**Version:** 12.1.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -201,8 +201,14 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-COLD-01 | Cold slower | **REVISED** | preload_modules pre-compiles ~60 kernels. |
 | F-CACHE-01 | Prefix cache TTFT | **MEASURED** | Cold 136ms → Warm 56ms (2.4x). |
 
-21 F-conditions. All tested. 12 confirmed, 4 revised,
-3 falsified, 2 weakened.
+| F-TCATTN-01 | TC attn <=14µs | **PROPOSED** | GQA Tensor Core (FlashInfer). HIGH risk: DRAM stall. |
+| F-NCU-01 | NCU finds root cause | **PROPOSED** | cgp ncu-analyze. LOW risk. |
+| F-GATE-01 | Falsification <20% | **PROPOSED** | Pre-opt bottleneck gate. MED risk. |
+| F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
+| F-L2-01 | L2 changes priorities | **PROPOSED** | Per-brick L2 in apr profile. MED risk. |
+
+26 F-conditions. 21 tested (12 confirmed, 4 revised,
+3 falsified, 2 weakened). 5 proposed (Phase 15).
 
 ---
 
@@ -253,6 +259,113 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | trueno#244 | Attention kernel opt | FILED |
 | realizr#201 | Graph default sm_89+ | **SHIPPED** |
 
+### Phase 15: Profiler + Kernel Sprint (PROPOSED)
+
+Five proposals from cross-repo analysis, arXiv research
+(2024-2025), org commit history, and batuta oracle.
+Each carries a falsification condition.
+
+**P15-01: GQA-aware Tensor Core attention (trueno#244)**
+
+FlashInfer (Ye et al. 2025) shows GQA 6:1 enables
+Tensor Core usage at M=1 by treating decode as thin
+prefill (6 queries, 1 KV set). Our Flash Decoding uses
+CUDA cores. llama.cpp FA2 exploits GQA for Tensor Cores.
+Predicted: 18.2µs → ~12µs attention, 329→361 tok/s.
+
+> **F-TCATTN-01:** If GQA-aware Tensor Core attention
+> does not reduce AttentionScore from 18.2µs to <=14µs
+> avg on RTX 4090 (Qwen2.5-1.5B, M=1), the technique
+> is falsified for small-model decode. Action: profile
+> `mma.m16n8k16` occupancy vs CUDA core throughput.
+> **Falsification risk: HIGH.** FA2's win may depend on
+> register file size at head_dim=128. Ramirez-Gargallo
+> 2025 shows >50% cycles stalled on DRAM even with FA —
+> Tensor Cores may starve waiting for data.
+
+**P15-02: NCU integration in cgp (`cgp ncu-analyze`)**
+
+Zero NSight/NCU usage across entire org (verified by
+commit search). All profiling uses custom timers.
+Missing: warp stall reasons, L2 hit rates, memory
+transaction counts. 6+ realizr experiments falsified
+without hardware counter pre-analysis.
+
+> **F-NCU-01:** If `cgp ncu-analyze` does not identify
+> the root cause of the 18.2µs attention bottleneck
+> (stall type + L2 miss rate) within 1 hour of
+> implementation, the tool adds complexity without
+> insight. Action: compare NCU diagnosis vs manual
+> five-whys — does NCU find the answer faster?
+> **Falsification risk: LOW.** NCU reliably reports
+> hardware counters. The risk is implementation time
+> vs value — may take weeks to wrap NCU properly.
+
+**P15-03: Pre-optimization bottleneck gate (contract)**
+
+step-profiler-v1 contract says "speculative optimization
+is prohibited." But 6+ realizr experiments (RMSNorm+GEMV,
+fused K+V, DP4A inline, f16 conv, shared Q8K, 16 qcd
+fusions) were falsified — the gate wasn't enforced.
+
+> **F-GATE-01:** If adding `apr profile` JSON as a
+> required precondition for perf tickets does not reduce
+> the falsification rate of optimization experiments from
+> 6/10 (60%) to <=2/10 (20%) over the next 10 attempts,
+> the gate adds bureaucracy without improving hit rate.
+> **Falsification risk: MEDIUM.** Some falsifications
+> are inherent to M=1 decode physics (small dims defeat
+> fusion). The gate would prevent obviously wrong
+> attempts but not physics-limited ones.
+
+**P15-04: cgp documentation (CLAUDE.md)**
+
+cgp has 9 backend profilers, roofline, regression
+detection, performance contracts, `compete`, `diff`,
+`explain` — but ZERO documentation. No CLAUDE.md, no
+README.md. Blocks onboarding and discovery.
+
+> **F-DOCS-01:** If cgp CLAUDE.md does not result in at
+> least 2 new uses of `cgp` commands (by contributors
+> other than the author) within 30 days, the
+> documentation failed to enable adoption. Action:
+> track `cgp` usage in commit messages.
+> **Falsification risk: LOW.** Documentation is
+> inherently low-risk. Only risk is effort vs adoption
+> if the org is too small for external contributors.
+
+**P15-05: L2 cache + occupancy in `apr profile`**
+
+Ramirez-Gargallo 2025: >50% attention cycles stalled
+on DRAM, L2 hit rate avg 12%, L1 avg 2%. Our `apr
+profile --granular` reports AI=4.0 but not WHERE cache
+misses occur. Adding per-brick L2 hit% and occupancy%
+via CUPTI events makes roofline actionable.
+
+> **F-L2-01:** If per-brick L2 hit rate data does not
+> change the optimization priority ordering (currently:
+> attention > QKV > RMSNorm) for at least one brick,
+> the metric adds noise without insight. Action:
+> compare priority ordering before/after L2 data.
+> **Falsification risk: MEDIUM.** L2 data might confirm
+> existing priorities without changing them — useful for
+> confidence but not for new insights. Risk increases
+> if CUPTI event collection adds >5% overhead to the
+> profiling pass itself.
+
+### Phase 15 Priority & Risk Matrix
+
+| # | Proposal | Impact | Risk | Effort | Priority |
+|---|----------|--------|------|--------|----------|
+| P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | **P0** |
+| P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P1 |
+| P15-03 | Bottleneck gate | process | MED | 1 wk | P2 |
+| P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P3 |
+| P15-04 | cgp docs | enablement | LOW | 2 days | P4 |
+
+**Decision required:** Approve Phase 15 proposals or
+revise priorities before implementation begins.
+
 ---
 
 ## 9. Research Basis (arXiv-grounded)
@@ -273,19 +386,41 @@ CUDA graphs amortize kernel launch overhead by recording
 a DAG of kernel nodes and replaying with a single API
 call (NVIDIA CUDA Programming Guide, Section 3.2.8).
 Our manual graph construction (cuGraphAddKernelNode)
-avoids stream capture bugs while achieving equivalent
-replay performance. 647 nodes in linear chain,
-position/seq_len updated via device-side buffers.
+avoids stream capture bugs. 647 nodes, linear chain.
+
+**PyGraph** (Ghosh et al. 2025, arXiv:2503.19779):
+Parameter copy elimination doubles CUDA graph benefit.
+Our device-side buffers (position_buf, seq_len_buf)
+already implement this pattern.
+
+**Kernel Looping** (Prabhakar et al. 2024,
+arXiv:2410.23668): H100 achieves only 21% peak BW
+during decode. Kernel looping (32 layers → 1 kernel)
+reaches 78% roofline (2x speedup). Requires dataflow
+HW (SN40L). On GPU, our graph is near-optimal.
 
 ### Flash Attention vs Flash Decoding
 
 llama.cpp uses FlashAttention-2 (Dao 2023) with recent
 register spill fix (+26%). realizr uses Flash Decoding
 (Hong et al. 2023, "FlashDecoding++") — chunked KV
-with two-pass reduce. Flash Decoding targets single-query
-(M=1) efficiency but has higher per-head overhead than
-FA2 for short sequences. Gap: 18.2µs vs ~12µs per
-attention call. trueno#244 filed.
+with two-pass reduce. Gap: 18.2µs vs ~12µs.
+
+**FlashInfer** (Ye et al. 2025, arXiv:2501.01005):
+GQA decode as thin prefill enables Tensor Core usage
+at M=1. For GQA 6:1, 6 queries share 1 KV set →
+sufficient AI for `mma.m16n8k16`. Near-100% BW
+utilization on RTX 4090. 29-69% ITL reduction.
+
+**FlashAttention-3** (Shah et al. 2024, NeurIPS):
+Warp specialization + async softmax achieves 75% of
+peak FLOPs on H100 (vs 35% FA2). Ada (sm_89) lacks
+TMA but warp specialization principle applies.
+
+**Mind the Memory Gap** (Ramirez-Gargallo et al. 2025,
+arXiv:2503.08311): >50% attention cycles stalled on
+DRAM. L2 hit rate 12%, L1 2%. Even FA remains
+memory-bound at all batch sizes (AI 0.5-1.0).
 
 ### Quantized Inference Precision
 
@@ -349,4 +484,5 @@ cgp (kernel/roofline/contract), batuta (PPL), llama.cpp
 | 11.0 | 04-05 | **Graph fix** (realizr#198): 647 kernels, 331 tok/s. |
 | 11.1 | 04-05 | Showdown: llama.cpp 425, realizr 333, Candle 227. |
 | 11.2 | 04-05 | Graph default sm_89+. Bootstrap CI. Profile. |
-| 12.0 | 04-05 | arXiv grounding. Condensed 897→500 lines. |
+| 12.0 | 04-05 | arXiv grounding. Condensed 897→352 lines. |
+| 12.1 | 04-05 | Phase 15: 5 profiler proposals with falsification. FlashInfer, PyGraph, Kernel Looping, Mind the Memory Gap. 26 F-conditions. |
