@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 12.3.0
+**Version:** 13.0.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -201,7 +201,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-COLD-01 | Cold slower | **REVISED** | preload_modules pre-compiles ~60 kernels. |
 | F-CACHE-01 | Prefix cache TTFT | **MEASURED** | Cold 136ms → Warm 56ms (2.4x). |
 
-| F-CONTRACT-01 | Contracts catch >=1 bug | **PROPOSED** | 6 invariants wired. LOW risk: wall_coverage alone flags missing kernels. |
+| F-CONTRACT-01 | Contracts catch >=1 bug | **WIRED** | 6/6 invariants wired (realizr 1a05516). Awaiting 5 profiling sessions. |
 | F-TCATTN-01 | TC attn <=14µs | **PROPOSED** | GQA Tensor Core (FlashInfer). HIGH risk: DRAM stall. |
 | F-NCU-01 | NCU finds root cause | **PROPOSED** | cgp ncu-analyze. LOW risk. |
 | F-GATE-01 | Falsification <20% | **PROPOSED** | Pre-opt bottleneck gate. MED risk. |
@@ -209,7 +209,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-L2-01 | L2 changes priorities | **PROPOSED** | Per-brick L2 in apr profile. MED risk. |
 
 27 F-conditions. 21 tested (12 confirmed, 4 revised,
-3 falsified, 2 weakened). 6 proposed (Phase 15).
+3 falsified, 2 weakened). 1 wired (P15-06). 5 proposed.
 
 ---
 
@@ -256,11 +256,11 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | ID | Task | Status |
 |----|------|--------|
 | PMAT-453 | Graph dispatch | **FIXED** (329 tok/s) |
-| PMAT-456 | Batched prefill PPL | TODO |
+| PMAT-456 | Batched prefill PPL | **FILED** (realizr#203) |
 | trueno#244 | Attention kernel opt | FILED |
 | realizr#201 | Graph default sm_89+ | **SHIPPED** |
 
-### Phase 15: Profiler + Kernel Sprint (PROPOSED)
+### Phase 15: Profiler + Kernel Sprint (ACTIVE)
 
 Five proposals from cross-repo analysis (qwen-coder-deploy
 v6.34.0, paiml-mcp-agent-toolkit), arXiv 2024-2025,
@@ -350,23 +350,30 @@ fidelity) BEFORE they reached measurement.
 
 ### Phase 15 Priority & Risk Matrix
 
-| # | Proposal | Impact | Risk | Effort | Priority |
-|---|----------|--------|------|--------|----------|
-| P15-06 | Contract enforcement | **bug prevention** | LOW | 1 wk | **P0** |
-| P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | P1 |
-| P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 |
-| P15-03 | Bottleneck gate | process | MED | 1 wk | P3 |
-| P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 |
-| P15-04 | cgp docs | enablement | LOW | 2 days | P5 |
+| # | Proposal | Impact | Risk | Effort | Priority | Status |
+|---|----------|--------|------|--------|----------|--------|
+| P15-06 | Contract enforcement | **bug prevention** | LOW | 1 wk | **P0** | **DONE** |
+| P15-01 | TC attention | **+32 tok/s** | HIGH | 4-6 wk | P1 | TODO |
+| P15-02 | NCU in cgp | diagnostic | LOW | 1-2 wk | P2 | TODO |
+| P15-03 | Bottleneck gate | process | MED | 1 wk | P3 | TODO |
+| P15-05 | L2 in apr profile | diagnostic | MED | 2-3 wk | P4 | TODO |
+| P15-04 | cgp docs | enablement | LOW | 2 days | P5 | TODO |
 
-**P15-06 promoted to P0:** Five-whys shows contract
-enforcement catches bugs upstream of all other
-proposals. One week of wiring prevents weeks of
-debugging (our SwiGLU bug took a full five-whys
-session to find — wall_coverage would flag it in 1s).
+**P15-06 IMPLEMENTED:** 6/6 invariants wired into realizr
+profiler, tracer, and inference trace (realizr `1a05516`):
 
-**Decision required:** Approve Phase 15 proposals or
-revise priorities before implementation begins.
+| Contract | Invariant | Location |
+|----------|-----------|----------|
+| gpu-decode-profiling-v1 | wall_coverage >= 0.85 | `profiler_contracts.rs` |
+| gpu-decode-profiling-v1 | LmHead > 10x RmsNorm | `profiler_contracts.rs` |
+| gpu-decode-profiling-v1 | decoded_tokens == LmHead.count | `profiler_contracts.rs` |
+| per-op-training-v1 | GEMM >= 50% of compute | `profiler_contracts.rs` |
+| layer-parity-v1 | cosine_sim(GPU, CPU) >= 0.99 | `tracer.rs` |
+| tracing-observability-v1 | monotonic IDs + no orphan spans | `tracer_contracts.rs` |
+
+GPU verification (RTX 4090, 2520 MHz): **328.2 decode
+tok/s** [within bootstrap CI 317-337]. ITL P50 = 3.0ms.
+Consistent with v11 baseline (329.4). No regression.
 
 ---
 
@@ -471,7 +478,7 @@ validates under realistic traffic patterns.
 
 | Gap | Severity | Reference |
 |-----|----------|-----------|
-| **Contract enforcement** | Critical | 11 YAML contracts, 0 wired to profiler code. P15-06 five-whys. |
+| **Contract enforcement** | **CLOSED** | 6/6 invariants wired to profiler+tracer (P15-06). |
 | **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. PMAT-456. |
 | **Chrome Trace export** | High | Custom JSON, not Perfetto/Chrome. |
 | **GPU-side kernel timing** | High | CPU Instant::now() only. CUPTI needed. |
@@ -497,3 +504,4 @@ validates under realistic traffic patterns.
 | 12.1 | 04-05 | Phase 15: 5 profiler proposals with falsification. FlashInfer, PyGraph, Kernel Looping, Mind the Memory Gap. 26 F-conditions. |
 | 12.2 | 04-05 | Cross-project insights from qcd + toolkit. Profiler fidelity section. |
 | 12.3 | 04-05 | P15-06 contract enforcement: five-whys (11 YAML, 0 wired) + chain of thought (6 high-value invariants). F-CONTRACT-01. P15-06 promoted to P0. 27 F-conditions. |
+| 13.0 | 04-05 | **P15-06 DONE:** 6/6 contracts wired upstream (realizr 1a05516). GPU verified 328.2 tok/s (within CI). PMAT-456 filed (realizr#203). Phase 15 ACTIVE. |
