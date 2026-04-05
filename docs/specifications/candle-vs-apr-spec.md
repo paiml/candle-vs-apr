@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.4.0
+**Version:** 14.5.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -98,16 +98,18 @@ realizr#190 false regression from GPU contention).
 
 ### Phase 1: Single-Request (c=1)
 
-| Metric | v14.2 (chunk=16) | v11 graph | v11 eager | Candle | llama.cpp |
-|--------|-----------------|-----------|-----------|--------|-----------|
-| Decode tok/s | **353.9** | 329.4 | 264.6 | 227.4 | 425.0 |
-| ITL P50 | 2.8ms | 3.0ms | 3.8ms | -- | 2.4ms |
-| µs/layer | 100.5 | 107 | 135 | -- | 84 |
-| GPU util | 98% | -- | -- | -- | -- |
-| Peak RSS | 3,082 MB | 3,082 MB | 3,082 MB | 449 MB | -- |
+| Metric | v14 graph (c=16) | v14 eager (c=16) | v11 graph | v11 eager | Candle | llama.cpp |
+|--------|------------------|------------------|-----------|-----------|--------|-----------|
+| Decode tok/s | **353.9** | 307.2 | 329.4 | 264.6 | 227.4 | 433.8 |
+| ITL P50 | 2.8ms | -- | 3.0ms | 3.8ms | -- | 2.3ms |
+| µs/layer | 100.5 | -- | 107 | 135 | -- | -- |
+| GPU util | 98% | -- | -- | -- | -- | -- |
+| Delta | +7.4% | +16.1% | base | base | base | +2.1% |
 
-v14.2: chunk_size=16 (trueno#246) + graph replay.
-+7.4% short ctx, +45% long ctx vs chunk=32 baseline.
+v14: chunk_size=16 (trueno#246). Eager benefits MORE
+(+16.1%) than graph (+7.4%) because eager has full
+launch overhead per kernel; chunk=16's doubled blocks
+reduce relative overhead.
 
 ### Phase 2: Scaling (Yoga RTX 4060)
 
@@ -136,8 +138,20 @@ scaling degradation. At long ctx, going from 232→339
 tok/s (+46%). Doubling block count (num_heads × num_chunks)
 fills the 128-SM GPU better.
 
-chunk=8 tested but no better (overhead dominates).
-Sweet spot is chunk=16. Upstream fix: trueno#246.
+**Full sweep (tok/s, RTX 4090):**
+
+| chunk | MICRO | LONG | MICRO Δ | LONG Δ |
+|-------|-------|------|---------|--------|
+| 8 | 351.2 | 322.4 | +6.6% | +38.7% |
+| 12 | 349.0 | 314.8 | +6.0% | +35.4% |
+| **16** | **351.5** | **338.9** | **+6.7%** | **+45.8%** |
+| 20 | 348.8 | 333.3 | +5.9% | +43.4% |
+| 24 | 341.2 | 332.0 | +3.6% | +42.8% |
+| 32 | 329.3 | 232.4 | baseline | baseline |
+
+Sweet spot **chunk=16**. Non-monotonic — chunk=12 worse
+than both 16 and 8 (possibly warp alignment). Upstream
+fix: trueno#246.
 
 Long ctx verified stable (N=3): 342.4 mean, range
 [340.2, 345.2] tok/s, CV 0.7%. +47% vs chunk=32.
@@ -628,3 +642,4 @@ validates under realistic traffic patterns.
 | 14.2 | 04-05 | **chunk_size=16 BREAKTHROUGH:** trueno#246, 353.9 tok/s [352.7, 355.1]. +7.4% short ctx / +45.8% long ctx. 1.56x Candle. F-1.5X-01 CONFIRMED. |
 | 14.3 | 04-05 | Fresh showdown: llama.cpp 433.8 vs realizr 353.9. Gap closed 1.29x→1.23x. Long ctx verified 342.4 [340,345]. |
 | 14.4 | 04-05 | NCU verified chunk=16: occupancy 2.15%→3.09% (+44%), L2 hit 82%→91% (+9pp), SM busy 0.88%→1.33% (+51%). |
+| 14.5 | 04-05 | Full chunk_size sweep {8,12,16,20,24,32}. chunk=16 wins both MICRO and LONG. Non-monotonic (chunk=12 worse). Eager +16% too. |
