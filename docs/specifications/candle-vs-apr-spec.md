@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.6.5
+**Version:** 14.7.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -127,55 +127,45 @@ reduce relative overhead.
 Validates continuous batching (Orca, Yu et al. 2022).
 Candle has no server — cannot demonstrate c>1.
 
-### Phase 2c: Scaling Regression on RTX 4090 (NEW)
+### Phase 2c: Scaling on RTX 4090
 
-**realizr c=N sweep (chunk=16, RTX 4090):**
+**realizr c=N sweep (chunk=16, RTX 4090, post-#211 fix):**
 
-| c | Agg tok/s | Per-req | ITL P50 | ITL ratio | Scaling |
-|---|-----------|---------|---------|-----------|---------|
-| 1 | 357 | 357 | 2.8ms | 1.0x | 1.0x |
-| 2 | 376 | 188 | 5.3ms | **1.9x** | 1.05x |
-| 4 | 368 | 92 | 10.9ms | **3.9x** | 1.03x |
-| 8 | 376 | 47 | 21.3ms | **7.6x** | 1.05x |
+| c | Agg tok/s | Per-req | ITL P50 | Scaling |
+|---|-----------|---------|---------|---------|
+| 1 | 380.9 | 380.9 | 2.6ms | 1.0x |
+| 4 | **671.0** | 167.7 | 6.0ms | **1.76x** |
+| 8 | **1,009.1** | 127.7 | 7.8ms | **2.65x** |
 
-**Diagnostic:** ITL scales near-linearly with c (1.9x/3.9x/7.6x for
-c=2/4/8) while aggregate stays ~375 tok/s. This is the exact
-signature of serialized per-request M=1 decode — NO batching
-coalescing. Expected M=N decode would give ITL ratio ~1.0-1.5x.
+**Pre-fix (stream=false serialization bug, realizr#211):**
 
-**vs llama.cpp b7746 (c=1 and c=4 measured):**
+| c | Agg tok/s | Scaling | Root cause |
+|---|-----------|---------|------------|
+| 1 | 357 | 1.0x | — |
+| 4 | 367.7 | 1.03x | write-lock serialization |
+| 8 | 376 | 1.05x | write-lock serialization |
 
-| c | Mode | realizr chunk=16 | llama.cpp b7746 | gap |
-|---|------|------------------|-----------------|-----|
-| 1 | -- | 353.9 | 431.1 | 0.82x |
-| 4 | stream=false | 367.7 | 902.3 | 0.41x |
-| 4 | stream=true | **671.8** | **911.2** | **0.74x** |
+**Fix (realizr a548e60c):** Non-streaming path now routes through
+PMAT-044 batch scheduler. Five-whys: `stream=false` took exclusive
+`cuda_model_lock.write()`, serializing all concurrent requests
+through M=1 decode. Only `stream=true` was wired to `cuda_batch_tx()`.
 
-Per-request decode at c=4 stream=true: realizr 171.7 vs llama.cpp 231.4 tok/s (1.35x).
-ITL P50 at c=4 stream=true: realizr 5.82ms vs llama.cpp 4.32ms (1.35x).
+**vs llama.cpp b7746 (c=4):**
 
-**Scaling c=1 → c=4 stream=true:**
-- realizr: 353.9 → 671.8 = **1.90x** ✓
-- llama.cpp: 431.1 → 911.2 = **2.11x** ✓
+| c | realizr (fixed) | llama.cpp b7746 | gap |
+|---|-----------------|-----------------|-----|
+| 1 | 380.9 | 431.1 | 0.88x |
+| 4 | **671.0** | 902.3 | **0.74x** |
 
-Both scale properly with streaming. The remaining 35% per-req gap at
-c=4 mirrors the c=1 gap (0.82x) and reflects FlashAttention-2 (llama.cpp)
-vs Flash Decoding (realizr) kernel efficiency at M>1.
+Per-request decode at c=4: realizr 167.7 vs llama.cpp ~225 tok/s.
+ITL P50 at c=4: realizr 6.0ms vs llama.cpp ~4.3ms.
+The ~26% gap at c=4 mirrors the c=1 gap (0.88x) and reflects
+FlashAttention-2 (llama.cpp) vs Flash Decoding (realizr) kernel
+efficiency at M>1.
 
-**Finding:** realizr has a **dual-path architecture**:
-- `stream=true` → batch scheduler (continuous batching): scales **1.90x** at c=4 (671.8 agg)
-- `stream=false` → write-lock serialization: scales **1.03x** at c=4 (367.7 agg)
-
-The probador `--stream false` default hits the serialized path in
-`try_cuda_backend` (src/api/cuda_chat_backend.rs:167, `cuda_model_lock.write()`).
-llama.cpp has no equivalent dual-path; its scheduler serves both modes.
-
-With stream=true, realizr's c=4 scaling is healthy (1.90x vs llama.cpp 2.09x).
-
-F-PARITY-02 remains **FALSIFIED** for the stream=false path (spec target
-was >=1.5x slower; measured 2.45x slower). Stream=true path re-confirms
-the original prediction. Filed upstream as realizr#211 with root cause
-analysis + proposed fix to route non-stream through batch scheduler.
+**F-PARITY-02:** Now **REVISED** — c=4 scaling was 1.03x (FALSIFIED),
+now 1.76x post-fix. Contract FALSIFY-BATCH-006 added to
+`batch-inference-v1.yaml` to prevent regression.
 
 ### Phase 2b: Context-Length Scaling (RTX 4090)
 
@@ -309,7 +299,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-SERVING-01 | Overhead <5ms | **CONFIRMED** | 4.6ms (TTFT-ITL). |
 | F-FMTPARITY-01 | 3 formats +/-10% | **REVISED** | Yoga: GGUF 132.5, FP16 151.6, Q4K 132.3. |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | 0.0% GGUF, 1.4% Q4K. |
-| F-PARITY-02 | c=4 <=1.5x slower | **FALSIFIED** (4090 chunk=16) | realizr c=4 agg 367.7 vs llama.cpp 902.3 = 2.45x SLOWER. realizr scales only 1.03x from c=1 (357→367). llama.cpp 2.09x (431→902). Batch scheduler gap. Prior CONFIRMED (274.5, 1.22x) was pre-FA-fix llama.cpp. |
+| F-PARITY-02 | c=4 <=1.5x slower | **FIXED** (realizr#211) | Was FALSIFIED: c=4 stream=false 367.7 (1.03x). Fix: route non-streaming through batch scheduler. Post-fix: 671.0 (1.76x). vs llama.cpp 902.3 = 0.74x gap (matches c=1 ratio). |
 | F-PARITY-04 | realizr >= llama.cpp | **REVISED** | chunk=16 353.9 vs llama.cpp b7746 431.1 (0.82x). FA gap. |
 | F-CLIPARITY-01 | apr = Candle CLI | **CONFIRMED** | 6/6 features. |
 | F-1.5X-01 | >=341 (1.5x Candle) | **CONFIRMED** | 353.9 [352.7, 355.1] with chunk_size=16. 1.56x Candle. |
@@ -328,7 +318,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
 27 F-conditions. 25 tested (11 confirmed, 5 revised,
-4 falsified, 2 weakened, 1 fixed, 1 measured, 1 wired).
+3 falsified, 2 weakened, 2 fixed, 1 measured, 1 wired).
 2 proposed (F-GATE-01, F-DOCS-01).
 
 ---
@@ -382,6 +372,7 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | trueno#246 | chunk_size=16 tuning | **SHIPPED** (+7.4%/+45.8%) |
 | realizr#201 | Graph default sm_89+ | **SHIPPED** |
 | realizr#203 | Batched prefill teacher-forcing | **FILED** |
+| realizr#211 | Non-stream batch scheduler | **FIXED** (671 agg at c=4, was 367.7) |
 
 ### Phase 15: Profiler + Kernel Sprint (ACTIVE)
 
@@ -720,3 +711,4 @@ validates under realistic traffic patterns.
 | 14.6.1-3 | 04-05 | Audit pass: propagated chunk=16 numbers to F-SUMMARY/PARITY/PARITY-04 (329→353.9), expanded Phase 14 task table with trueno#244/245/246/realizr#203 actual states, corrected P15-01 to FALSIFIED and P15-04 to BLOCKED, fixed AttentionScore bottleneck label (Memory BW → Occupancy, per F-L2-01), fixed configs/showdown.yaml spec_ref (non-existent §12 → §5/§8). README updated v8.8 → v14.6. |
 | 14.6.4 | 04-05 | **Phase 2b medium chunk=16 filled:** 357.7 tok/s (+24.1% vs chunk=32). Verified all 4 prompt profiles reproduce within 2.4% of spec. Binary version fingerprint preflight added to bootstrap-ci.sh (catches apr 0.4.11 vs 0.4.12 PATH regressions, 36% delta). |
 | 14.6.5 | 04-05 | **F-PARITY-02 FALSIFIED:** RTX 4090 c=4 comparison shows realizr scales only 1.03x (367.7 agg) while llama.cpp b7746 scales 2.09x (902.3 agg). realizr#211 filed upstream with five-whys + continuous-batching-v1.yaml proposed contract. New Phase 2c section. |
+| 14.7.0 | 04-05 | **realizr#211 FIXED upstream:** Non-streaming path routed through batch scheduler. c=4 stream=false: 367.7→671.0 (+82%), c=8: 376→1,009.1 (+168%). F-PARITY-02 → FIXED. Contract FALSIFY-BATCH-006 added. c=1 baseline improved 357→380.9 tok/s. |
