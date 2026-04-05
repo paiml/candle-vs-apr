@@ -770,7 +770,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | PMAT-450 | KV prefix caching (prompt reuse) | FILED | realizr#193 | +13% total tok/s (match llama.cpp) |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
-| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **DRIVER BLOCKED** | trueno#238 infra done, realizr#197 | Driver 570.207 code 901. Infra exists but graph capture poisons context. Need driver >= 575. |
+| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **MANUAL API SHIPPED** | trueno#243 (4ba00082), realizr#197 | Stream capture blocked (code 901). Manual `cuGraphAddKernelNode` API shipped. Wiring into decode path next. |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
 | PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 1f527a89 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. Gate debt cleared (realizr#195). |
 | PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
@@ -843,4 +843,4 @@ manual graph construction via `cuGraphAddKernelNode`
 | 9.0.1 | 2026-04-05 | **realizr#194 PUSHED** (all 4 gates ✅). Fixed 30+ examples/tests/benches (field accessors, clippy). trueno BLIS clippy fixed (unsafe_op_in_unsafe_fn, wgsl_forward). Gate debt cleared across realizr + trueno. |
 | 9.1.0 | 2026-04-05 | Tooling upgrade: `cgp` (trueno) + `apr bench` (load testing) integrated into spec. Workflow updated: `apr check` → `apr profile` → `apr bench` → `cgp contract verify`. 14 tools in Section 12 (was 8). |
 | 9.2.0 | 2026-04-05 | **PMAT-452 FALSIFIED:** Fused K+V kernel -3.1% regression at kv_dim=256. Reverted to Phase 1. |
-| 9.3.0 | 2026-04-05 | **PROFILED:** `apr profile --granular` → 85.9% launch overhead on 430 launches/token. **PMAT-453 DRIVER BLOCKED:** CUDA graph code 901 on driver 570.207 (realizr#197). Graph infra exists but poisons context. Only path to 1.5x requires driver >= 575 or manual graph construction. |
+| 9.3.0 | 2026-04-05 | **PROFILED:** 85.9% launch overhead. PMAT-453 stream capture blocked (code 901 on 570.207, both Global + ThreadLocal). **trueno#243 SHIPPED:** `cuGraphAddKernelNode` manual graph API — bypasses stream capture. Wiring into decode path next. |
