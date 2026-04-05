@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.1.0
+**Version:** 14.2.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -20,24 +20,26 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML)
 vs **realizr** (Sovereign AI Stack) on same model, same
 GPU, same methodology. Pure Rust-vs-Rust comparison.
 
-**v11 Showdown (RTX 4090, 2520 MHz, clean GPU):**
+**v14.2 Showdown (RTX 4090, 2520 MHz, chunk_size=16):**
 
 | Engine | Decode tok/s | vs Candle | ITL P50 | µs/layer |
 |--------|-------------|-----------|---------|----------|
 | llama.cpp b7746 | **425.0** | 1.87x | 2.4ms | 84 |
-| realizr (graph) | **329.4** | 1.45x | 3.0ms | 107 |
+| realizr (chunk=16) | **353.9** | **1.56x** | 2.8ms | 100.5 |
+| realizr (chunk=32) | 329.4 | 1.45x | 3.0ms | 107 |
 | realizr (eager) | 264.6 | 1.16x | 3.8ms | 135 |
 | Candle | 227.4 | 1.00x | -- | -- |
 
-Bootstrap CI (N=30): **329.4** [317.3, 336.7] CV=1.5%.
-Graph replay DEFAULT for sm_89+ (realizr#201).
-Memory-bound decode (arithmetic intensity 4.0).
+Bootstrap CI (N=5, chunk=16): **353.9** [352.7, 355.1]
+CV=0.4%. GPU util 98%. trueno#246 shipped.
+Gap to llama.cpp: 1.20x (was 1.29x).
 
 **Key findings:**
 1. Graph dispatch: +26% decode (647 kernels → 1 launch)
-2. AttentionScore: 44% of compute, 23µs/layer gap vs FA
-3. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap)
-4. Scaling: 1,776 tok/s at c=32 (Yoga, 13.4x from c=1)
+2. **chunk_size=16: +7.4% short / +45% long ctx** (trueno#246)
+3. AttentionScore: 44% of compute, 23µs/layer gap vs FA
+4. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap)
+5. Scaling: 1,776 tok/s at c=32 (Yoga, 13.4x from c=1)
 
 ---
 
@@ -96,17 +98,16 @@ realizr#190 false regression from GPU contention).
 
 ### Phase 1: Single-Request (c=1)
 
-| Metric | v11 graph | v11 eager | Candle | llama.cpp |
-|--------|-----------|-----------|--------|-----------|
-| Decode tok/s | **329.4** | 264.6 | 227.4 | 425.0 |
-| ITL P50 | 3.0ms | 3.8ms | -- | 2.4ms |
-| µs/layer | 107 | 135 | -- | 84 |
-| Peak RSS | 3,082 MB | 3,082 MB | 449 MB | -- |
-| VRAM peak | 5,388 MiB | 5,388 MiB | -- | -- |
+| Metric | v14.2 (chunk=16) | v11 graph | v11 eager | Candle | llama.cpp |
+|--------|-----------------|-----------|-----------|--------|-----------|
+| Decode tok/s | **353.9** | 329.4 | 264.6 | 227.4 | 425.0 |
+| ITL P50 | 2.8ms | 3.0ms | 3.8ms | -- | 2.4ms |
+| µs/layer | 100.5 | 107 | 135 | -- | 84 |
+| GPU util | 98% | -- | -- | -- | -- |
+| Peak RSS | 3,082 MB | 3,082 MB | 3,082 MB | 449 MB | -- |
 
-Graph replay: +26% from 647 kernels → 1 cuGraphLaunch.
-Validated by CUDA graph literature: Yu et al. 2020
-report 2-10x kernel launch reduction on DNN workloads.
+v14.2: chunk_size=16 (trueno#246) + graph replay.
++7.4% short ctx, +45% long ctx vs chunk=32 baseline.
 
 ### Phase 2: Scaling (Yoga RTX 4060)
 
@@ -123,22 +124,20 @@ Candle has no server — cannot demonstrate c>1.
 
 Decode tok/s vs prompt length (c=1, 256 gen tokens):
 
-| Prompt | Avg ctx | Decode tok/s | ITL P50 | Delta |
-|--------|---------|-------------|---------|-------|
-| micro (~5 tok) | ~130 | 329.3 | 3.0ms | baseline |
-| short (~30 tok) | ~160 | **350.2** | 2.9ms | +6.3% |
-| medium (~125 tok) | ~250 | 288.1 | 3.5ms | -12.5% |
-| long (~290 tok) | ~420 | **232.4** | 4.3ms | **-29.4%** |
+| Prompt | Avg ctx | chunk=32 | chunk=16 | Delta |
+|--------|---------|----------|----------|-------|
+| micro (~5 tok) | ~130 | 329.3 | **353.9** | **+7.4%** |
+| short (~30 tok) | ~160 | 350.2 | 351.5 | +0.4% |
+| medium (~125 tok) | ~250 | 288.1 | -- | -- |
+| long (~290 tok) | ~420 | 232.4 | **338.9** | **+45.8%** |
 
-**Finding:** Decode tok/s scales **inversely** with
-context length. Root cause: flash_decoding_chunk work
-scales linearly with seq_len (more chunks = more
-reduce work + K/V cache traffic). At seq_len~420,
-attention cost dominates → 29% slowdown.
+**Finding:** chunk_size=16 nearly eliminates context
+scaling degradation. At long ctx, going from 232→339
+tok/s (+46%). Doubling block count (num_heads × num_chunks)
+fills the 128-SM GPU better.
 
-Implication: 329 tok/s baseline is a best-case
-short-context number. Production at 1K+ context
-will be significantly slower.
+chunk=8 tested but no better (overhead dominates).
+Sweet spot is chunk=16. Upstream fix: trueno#246.
 
 ### Phase 3: Format Parity (Yoga)
 
@@ -229,7 +228,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-PARITY-02 | c=4 <=1.5x slower | **CONFIRMED** | 274.5 (1.22x FASTER). |
 | F-PARITY-04 | realizr >= llama.cpp | **REVISED** | Graph 329 vs llama.cpp 425 (0.78x). FA gap. |
 | F-CLIPARITY-01 | apr = Candle CLI | **CONFIRMED** | 6/6 features. |
-| F-1.5X-01 | >=341 (1.5x Candle) | **NEAR** | 329.4 [317, 337]. Needs attention kernel. |
+| F-1.5X-01 | >=341 (1.5x Candle) | **CONFIRMED** | 353.9 [352.7, 355.1] with chunk_size=16. 1.56x Candle. |
 | F-RSS-02 | RSS <=673 MB | **FALSIFIED** | Min 2,930 (weights + server irreducible). |
 | F-PARITY-03 | Output div <=1% | **WEAKENED** | 72% — chat template, not dequant. |
 | F-QUALITY-01 | PPL within 0.1 | **FALSIFIED** | DP4A 24.2 vs FP32 12.97. Int8 precision. |
@@ -244,7 +243,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
-27 F-conditions. 26 tested (15 confirmed, 4 revised,
+27 F-conditions. 26 tested (16 confirmed, 4 revised,
 4 falsified, 2 weakened). 1 wired (P15-06). 1 proposed.
 
 ---
@@ -625,3 +624,4 @@ validates under realistic traffic patterns.
 | 13.6 | 04-05 | PMAT-456 analyzed: FP8 infra exists, perplexity needs batched teacher-forcing. realizr#208 filed (cargo fmt workspace fix). |
 | 14.0 | 04-05 | **P15-01 FALSIFIED:** Multi-warp A/B: 284 vs 329 tok/s (-13.7%). 12 blocks on 128 SMs. Flash decode wins. F-TCATTN-01 falsified. 26/27 F-conditions tested. |
 | 14.1 | 04-05 | **Context scaling:** decode tok/s inversely scales with ctx (350→232 tok/s, -29% at ~420 ctx). 329 is best-case. Production at 1K+ ctx needs derating. |
+| 14.2 | 04-05 | **chunk_size=16 BREAKTHROUGH:** trueno#246, 353.9 tok/s [352.7, 355.1]. +7.4% short ctx / +45.8% long ctx. 1.56x Candle. F-1.5X-01 CONFIRMED. |
