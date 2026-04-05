@@ -16,21 +16,23 @@ Candle's general-purpose approach?**
 
 ## Key Findings
 
-### Showdown v14.6 (RTX 4090, 2520 MHz, probador bootstrap N=5)
+### Showdown v14.7 (RTX 4090, 2520 MHz, probador bootstrap N=5)
 
-| Metric | Candle | realizr (chunk=16) | llama.cpp b7746 | Winner |
+| Metric | Candle | realizr (#211 fix) | llama.cpp b7746 | Winner |
 |--------|--------|---------------------|-----------------|--------|
-| Decode tok/s (c=1) | 227.4 | **353.9** [352.7, 355.1] | **431.1** [429.5, 432.2] | llama.cpp |
-| ITL P50 (c=1) | -- | 2.8ms | **2.3ms** | llama.cpp |
-| µs/layer | -- | 100.5 | **82.8** | llama.cpp |
+| Decode tok/s (c=1) | 227.4 | **378.3** [372.4, 382.4] | **431.1** [429.5, 432.2] | llama.cpp |
+| ITL P50 (c=1) | -- | 2.6ms | **2.3ms** | llama.cpp |
+| µs/layer | -- | 94.3 | **82.8** | llama.cpp |
 | GPU util | -- | **98%** | 91% | realizr |
-| Decode tok/s (c=4) | N/A | **274.5** | 224.8 | **realizr** |
+| Decode tok/s (c=4) | N/A | **671.0** | 902.3 | llama.cpp |
+| Decode tok/s (c=8) | N/A | **1,009.1** | -- | realizr |
 | WikiText-2 PPL (DP4A) | -- | 24.2 | **12.97** (FP32) | llama.cpp |
 | Peak RSS (MB) | **449** | 3,082 | ~906 | Candle |
 
-> **Rankings at c=1:** llama.cpp (1.22x realizr) > realizr (1.56x Candle) > Candle.
-> realizr wins at c>=4 (continuous batching, Orca-style).
-> chunk_size=16 (trueno#246) gave realizr +7.4% short ctx / +45.8% long ctx.
+> **Rankings at c=1:** llama.cpp (1.14x realizr) > realizr (1.66x Candle) > Candle.
+> realizr#211 fix: non-streaming now routes through batch scheduler.
+> c=4 scaling: 1.03x → 1.76x. c=8: 1.05x → 2.65x.
+> chunk_size=16 (trueno#246) + batch scheduler fix = 378.3 tok/s at c=1.
 > PPL gap from DP4A int8 accumulation vs FP32 dequant (realizr#203 filed).
 
 Full analysis: [performance.md](performance.md).
@@ -65,17 +67,17 @@ Default produces Q4K (raw passthrough, `--preserve-q4k` deprecated).
 > poisoned the context. v14.6 uses CUDA graph dispatch (647 kernels →
 > 1 launch) + chunk_size=16 attention tuning.
 
-| Metric | Candle (decode) | realizr (v14 chunk=16) | Status |
-|--------|-----------------|------------------------|--------|
-| Decode tok/s | 227.4 | **353.9** [352.7, 355.1] | realizr **1.56x** |
-| ITL P50 | -- | **2.8ms** | probador |
-| µs/layer | -- | 100.5 | 28 layers |
+| Metric | Candle (decode) | realizr (v14.7 #211 fix) | Status |
+|--------|-----------------|--------------------------|--------|
+| Decode tok/s | 227.4 | **378.3** [372.4, 382.4] | realizr **1.66x** |
+| ITL P50 | -- | **2.6ms** | probador |
+| µs/layer | -- | 94.3 | 28 layers |
 | GPU util | -- | 98% | `--gpu-telemetry` |
 | Peak RSS (MB) | **449** | 3,082 | Candle wins |
 
 Candle 227.4 is self-reported decode-only (no HTTP).
-realizr 353.9 is full wall-clock via `probador llm load`,
-bootstrap N=5 runs × 30s, CV=0.4%.
+realizr 378.3 is full wall-clock via `probador llm load`,
+bootstrap N=5 runs × 30s, CV=1.1%. Post realizr#211 batch scheduler fix.
 
 ### Phase 2: realizr Scaling (Candle N/A -- no server)
 
@@ -95,7 +97,7 @@ v5 Yoga confirms batch scheduling: **1,776.5 tok/s at c=32**.
 | Format | Runtime | v14 (4090) | v5 (Yoga) | Notes |
 |--------|---------|------------|-----------|-------|
 | GGUF Q4_K_M | Candle | 227.4 | -- | CLI decode-only |
-| GGUF Q4_K_M | realizr | **353.9** | **132.5** | graph + chunk=16 |
+| GGUF Q4_K_M | realizr | **378.3** | **132.5** | graph + chunk=16 + #211 |
 | FP16 APR | realizr | -- | **151.6** | #180 FIXED (7.15x) |
 | APR v2 Q4K | realizr | -- | **132.3** | parity with GGUF |
 
@@ -183,15 +185,15 @@ quantized-qwen2-instruct --model model.gguf \
 Source of truth:
 [candle-vs-apr-spec.md §7](docs/specifications/candle-vs-apr-spec.md).
 
-**Current score (v14.6.0, 27 F-conditions):**
-25 tested (12 confirmed, 5 revised, 3 falsified, 2 weakened, 1 fixed,
+**Current score (v14.7.0, 27 F-conditions):**
+25 tested (11 confirmed, 5 revised, 3 falsified, 2 weakened, 2 fixed,
 1 measured, 1 wired). 2 proposed.
 
 **Headline results:**
-- F-1.5X-01 **CONFIRMED**: realizr 353.9 tok/s = 1.56x Candle (chunk=16)
+- F-1.5X-01 **CONFIRMED**: realizr 378.3 tok/s = 1.66x Candle (#211 fix)
 - F-SCALE-01 **CONFIRMED**: c=32 @ 1,776 tok/s on Yoga (13.4x scaling)
-- F-PARITY-02 **CONFIRMED**: c=4 realizr 1.22x faster than llama.cpp
-- F-PARITY-04 **REVISED**: realizr 0.82x llama.cpp at c=1 (FA register fix)
+- F-PARITY-02 **FIXED**: c=4 non-streaming 1.03x → 1.76x (realizr#211)
+- F-PARITY-04 **REVISED**: realizr 0.88x llama.cpp at c=1 (was 0.82x)
 - F-QUALITY-01 **FALSIFIED**: DP4A PPL 24.2 vs FP32 12.97 (int8 precision)
 - F-RSS-02 **FALSIFIED**: min 2,930 MB RSS (server + weights irreducible)
 - F-NCU-01 **CONFIRMED**: 2.15% occupancy → chunk=16 fix (trueno#246)
