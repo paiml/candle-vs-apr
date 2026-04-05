@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 9.4.0
+**Version:** 9.5.0
 **Last Updated:** 2026-04-04
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -848,4 +848,5 @@ to record kernel params instead of launching directly.
 | 9.1.0 | 2026-04-05 | Tooling upgrade: `cgp` (trueno) + `apr bench` (load testing) integrated into spec. Workflow updated: `apr check` → `apr profile` → `apr bench` → `cgp contract verify`. 14 tools in Section 12 (was 8). |
 | 9.2.0 | 2026-04-05 | **PMAT-452 FALSIFIED:** Fused K+V kernel -3.1% regression at kv_dim=256. Reverted to Phase 1. |
 | 9.3.0 | 2026-04-05 | **PROFILED:** 85.9% launch overhead. PMAT-453 stream capture blocked (code 901 on 570.207, both Global + ThreadLocal). **trueno#243 SHIPPED:** `cuGraphAddKernelNode` manual graph API — bypasses stream capture. Wiring into decode path next. |
-| 9.4.0 | 2026-04-05 | **VERIFIED:** Manual graph API works on driver 570.207 (Python driver test). `cuGraphCreate`+`cuGraphAddKernelNode`+`cuGraphLaunch` all succeed. Stream capture bug is kernel-specific (empty capture works, `--no-fp8-cache` still fails). Manual construction is the viable path to eliminate 85.9% overhead. |
+| 9.4.0 | 2026-04-05 | **VERIFIED:** Manual graph API works on driver 570.207 (Python test). Stream capture bug is kernel-specific. Manual construction viable. |
+| 9.5.0 | 2026-04-05 | **Manual graph infrastructure IMPLEMENTED** in realizr (6ae0703d): RecordedKernel struct, begin/end_graph_recording, record_kernel_launch. Wired into graphed_capture.rs (skips stream capture, uses eager+record). HW DP4A GEMV recording wired. Full kernel coverage needed (RMSNorm, attention, RoPE, etc.) before benchmark. |
