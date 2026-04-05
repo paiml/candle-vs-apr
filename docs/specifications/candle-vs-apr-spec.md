@@ -802,11 +802,14 @@ been falsified for small-dim M=1 decode.
 
 **DRIVER BLOCKED (realizr#197):** CUDA graph capture
 fails with code 901 on driver 570.207 (Ada Lovelace).
-Graph infrastructure exists in realizr (PAR-054) but
-poisons CUDA context on capture attempt. Profiled:
-85.9% launch overhead → graphs would reduce to <20%.
-Need driver >= 575 or manual graph construction via
-`cuGraphAddKernelNode` (bypass stream capture).
+Tested both `CaptureMode::Global` AND `ThreadLocal` —
+same failure (realizr 02854aee). Bug is in the capture
+mechanism itself, not the mode. Graph infrastructure
+exists in realizr (PAR-054) but poisons CUDA context
+on capture attempt. Profiled: 85.9% launch overhead →
+graphs would reduce to <20%. Need driver >= 575 or
+manual graph construction via `cuGraphAddKernelNode`
+(bypass stream capture entirely).
 
 ## 13. Revision History
 
