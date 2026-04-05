@@ -135,13 +135,23 @@ Decode tok/s vs prompt length (c=1, 256 gen tokens):
 |--------|---------|----------|----------|-------|
 | micro (~5 tok) | ~130 | 329.3 | **353.9** | **+7.4%** |
 | short (~30 tok) | ~160 | 350.2 | 351.5 | +0.4% |
-| medium (~125 tok) | ~250 | 288.1 | -- | -- |
+| medium (~125 tok) | ~250 | 288.1 | **357.7** | **+24.1%** |
 | long (~290 tok) | ~420 | 232.4 | **338.9** | **+45.8%** |
 
 **Finding:** chunk_size=16 nearly eliminates context
 scaling degradation. At long ctx, going from 232→339
-tok/s (+46%). Doubling block count (num_heads × num_chunks)
-fills the 128-SM GPU better.
+tok/s (+46%). Medium ctx (+24%), long ctx (+46%) —
+degradation inversely proportional to SM utilization.
+Doubling block count (num_heads × num_chunks) fills
+the 128-SM GPU better.
+
+Measurement fidelity: all probador `--prompt-profile` runs
+with apr 0.4.12 graph replay (ITL P50: short 2.78ms,
+medium 2.80ms, long 2.91ms). Decode rate derives from
+ITL P50 directly when output is long enough (short/medium/long
+hit max_tokens); micro profile emits ~9 tok/req due to
+early EOS, so its decode_tok_per_sec is cold-start biased
+(use ITL 3.9ms → implicit 257 tok/s only, not apples).
 
 **Full sweep (tok/s, RTX 4090):**
 
