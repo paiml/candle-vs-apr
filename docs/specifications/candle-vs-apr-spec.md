@@ -201,15 +201,17 @@ to close precision gap significantly.
 
 | Brick | % compute | Avg µs | Bottleneck |
 |-------|-----------|--------|------------|
-| **AttentionScore** | **44.3%** | 18.2 | Memory BW |
-| QkvProjection | 14.0% | 5.7 | Memory BW |
+| **AttentionScore** | **44.3%** | 18.2 | **Occupancy** (L2 82%, 2.15%→3.09%) |
+| QkvProjection | 14.0% | 5.7 | Memory BW (L2 14%) |
 | RmsNorm | 7.5% | 1.5 | Memory BW |
 | OutputProjection | 7.2% | 2.9 | Memory BW |
 | DownProjection | 7.0% | 2.9 | Memory BW |
 | RopeEmbedding | 6.9% | 2.8 | Compute |
 
 Roofline: AI=4.0, achieved 1,235 GB/s (122% of spec
-due to L2 hits). Memory-bound per Williams et al. 2009.
+due to L2 hits). GEMV ops memory-bound per Williams et al. 2009.
+Attention is **occupancy-bound** not BW-bound (P15-05 reversed
+naive priority — see F-L2-01).
 
 **NCU Root Cause (flash_decoding_chunk, P15-02):**
 Occupancy 2.15% (theoretical 50%). Grid 108 blocks on
