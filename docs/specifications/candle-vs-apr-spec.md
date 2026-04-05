@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.6.3
+**Version:** 14.6.4
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -668,3 +668,4 @@ validates under realistic traffic patterns.
 | 14.5 | 04-05 | Full chunk_size sweep {8,12,16,20,24,32}. chunk=16 wins both MICRO and LONG. Non-monotonic (chunk=12 worse). Eager +16% too. |
 | 14.6 | 04-05 | **Fair apples-to-apples:** probador bootstrap llama.cpp b7746 = 431.1 [429.5, 432.2] CV 0.4%. Gap 1.218x. Corrects methodology: spec's 433.8 was native eval_time, not probador. F-condition counts corrected (25 tested, not 26). |
 | 14.6.1-3 | 04-05 | Audit pass: propagated chunk=16 numbers to F-SUMMARY/PARITY/PARITY-04 (329→353.9), expanded Phase 14 task table with trueno#244/245/246/realizr#203 actual states, corrected P15-01 to FALSIFIED and P15-04 to BLOCKED, fixed AttentionScore bottleneck label (Memory BW → Occupancy, per F-L2-01), fixed configs/showdown.yaml spec_ref (non-existent §12 → §5/§8). README updated v8.8 → v14.6. |
+| 14.6.4 | 04-05 | **Phase 2b medium chunk=16 filled:** 357.7 tok/s (+24.1% vs chunk=32). Verified all 4 prompt profiles reproduce within 2.4% of spec. Binary version fingerprint preflight added to bootstrap-ci.sh (catches apr 0.4.11 vs 0.4.12 PATH regressions, 36% delta). |
