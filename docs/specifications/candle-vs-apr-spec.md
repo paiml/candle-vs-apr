@@ -1,8 +1,8 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 10.0.0
-**Last Updated:** 2026-04-04
+**Version:** 11.0.0
+**Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
 **Primary Target:** Lambda Vector (RTX 4090, 24 GB VRAM, sm_89)
@@ -68,15 +68,14 @@ CUDA — isolating architecture from language/runtime.
 c=1 is primary (Candle has no server). Concurrent
 benchmarks (c=4..32) show what Candle cannot provide.
 
-**Result (v9 showdown, clean GPU, 2520 MHz):** realizr
-**281.2** vs llama.cpp **336.7** decode tok/s (16.5% gap).
-llama.cpp TTFT 760ms vs realizr 911ms — prompt caching
-advantage. Earlier false regression (273.8→232) was GPU
-contention (realizr#190 CLOSED). Bootstrap: **277.3**
-[276.1, 278.5]. Candle: 227.4 (reference). RSS: Candle
-449 MB. Fused K+V kernel shipped (trueno 9d99e18c),
-graph poison fix shipped (realizr#194).
-See F-SUMMARY-01, F-PARITY-04.
+**Result (v10 graph replay, clean GPU, 2520 MHz):**
+realizr **331.2** vs llama.cpp **336.7** decode tok/s
+(**1.6% gap — near parity**). Graph replay: +26.3% vs
+eager (262.2). **1.46x Candle** (227.4). Root cause of
+prior garbled graph output: fused SwiGLU kernel missing
+recording (realizr 2797c878, #198). 647 kernels → 1
+graph launch. ITL 3.0ms, µs/layer 107.8.
+See F-SUMMARY-01, F-PARITY-04, F-1.5X-01.
 
 ---
 
@@ -325,17 +324,17 @@ plus `-summary.json` aggregates.
 
 ### Phase 1: Single-Request Parity (c=1)
 
-| Metric | Predict | v1 | v3 (graph fix) | v8 (showdown) | Status |
+| Metric | Predict | v1 | v3 (graph fix) | v10 (graph replay) | Status |
 |--------|---------|----|----|----|----|
-| Decode tok/s | 0.90-1.10 | 0.63x (poisoned) | **1.20x** (273.8 vs 227.4) | **0.87x total** (289.0 vs 333.1) | **v8: REVISED** |
-| Decode-only | 0.90-1.10 | -- | -- | **~1.01x** (~303 vs ~299) | **PARITY** |
+| Decode tok/s | 0.90-1.10 | 0.63x (poisoned) | **1.20x** (273.8 vs 227.4) | **1.46x** (331.2 vs 227.4) | **v10: 1.46x Candle** |
+| vs llama.cpp | -- | -- | -- | **0.98x** (331.2 vs 336.7) | **NEAR PARITY** |
 | Peak RSS | 0.85-1.15 | 0.15x (449/3082) | 0.15x (unchanged) | TBD | **FAIL** |
 
-**F-PARITY-01: REVISED.** v3: 1.20x. v8 showdown
-(clean GPU): total throughput **0.87x** (realizr 289.0
-vs llama.cpp 333.1). But llama.cpp prompt caching (LCP
-similarity) inflates total. Decode-only ~303 vs ~299:
-**parity**. Bootstrap: **277.3** [276.1, 278.5].
+**F-PARITY-01: REVISED (v10).** Graph replay: **331.2**
+decode tok/s (1.46x Candle, 0.98x llama.cpp). Eager:
+262.2. +26.3% from graph dispatch (647 kernels → 1
+launch). Root cause of prior garbled output: fused
+SwiGLU kernel MISSING from recording (realizr#198).
 RSS still 6.9x higher (server + KV cache pool).
 
 > **Mandatory pre-flight:** `nvidia-smi
@@ -496,9 +495,9 @@ and confirmed, weakened, or retracted.
 | F-FMTPARITY-01 | 3 formats GPU +/-10% | **REVISED** | GGUF 132.5, FP16 **151.6**, APR Q4K 132.3 (Yoga) |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | GGUF 0.0%, APR Q4K 1.4%. Version skew was root cause |
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
-| F-PARITY-04 | realizr >= llama.cpp at c=1 | **REVISED** | Total: realizr 289.0 vs llama.cpp **333.1** (0.87x). Decode-only: ~303 vs ~299 (**parity**). Gap = prompt caching. |
+| F-PARITY-04 | realizr >= llama.cpp at c=1 | **REVISED** | Eager: 262.2 vs llama.cpp 336.7 (0.78x). **Graph: 331.2** vs llama.cpp 336.7 (**0.98x, near parity**). |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
-| F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **TESTING** | Phase 12: tensor graph + fusion + weight layout |
+| F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **NEAR** | Graph: **331.2** (1.46x Candle 227.4). 2.9% below 341 target. ITL 3.0ms, µs/layer 107.8. |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
 | F-PARITY-03 | Greedy output divergence <=1% | **WEAKENED** | 72% word divergence — but caused by chat template wrapping, not dequant. Needs prompt-parity test. |
 | F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **FALSIFIED** | DP4A decode PPL: 20.4-31.3 (weighted 24.2, 5 chunks). llama.cpp 12.97. Gap = DP4A int8 vs FP32. Batched FP8 GEMM path untested (needs batched forward in PPL endpoint). |
@@ -550,8 +549,16 @@ cold model). Contract: `gpu-inference-parity-v1`.
 **Target:** realizr >=341 tok/s decode AND RSS <=673 MB
 at c=1 on RTX 4090. (1.5x Candle's 227.4 / 449 MB.)
 
-**Current (v8.5 clean GPU):** **277.3** tok/s (1.22x),
-3,082 MB RSS (6.9x). Gap: +23.0% decode, -78.2% RSS.
+**Current (v10 graph replay):** **331.2** tok/s (1.46x),
+3,082 MB RSS (6.9x). Gap: **+2.9% decode** to target,
+-78.2% RSS.
+
+**v10 BREAKTHROUGH:** Manual graph replay (realizr
+2797c878) delivers 331.2 vs eager 262.2 (+26.3%).
+Root cause of garbled output: fused gate+up+SwiGLU
+kernel was MISSING graph recording (28 kernels/forward).
+647 kernels now recorded (was 619). All buffers
+diff=0.000000 in A/B test.
 
 > **F-1.5X-01:** If realizr cannot sustain >=341 tok/s
 > decode at c=1 (30s, probador) on RTX 4090, the 1.5x
@@ -614,7 +621,7 @@ survived validation. Mega-kernels fail at low SM count.
 | PMAT-434 | RMSNorm+GEMV fusion kernel | **REVERTED** | realizr PMAT-092: fused kernel 5% slower. Dead end without new approach. |
 | PMAT-435 | Tensor graph dispatch (trueno layer) | **INFRA DONE** | trueno#238 graph module merged. Phase 12 quantized wiring NOT started. |
 | PMAT-436 | Marlin-style Q4K weight pre-packing | **DEPRIORITIZED** | trueno#239 branch stale (1453 behind). Not beneficial for M=1 decode. |
-| PMAT-437 | Re-benchmark: probador 1.5x gate | TODO | 435 |
+| PMAT-437 | Re-benchmark: probador 1.5x gate | **MEASURED** | Graph: **331.2** vs eager 262.2 (+26.3%). 1.46x Candle. 2.9% below 341 target. |
 | PMAT-438 | RSS re-measure with --no-fp8-cache | **DONE** | Yoga measured |
 
 **Perf gate:** `probador llm load --url ... --concurrency 1
@@ -770,7 +777,7 @@ and unblock the only untested F-condition (F-QUALITY-01).
 | PMAT-450 | KV prefix caching (prompt reuse) | **MEASURED** | realizr#199, cb00153b | PrefixCache wired into streaming path. Cold 136ms → Warm 56ms (2.4x, 80ms saved). Prompt-only KV snapshot. Output parity limited by FP8/DP4A precision divergence. |
 | PMAT-451 | Logprobs endpoint | **SHIPPED** | realizr e8da8431, /v1/logprobs | Generation logprobs done. Teacher-forcing PPL next. |
 | PMAT-452 | Fused K+V kernel (single launch) | **FALSIFIED** | trueno 9d99e18c, realizr 84d36305 | MEASURED: 272.5 vs 281.2 tok/s (-3.1%). kv_dim=256 too small for fusion benefit. Reverted to Phase 1 (Q8 cache). |
-| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **A/B TESTED** | trueno#243, realizr 06357373, realizr#198 | 619 kernels wired. A/B test: RMSNorm IDENTICAL (diff=0), hidden_buf2 DIVERGED (155.1) after 28 layers. Bug is in Q8→GEMV→attention→FFN pipeline, not input/RMSNorm. Need layer binary search. |
+| PMAT-453 | Tensor graph dispatch wiring (Phase 12 quantized) | **FIXED + MEASURED** | trueno#243, realizr 2797c878 | Five-whys: fused gate+up+SwiGLU kernel MISSING recording (28 kernels/forward). Fix: 647 kernels (was 619). A/B: ALL buffers diff=0. **331.2 tok/s** (+26.3% vs eager 262.2). 1.46x Candle. |
 | PMAT-454 | GPU isolation pre-flight in all scripts | **DONE** | bootstrap-ci.sh, run-showdown.sh | Prevents false regressions |
 | PMAT-455 | Perplexity graph poison fix | **SHIPPED** | realizr#194, 1f527a89 | KV overflow validation + error recovery. C-GRAPH-RECOVERY-01. Gate debt cleared (realizr#195). |
 | PMAT-456 | Batched prefill PPL endpoint | TODO | realizr (needs new path) | FP8 GEMM PPL vs DP4A — true precision comparison for F-QUALITY-01. |
@@ -795,10 +802,11 @@ kv_dim=256 too small — launch overhead savings (~5μs)
 Same pattern as qcd PMAT-280..289 (16 fusion failures).
 Reverted to Phase 1 (Q8 cache sharing only).
 
-Remaining Phase 12 path: tensor graph dispatch
-(PMAT-435/453) is the only technique that survived
-validation in qcd. All kernel fusion approaches have
-been falsified for small-dim M=1 decode.
+**Phase 12 COMPLETE:** Tensor graph dispatch (PMAT-453)
+is the WINNING technique — **+26.3%** (262.2→331.2).
+All kernel fusion approaches falsified for small-dim
+M=1 decode. Graph dispatch was the only survivor,
+exactly as predicted by qcd validation.
 
 **DRIVER BLOCKED (realizr#197):** CUDA graph stream
 capture fails with code 901 on driver 570.207 (Ada
@@ -833,10 +841,15 @@ graph cleared by prefill (CORRECTNESS-014). Actual
 decode graph (pos=9) has correct buffer pointers
 (logits_buf, input_buf match).
 
-Remaining: output quality still differs from eager path.
-Logits are plausible but produce different tokens.
-Needs A/B comparison at per-kernel level to isolate
-which kernel's graph replay diverges from eager.
+**Five-whys root cause #3 FOUND AND FIXED (realizr
+2797c878):** `fused_gate_up_swiglu_hw_dp4a_q4k_gemv_into`
+was missing `if self.graph_recording` block. 28
+kernels/forward (one per layer) never captured. Graph
+replay used stale ffn_act_buf from eager, producing
+hidden_buf2 divergence (81.0 max diff). Fix: 647
+kernels recorded (was 619). A/B test: ALL 13 workspace
+buffers diff=0.000000. Graph replay now produces
+correct, coherent output. **331.2 tok/s decode.**
 
 ## 13. Revision History
 
@@ -878,3 +891,4 @@ which kernel's graph replay diverges from eager.
 | 9.8.0 | 2026-04-05 | **PMAT-450 KV prefix caching IMPLEMENTED** (realizr 045f1c2d, realizr#199). PrefixCache wired into generate_gpu_resident: lookup before prefill, GPU KV D2H snapshot after generate, H2D restore on cache hit. Skip prefill entirely for repeated prompts. Expected TTFT ~900ms → ~5ms. Needs GPU benchmark. |
 | 9.9.0 | 2026-04-05 | **PMAT-450 MEASURED** (realizr cb00153b). Cold 136ms → Warm 56ms (2.4x, 80ms saved). Fixed: prompt-only KV snapshot (was caching generated tokens too). Wired streaming path (server uses true streaming). Output parity limited by FP8/DP4A precision divergence at first-token boundary. |
 | 10.0.0 | 2026-04-05 | **PMAT-453 A/B TEST** (realizr 06357373). Graph replay at same position: RMSNorm IDENTICAL (diff=0.0), hidden_buf2 DIVERGED (155.1). Bug is in 28-layer Q8→GEMV→attention→FFN pipeline. 619 kernels all recorded + all launch configs correct. Need layer binary search to find first divergence point. |
+| 11.0.0 | 2026-04-05 | **GRAPH REPLAY FIXED + MEASURED** (realizr 2797c878). Five-whys: `fused_gate_up_swiglu_hw_dp4a_q4k_gemv_into` MISSING graph recording — 28 kernels/forward never captured. Fix: 647 kernels (was 619). A/B: ALL 13 buffers diff=0. **331.2 tok/s** (+26.3% vs eager 262.2, **1.46x Candle**, 0.98x llama.cpp). F-1.5X-01 NEAR (2.9% gap). F-PARITY-04 near parity. |
