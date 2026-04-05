@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 13.6.0
+**Version:** 14.0.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -217,14 +217,14 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-CACHE-01 | Prefix cache TTFT | **MEASURED** | Cold 136ms → Warm 56ms (2.4x). |
 
 | F-CONTRACT-01 | Contracts catch >=1 bug | **WIRED** | 6/6 invariants wired (realizr 1a05516). Awaiting 5 profiling sessions. |
-| F-TCATTN-01 | TC attn <=14µs | **PROPOSED** | GQA Tensor Core (FlashInfer). HIGH risk: DRAM stall. |
+| F-TCATTN-01 | TC attn <=14µs | **FALSIFIED** (multi-warp) | PAR-070: 284 tok/s vs 329 baseline (-13.7%). 12 blocks on 128 SMs. |
 | F-NCU-01 | NCU finds root cause | **CONFIRMED** | Occupancy 2.15%, scheduler starved 96.6%. Attention grid too small for 128 SMs. |
 | F-GATE-01 | Falsification <20% | **PROPOSED** | Pre-opt bottleneck gate. MED risk. |
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
-27 F-conditions. 25 tested (15 confirmed, 4 revised,
-3 falsified, 2 weakened). 1 wired (P15-06). 2 proposed.
+27 F-conditions. 26 tested (15 confirmed, 4 revised,
+4 falsified, 2 weakened). 1 wired (P15-06). 1 proposed.
 
 ---
 
@@ -301,15 +301,26 @@ FlashInfer (Ye 2025): GQA 6:1 → TC at M=1. Predicted
 18.2µs → ~12µs, 329→361 tok/s. **F-TCATTN-01:** <=14µs
 or falsified. **Risk: HIGH** (DRAM stalls).
 
-**NCU-informed update:** Root cause is NOT kernel speed
-(2.9µs per chunk launch) but occupancy (2.15%). The
-multi-warp kernel (PAR-070) is **fully implemented** in
-trueno but **not wired into dispatch**. Grid: 12 blocks
-(1 per head) × 4 warps = 48 warps — still only 12
-blocks on 128 SMs. Need either:
-1. Multi-warp integration (trueno#245, moderate risk)
-2. Persistent kernel (stays resident on SMs)
-3. FlashInfer TC (combines occupancy + compute boost)
+**NCU-informed update:** Root cause is occupancy (2.15%).
+
+**A/B test (multi-warp vs flash decode, RTX 4090):**
+
+| Kernel | Decode tok/s | ITL P50 | Graph kernels | Blocks |
+|--------|-------------|---------|---------------|--------|
+| Flash decode | **329.3** | **3.0ms** | 647 | 108 (12×9) |
+| Multi-warp 4W | 284.1 | 3.5ms | 619 | 12 (1/head) |
+| Delta | **-13.7%** | +17% | -28 | -89% |
+
+**FALSIFIED:** Multi-warp reduces graph kernels (619 vs
+647) but REGRESSES decode by 13.7%. Root cause: 12
+blocks on 128 SMs = 9.4% SM utilization. Flash decode
+has 108 blocks = 84% SM utilization. Multi-warp improves
+intra-block parallelism but loses inter-block.
+
+**Remaining paths:**
+1. FlashInfer TC (GQA thin prefill, more blocks)
+2. Persistent kernel (stays resident, no block limit)
+3. Fused multi-warp+flash (N warps per chunk)
 
 **P15-02: NCU on attention kernel. DONE.**
 `flash_decoding_chunk` profiled (RTX 4090, 2520 MHz):
@@ -591,3 +602,4 @@ validates under realistic traffic patterns.
 | 13.4 | 04-05 | **P15-05 DONE:** L2 cache from NCU. Attention 82% L2 (occupancy problem), GEMV 14% L2 (BW problem). Reversed naive priority. F-L2-01 CONFIRMED. |
 | 13.5 | 04-05 | Phase 15: 5/6 done (P15-04 blocked: no cgp repo). Methodology gaps updated. 25/27 F-conditions tested. |
 | 13.6 | 04-05 | PMAT-456 analyzed: FP8 infra exists, perplexity needs batched teacher-forcing. realizr#208 filed (cargo fmt workspace fix). |
+| 14.0 | 04-05 | **P15-01 FALSIFIED:** Multi-warp A/B: 284 vs 329 tok/s (-13.7%). 12 blocks on 128 SMs. Flash decode wins. F-TCATTN-01 falsified. 26/27 F-conditions tested. |
