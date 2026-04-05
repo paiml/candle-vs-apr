@@ -236,8 +236,8 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 
 | ID | Prediction | Status | Evidence |
 |----|-----------|--------|---------|
-| F-SUMMARY-01 | realizr wins c=1 | **REVISED** | Graph 329 vs llama.cpp 425 (0.78x). 1.45x Candle. |
-| F-PARITY-01 | c=1 within +/-10% | **REVISED** | Graph 329 vs Candle 227 (1.45x). vs llama.cpp 0.78x. |
+| F-SUMMARY-01 | realizr wins c=1 | **REVISED** | chunk=16 353.9 vs llama.cpp b7746 431.1 (0.82x). 1.56x Candle. |
+| F-PARITY-01 | c=1 within +/-10% | **REVISED** | chunk=16 353.9 vs Candle 227 (1.56x). vs llama.cpp 0.82x. |
 | F-FORMAT-01 | APR load faster | **FIXED** | Q4K raw passthrough (realizr#185). |
 | F-SCALE-01 | c=32 >=1,280 | **CONFIRMED** | Yoga: **1,776.5** (13.4x). |
 | F-HW-01 | CV <5% locked | **CONFIRMED** | CV 0.8-0.9%. Bootstrap CV=1.5%. |
@@ -248,7 +248,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-FMTPARITY-01 | 3 formats +/-10% | **REVISED** | Yoga: GGUF 132.5, FP16 151.6, Q4K 132.3. |
 | F-TOOLPARITY-01 | apr/realizr +/-5% | **CONFIRMED** | 0.0% GGUF, 1.4% Q4K. |
 | F-PARITY-02 | c=4 <=1.5x slower | **CONFIRMED** | 274.5 (1.22x FASTER). |
-| F-PARITY-04 | realizr >= llama.cpp | **REVISED** | Graph 329 vs llama.cpp 425 (0.78x). FA gap. |
+| F-PARITY-04 | realizr >= llama.cpp | **REVISED** | chunk=16 353.9 vs llama.cpp b7746 431.1 (0.82x). FA gap. |
 | F-CLIPARITY-01 | apr = Candle CLI | **CONFIRMED** | 6/6 features. |
 | F-1.5X-01 | >=341 (1.5x Candle) | **CONFIRMED** | 353.9 [352.7, 355.1] with chunk_size=16. 1.56x Candle. |
 | F-RSS-02 | RSS <=673 MB | **FALSIFIED** | Min 2,930 (weights + server irreducible). |
@@ -307,16 +307,19 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | VRAM | Peak 5,388 MiB (RTX 4090) |
 | Poisson | c=1 stable 245-254, c=4 agg 387 |
 | Output correctness | 72% divergence (chat template) |
-| Showdown | llama.cpp 425 > realizr 329 > Candle 227 |
+| Showdown | llama.cpp b7746 431.1 > realizr chunk=16 353.9 > Candle 227.4 |
 
 ### Phase 14: Active
 
 | ID | Task | Status |
 |----|------|--------|
-| PMAT-453 | Graph dispatch | **FIXED** (329 tok/s) |
+| PMAT-453 | Graph dispatch + chunk=16 | **FIXED** (353.9 tok/s) |
 | PMAT-456 | Batched prefill PPL | **ANALYZED** (realizr#203) |
-| trueno#244 | Attention kernel opt | FILED |
+| trueno#244 | TC attention (multi-warp path) | **FALSIFIED** (-13.7% regression) |
+| trueno#245 | Multi-warp flash decode A/B | **FALSIFIED** (occupancy problem) |
+| trueno#246 | chunk_size=16 tuning | **SHIPPED** (+7.4%/+45.8%) |
 | realizr#201 | Graph default sm_89+ | **SHIPPED** |
+| realizr#203 | Batched prefill teacher-forcing | **FILED** |
 
 ### Phase 15: Profiler + Kernel Sprint (ACTIVE)
 
