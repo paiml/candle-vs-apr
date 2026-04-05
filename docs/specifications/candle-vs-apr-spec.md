@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 11.1.0
+**Version:** 11.2.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -498,7 +498,7 @@ and confirmed, weakened, or retracted.
 | F-PARITY-02 | c=4 <=1.5x slower llama.cpp | **CONFIRMED** | **274.5** (1.22x FASTER than llama.cpp 224.8) |
 | F-PARITY-04 | realizr >= llama.cpp at c=1 | **REVISED** | v11 showdown: llama.cpp **425.0** (FA fix), realizr graph **333.3** (0.78x). Gap widened by llama.cpp FA register fix (+26%). Realizr graph +26% vs eager. |
 | F-CLIPARITY-01 | apr run = Candle features | **CONFIRMED** | 6/6: top-p, seed, repeat-penalty/last-n, split, chrome |
-| F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **NEAR** | Graph: **331.2** (1.46x Candle 227.4). 2.9% below 341 target. ITL 3.0ms, µs/layer 107.8. |
+| F-1.5X-01 | realizr >=341 tok/s (1.5x Candle) | **NEAR** | Bootstrap (N=30): **329.4** [317.3, 336.7] CV=1.5%. GPU-compute-bound at 107µs/layer. Attention 44.3% of compute (trueno#244). Needs kernel improvement for 341. |
 | F-RSS-02 | realizr RSS <=673 MB at c=1 | **FALSIFIED** | Yoga min 2,930 MB (both flags). Irreducible: weights ~1 GB + server ~1.5 MB |
 | F-PARITY-03 | Greedy output divergence <=1% | **WEAKENED** | 72% word divergence — but caused by chat template wrapping, not dequant. Needs prompt-parity test. |
 | F-QUALITY-01 | realizr PPL within 0.1 of llama.cpp | **FALSIFIED** | DP4A decode PPL: 20.4-31.3 (weighted 24.2, 5 chunks). llama.cpp 12.97. Gap = DP4A int8 vs FP32. Batched FP8 GEMM path untested (needs batched forward in PPL endpoint). |
@@ -569,19 +569,19 @@ diff=0.000000 in A/B test.
 > memory parity claim is falsified. Action: audit allocs.
 
 **Root cause analysis (decode, `apr profile --granular`):**
-- **85.9% kernel launch overhead** at M=1 (430 launches/token)
-- Compute breakdown (14.1% of time):
-  - AttentionScore: 39.9% (6.0ms, 14.3µs avg)
-  - QkvProjection: 15.6% (2.3ms, 5.6µs avg)
-  - RmsNorm: 8.2%, OutputProjection: 8.0%
-  - DownProjection: 7.8%, RopeEmbedding: 7.7%
-  - LmHead: 5.7%, Residuals: 7.3%
-- Compute efficiency: 6.6% (per-kernel)
-- **CUDA graph BLOCKED** on driver 570.207 (code 901,
-  realizr#197). Poisons context on capture attempt.
-- Candle weaknesses: no CUDA graphs, no FlashAttn for
-  quantized, 2-kernel QMatMul, ~640 launches/token,
-  per-call KV alloc, no memory pooling
+- Eager: 84.4% launch overhead, 647 launches/token
+- **Graph: 0% launch overhead** (1 cuGraphLaunch)
+- Compute breakdown (graph mode, 100% of time):
+  - **AttentionScore: 44.3%** (8.1ms, 18.2µs avg)
+  - QkvProjection: 14.0% (2.6ms, 5.7µs avg)
+  - RmsNorm: 7.5%, OutputProjection: 7.2%
+  - DownProjection: 7.0%, RopeEmbedding: 6.9%
+  - LmHead: 6.4%, Residuals: 6.7%
+- **Memory-bound** (arithmetic intensity 4.0, BW 1235 GB/s)
+- **Graph replay DEFAULT** for sm_89+ (realizr#201)
+- **Attention is the #1 target** (trueno#244): 23µs/layer
+  gap vs llama.cpp's flash attention (18.2 vs ~12µs)
+- Bootstrap CI (N=30): **329.4** [317.3, 336.7] CV=1.5%
 
 **Root cause analysis (RSS) — MEASURED on Yoga:**
 
@@ -894,3 +894,4 @@ correct, coherent output. **331.2 tok/s decode.**
 | 10.0.0 | 2026-04-05 | **PMAT-453 A/B TEST** (realizr 06357373). Graph replay at same position: RMSNorm IDENTICAL (diff=0.0), hidden_buf2 DIVERGED (155.1). Bug is in 28-layer Q8→GEMV→attention→FFN pipeline. 619 kernels all recorded + all launch configs correct. Need layer binary search to find first divergence point. |
 | 11.0.0 | 2026-04-05 | **GRAPH REPLAY FIXED + MEASURED** (realizr 2797c878). Five-whys: `fused_gate_up_swiglu_hw_dp4a_q4k_gemv_into` MISSING graph recording — 28 kernels/forward never captured. Fix: 647 kernels (was 619). A/B: ALL 13 buffers diff=0. **331.2 tok/s** (+26.3% vs eager 262.2, **1.46x Candle**, 0.98x llama.cpp). F-1.5X-01 NEAR (2.9% gap). F-PARITY-04 near parity. |
 | 11.1.0 | 2026-04-05 | **V11 SHOWDOWN** (3-way). llama.cpp b7746 **425.0** (+26% FA register fix), realizr graph **333.3** (+26% graph dispatch), realizr eager 264.6, Candle 227.4. Gap unchanged at ~22%. realizr 1.47x Candle. Sync removal (realizr#200, a20c3229): marginal — GPU-compute-bound at 107µs/layer. F-1.5X-01: 333 vs 341 target requires kernel improvements. |
+| 11.2.0 | 2026-04-05 | **Graph default + bootstrap + profile.** Graph replay DEFAULT for sm_89+ (realizr#201, 6478013b). Bootstrap CI (N=30): **329.4** [317.3, 336.7] CV=1.5%. Fresh profile: AttentionScore **44.3%** of compute (18.2µs avg). trueno#244 filed: attention kernel 23µs/layer gap vs llama.cpp FA. Memory-bound (AI=4.0, BW=1235 GB/s). |
