@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.0.0
+**Version:** 14.1.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -118,6 +118,27 @@ report 2-10x kernel launch reduction on DNN workloads.
 
 Validates continuous batching (Orca, Yu et al. 2022).
 Candle has no server — cannot demonstrate c>1.
+
+### Phase 2b: Context-Length Scaling (RTX 4090)
+
+Decode tok/s vs prompt length (c=1, 256 gen tokens):
+
+| Prompt | Avg ctx | Decode tok/s | ITL P50 | Delta |
+|--------|---------|-------------|---------|-------|
+| micro (~5 tok) | ~130 | 329.3 | 3.0ms | baseline |
+| short (~30 tok) | ~160 | **350.2** | 2.9ms | +6.3% |
+| medium (~125 tok) | ~250 | 288.1 | 3.5ms | -12.5% |
+| long (~290 tok) | ~420 | **232.4** | 4.3ms | **-29.4%** |
+
+**Finding:** Decode tok/s scales **inversely** with
+context length. Root cause: flash_decoding_chunk work
+scales linearly with seq_len (more chunks = more
+reduce work + K/V cache traffic). At seq_len~420,
+attention cost dominates → 29% slowdown.
+
+Implication: 329 tok/s baseline is a best-case
+short-context number. Production at 1K+ context
+will be significantly slower.
 
 ### Phase 3: Format Parity (Yoga)
 
@@ -603,3 +624,4 @@ validates under realistic traffic patterns.
 | 13.5 | 04-05 | Phase 15: 5/6 done (P15-04 blocked: no cgp repo). Methodology gaps updated. 25/27 F-conditions tested. |
 | 13.6 | 04-05 | PMAT-456 analyzed: FP8 infra exists, perplexity needs batched teacher-forcing. realizr#208 filed (cargo fmt workspace fix). |
 | 14.0 | 04-05 | **P15-01 FALSIFIED:** Multi-warp A/B: 284 vs 329 tok/s (-13.7%). 12 blocks on 128 SMs. Flash decode wins. F-TCATTN-01 falsified. 26/27 F-conditions tested. |
+| 14.1 | 04-05 | **Context scaling:** decode tok/s inversely scales with ctx (350→232 tok/s, -29% at ~420 ctx). 329 is best-case. Production at 1K+ ctx needs derating. |

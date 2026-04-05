@@ -37,10 +37,11 @@ HEAD_DIM=128
 VOCAB_SIZE=151936
 MODEL_SIZE_MB=1024    # ~1 GB Q4_K_M
 
-# Current baselines (from spec v13.x measurements)
-BASELINE_DECODE_TOKS=329.4
-BASELINE_ATTN_US=18.2       # Per-layer average
-BASELINE_GEMV_US=4.2        # hw_dp4a_q4k_gemv average
+# Current baselines (from spec v14.x measurements)
+BASELINE_DECODE_TOKS=329.4       # best-case, short context
+BASELINE_DECODE_TOKS_LONG=232.4  # at ~420 ctx
+BASELINE_ATTN_US=18.2            # Per-layer average
+BASELINE_GEMV_US=4.2             # hw_dp4a_q4k_gemv average
 BASELINE_ATTN_OCCUPANCY=2.15
 BASELINE_GEMV_BW_PCT=33.2
 
