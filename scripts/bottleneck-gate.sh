@@ -37,12 +37,12 @@ HEAD_DIM=128
 VOCAB_SIZE=151936
 MODEL_SIZE_MB=1024    # ~1 GB Q4_K_M
 
-# Current baselines (from spec v14.x measurements)
-BASELINE_DECODE_TOKS=329.4       # best-case, short context
-BASELINE_DECODE_TOKS_LONG=232.4  # at ~420 ctx
-BASELINE_ATTN_US=18.2            # Per-layer average
+# Current baselines (from spec v14.7 measurements, post-#211 fix)
+BASELINE_DECODE_TOKS=378.3       # bootstrap CI [372.4, 382.4], CV 1.1%
+BASELINE_DECODE_TOKS_LONG=338.9  # at ~420 ctx (chunk=16)
+BASELINE_ATTN_US=18.2            # Per-layer average (chunk=16: 3.09% occupancy)
 BASELINE_GEMV_US=4.2             # hw_dp4a_q4k_gemv average
-BASELINE_ATTN_OCCUPANCY=2.15
+BASELINE_ATTN_OCCUPANCY=3.09     # chunk=16 (was 2.15 with chunk=32)
 BASELINE_GEMV_BW_PCT=33.2
 
 RED='\033[0;31m'
