@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 13.1.0
+**Version:** 13.2.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -288,10 +288,20 @@ allocs, -47% runtime. PMAT-033 falsification audit.
 
 #### Proposals (each with falsification condition)
 
-**P15-01: GQA Tensor Core attention (trueno#244).**
+**P15-01: GQA Tensor Core attention (trueno#244, #245).**
 FlashInfer (Ye 2025): GQA 6:1 → TC at M=1. Predicted
 18.2µs → ~12µs, 329→361 tok/s. **F-TCATTN-01:** <=14µs
 or falsified. **Risk: HIGH** (DRAM stalls).
+
+**NCU-informed update:** Root cause is NOT kernel speed
+(2.9µs per chunk launch) but occupancy (2.15%). The
+multi-warp kernel (PAR-070) is **fully implemented** in
+trueno but **not wired into dispatch**. Grid: 12 blocks
+(1 per head) × 4 warps = 48 warps — still only 12
+blocks on 128 SMs. Need either:
+1. Multi-warp integration (trueno#245, moderate risk)
+2. Persistent kernel (stays resident on SMs)
+3. FlashInfer TC (combines occupancy + compute boost)
 
 **P15-02: NCU on attention kernel. DONE.**
 `flash_decoding_chunk` profiled (RTX 4090, 2520 MHz):
@@ -534,3 +544,4 @@ validates under realistic traffic patterns.
 | 12.3 | 04-05 | P15-06 contract enforcement: five-whys (11 YAML, 0 wired) + chain of thought (6 high-value invariants). F-CONTRACT-01. P15-06 promoted to P0. 27 F-conditions. |
 | 13.0 | 04-05 | **P15-06 DONE:** 6/6 contracts wired upstream (realizr 1a05516). GPU verified 328.2 tok/s (within CI). PMAT-456 filed (realizr#203). Phase 15 ACTIVE. |
 | 13.1 | 04-05 | **P15-02 DONE:** NCU on flash_decoding_chunk. Root cause: 2.15% occupancy, 96.6% scheduler stalls. Grid (108 blocks) too small for 128 SMs at M=1. F-NCU-01 CONFIRMED. |
+| 13.2 | 04-05 | P15-01 analysis: multi-warp (PAR-070) ready but unwired. trueno#245 filed. NCU confirms kernel fast (2.9µs) but GPU idle (99%). |
