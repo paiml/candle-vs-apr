@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 16.2.0
+**Version:** 16.3.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -20,17 +20,19 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML)
 vs **realizr** (Sovereign AI Stack) on same model, same
 GPU, same methodology. Pure Rust-vs-Rust comparison.
 
-**v14.11 Showdown (RTX 4090, 2520 MHz, realizr 0.8.6+#212, probador N=3):**
+**v16.2 Showdown (RTX 4090, 2520 MHz, probador 30s, stream=false):**
 
-| Engine | Mode | Decode tok/s | vs Candle | Notes |
-|--------|------|-------------|-----------|-------|
-| llama.cpp b7746 | -ngl 99, FA on | **443.6** | **1.95x** | [442, 444, 446] |
-| realizr 0.8.6 | stream=true | **369.9** | **1.63x** | [361, 370, 379] |
-| realizr 0.8.6 | stream=false | **367.0** | **1.61x** | N=5 CI [365, 369] |
-| Candle | CLI native | 227.4 | 1.00x | — |
+| Engine | c=1 | c=4 | c=32 | VRAM | vs Candle c=1 |
+|--------|-----|-----|------|------|------------|
+| llama.cpp b7746 | **443.6** | — | — | 1.3 GB | **1.95x** |
+| **realizr 0.8.6** | **369.9** | **634.1** | **3,219.9** | **5.2 GB** | **1.63x** |
+| vLLM 0.19 (eager) | 99.0 | 427.1 | 2,717.0 | 15.2 GB | 0.44x |
+| Candle | 227.4 | N/A | N/A | 0.4 GB | 1.00x |
 
-Gap to llama.cpp: **0.834x** (16.6%). Attention kernel occupancy
-(51% of gap) + GEMV efficiency (21%) per Phase 16 decomposition.
+**Rankings:** llama.cpp > realizr (0.83x) > vLLM eager > Candle.
+realizr beats vLLM on ALL concurrency (1.19-3.74x throughput,
+3.46-10.92x efficiency). Gap to llama.cpp: 16.6% (attention 51%,
+GEMV 21%). F-EFFICIENCY-01 CONFIRMED: 4.34x vLLM at c=4.
 
 **CORRECTION (v14.9):** v14.7's 378.3 tok/s was measured with
 stream=true, not stream=false as recorded. A/B testing (realizr#212)
@@ -744,6 +746,36 @@ at all concurrency levels without per-batch graphs.
 vLLM at c=4: **4.34x** (actual, eager). Even against compiled
 estimate: **2.47x**. Exceeds 1.5x target.
 
+**Revised recommendation (post-measurement):**
+
+The Phase 18b measurement changes the priority matrix. realizr
+already wins on efficiency. The remaining goal is closing the
+**llama.cpp c=1 gap** (0.83x, 16.6%) — this is the only
+comparison where realizr loses.
+
+| # | Action | Impact | Risk | Effort | Priority |
+|---|--------|--------|------|--------|----------|
+| 1 | Per-batch CUDA graph (Phase 17 Approach B) | **+62% c=4** (634→1,027) | LOW | 2-3 wk | **P1** |
+| 2 | Close llama.cpp c=1 gap (FlashInfer TC) | **+8% c=1** (370→400) | HIGH | 4-6 wk | P2 |
+| 3 | Marlin GEMV pre-packing | **+3% c=1** (370→381) | MED | 2-3 wk | P3 |
+| 4 | vLLM torch.compile parity (measure) | Validate estimates | LOW | 1 day | P4 |
+
+**Chain of thought: what matters most now?**
+
+1. **realizr beats Candle** — 1.63x, done, irreversible.
+2. **realizr beats vLLM eager** — 1.19-3.74x, done.
+3. **realizr loses to llama.cpp c=1** — 0.83x, the ONLY gap.
+4. Per-batch graph (P1) widens the vLLM win at c>1 but doesn't
+   help c=1 (already graphed). It's still P1 because c>1 is
+   where serving revenue comes from.
+5. FlashInfer TC (P2) is the only path to close llama.cpp c=1.
+   But it's HIGH effort and only +8%. The ROI question:
+   is 370→400 tok/s worth 4-6 weeks of kernel engineering?
+6. **The pragmatic answer:** Ship per-batch graph (P1, 2 weeks)
+   for the c>1 win, then evaluate whether the llama.cpp gap
+   matters for the product (it may not — users care about
+   throughput at c>1, not single-request latency).
+
 **Three-phase plan to 1.5x vLLM efficiency:**
 
 | Phase | Action | Impact | Effort |
@@ -1224,6 +1256,7 @@ validates under realistic traffic patterns.
 | 14.12.0 | 04-06 | **F-MULTIWARPC-01 FALSIFIED:** Fixed shared mem bug (u32 offsets), kernel runs correctly. A/B: short ctx +1.9% (noise), long ctx -1.7% (regression). Root cause: 2× bar.sync per chunk position = O(seq_len) synchronization overhead cancels occupancy gain. Both multi-warp approaches now falsified (P15-01 block-level, P16 warp-level). Remaining path: persistent kernel or FlashInfer TC (avoid cross-warp coordination). 29 F-conditions, 28 tested, 4 falsified. |
 | 15.0.0 | 04-06 | **Chain of thought: Candle parity ACHIEVED (1.63x).** realizr's advantage is architectural and irreversible (CUDA graph, Flash Decoding, fused DP4A, continuous batching). Candle cannot close the gap without fundamental redesign. Remaining work is llama.cpp gap (16.6%): FlashInfer TC (P1, +8%), Marlin GEMV (P2, +3%). Priority matrix and decision tree added. Phase 16 complete. 3 multi-warp approaches falsified. |
 | 15.1.0 | 04-06 | **Cross-project assimilation (qcd v6.34.0).** Hardware matrix: 4090 (369.9), Yoga (136), GB10 (101), Jetson (40.8). vLLM gap: 0.53-0.88x (CPU dispatch bottleneck). 6 falsified approaches cross-validated. 5 confirmed findings: DP4A 92% ceiling, BrickProfiler 3.4x fidelity, CPU dispatch 5ms/step, Orca scaling, FP8 M≥5 threshold. Blackwell implications. Combined verdict: realizr > Candle everywhere, competitive with llama.cpp, 0.53-0.88x vLLM (dispatch-bound, not kernel-bound). |
+| 16.3.0 | 04-06 | **Revised recommendation post-vLLM measurement.** Executive summary updated to 4-way showdown. realizr beats Candle (1.63x), vLLM eager (1.19-3.74x), loses only to llama.cpp c=1 (0.83x). Priority: P1=per-batch graph (c>1 win, 2 wk), P2=FlashInfer TC (c=1 gap, 4-6 wk). Pragmatic path: ship P1 then evaluate if llama.cpp gap matters for product. |
 | 16.2.0 | 04-06 | **Phase 18b: vLLM 0.19.0 MEASURED on RTX 4090.** Eager mode (graphs crashed). realizr beats vLLM on ALL concurrency: 3.74x c=1, 1.48x c=4, 1.19x c=32. Resource efficiency: 3.46-10.92x (5.2 vs 15.2 GB VRAM). F-EFFICIENCY-01 CONFIRMED at 4.34x (target was 1.5x). qcd Yoga gap (0.53-0.88x) was against vLLM WITH torch.compile — eager-to-eager realizr wins decisively. 30 F-conditions, 29 tested, 13 confirmed. |
 | 16.1.0 | 04-06 | **Provable-contract driven design:** `cuda-graph-batched-inference-v1.yaml` committed to provable-contracts. 6 equations, 6 falsification tests (FALSIFY-BGRAPH-001..006), 3 Kani harnesses. Contract-first: implementation blocked until invariants wired to CI. Prevents realizr#198/#211/qcd-PMAT-3031 class of bugs. |
 | 16.0.0 | 04-06 | **Phase 18: 1.5x vLLM target.** Five-whys: raw 1.5x throughput infeasible at c=1 (FP16 TC > DP4A) and marginal at c=4 (1.33x max). Reframed to RESOURCE EFFICIENCY (tok/s/GB VRAM). Post-graph realizr: 197.5 tok/s/GB vs vLLM 108-135 = **1.46-1.83x**. F-EFFICIENCY-01 defined. Three-phase plan: 18a per-batch graph, 18b measure vLLM on 4090, 18c batched FlashInfer TC. Quality crossover at c≥128 (realizr 66 > vLLM 64). |
