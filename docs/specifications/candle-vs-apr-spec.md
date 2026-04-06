@@ -1,8 +1,8 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.8.0
-**Last Updated:** 2026-04-05
+**Version:** 14.9.0
+**Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
 **Primary Target:** Lambda Vector (RTX 4090, 24 GB VRAM, sm_89)
@@ -20,20 +20,25 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML)
 vs **realizr** (Sovereign AI Stack) on same model, same
 GPU, same methodology. Pure Rust-vs-Rust comparison.
 
-**v14.7 Showdown (RTX 4090, 2520 MHz, probador bootstrap N=5):**
+**v14.9 Showdown (RTX 4090, 2520 MHz, realizr 0.8.6, probador N=5):**
 
-| Engine | Decode tok/s | 95% CI | vs Candle | ITL P50 | µs/layer |
-|--------|-------------|--------|-----------|---------|----------|
-| llama.cpp b7746 | **431.1** | [429.5, 432.2] | 1.90x | 2.3ms | 82.8 |
-| realizr (chunk=16, #211) | **378.3** | [372.4, 382.4] | **1.66x** | 2.6ms | 94.3 |
-| realizr (chunk=16, pre-#211) | 353.9 | [352.7, 355.1] | 1.56x | 2.8ms | 100.5 |
-| realizr (chunk=32) | 329.4 | -- | 1.45x | 3.0ms | 107 |
-| Candle | 227.4 | -- | 1.00x | -- | -- |
+| Engine | Mode | Decode tok/s | 95% CI | vs Candle | ITL P50 |
+|--------|------|-------------|--------|-----------|---------|
+| llama.cpp b7746 | stream=false | **431.1** | [429.5, 432.2] | 1.90x | 2.3ms |
+| realizr (#212 fix) | stream=true | **380.0** | [375.4, 384.6] | **1.67x** | 2.5ms |
+| realizr (#212 fix) | stream=false | **376.5** | [365.4, 369.4] | **1.66x** | 2.7ms |
+| realizr (pre-#212) | stream=false | 361.0 | [357.2, 364.4] | 1.59x | 2.8ms |
+| realizr (chunk=32) | stream=false | 329.4 | -- | 1.45x | 3.0ms |
+| Candle | CLI native | 227.4 | -- | 1.00x | -- |
 
-Bootstrap CV=1.1% (N=5 × 30s, stream=false through batch scheduler).
-Gap to llama.cpp: **1.140x** (was 1.218x pre-#211).
-GPU util: realizr 98%, llama.cpp 91%. trueno#246 shipped.
-**realizr#211 fix: c=4 671 agg, c=8 1,009 agg tok/s.**
+**CORRECTION (v14.9):** v14.7's 378.3 tok/s was measured with
+stream=true, not stream=false as recorded. A/B testing (realizr#212)
+identified 5.3% gap: stream=false per-token mpsc overhead. Fix:
+bulk-send after generation (+4.3%, 361→376 tok/s).
+
+Gap to llama.cpp: **1.145x** (stream=false) / **1.134x** (stream=true).
+GPU util: realizr 98%, llama.cpp 91%.
+**c=4 verified: 683.6 agg tok/s post-#212 (no regression).**
 
 Methodology: probador `llm load` wall-clock for both runtimes (fair
 apples-to-apples). llama.cpp native eval_time reports 433.8 tok/s — agrees
@@ -43,10 +48,11 @@ Candle 227.4 is CLI-native decode (no HTTP server available).
 **Key findings:**
 1. Graph dispatch: +26% decode (647 kernels → 1 launch)
 2. **chunk_size=16: +7.4% short / +45% long ctx** (trueno#246)
-3. **realizr#211 fix: +6.9% c=1, +82% c=4, +168% c=8** (batch scheduler for all paths)
-4. AttentionScore: 44% of compute, 23µs/layer gap vs FA
-5. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap)
-6. Scaling: **3,331 tok/s at c=32** (RTX 4090, 8.81x) / 1,776 at c=32 (Yoga, 13.4x)
+3. **realizr#211 fix: +82% c=4, +168% c=8** (batch scheduler for all paths)
+4. **realizr#212 fix: +4.3% c=1 stream=false** (bulk-send eliminates channel overhead)
+5. AttentionScore: 44% of compute, occupancy-bound (not BW-bound)
+6. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap). FP8 prefill: 3.8% better.
+7. Scaling: **3,331 tok/s at c=32** (RTX 4090, 8.81x) / 1,776 at c=32 (Yoga, 13.4x)
 
 ---
 
@@ -105,13 +111,13 @@ realizr#190 false regression from GPU contention).
 
 ### Phase 1: Single-Request (c=1)
 
-| Metric | v14.7 (#211 fix) | v14 graph (c=16) | v11 graph | Candle | llama.cpp b7746 |
-|--------|-------------------|------------------|-----------|--------|-----------------|
-| Decode tok/s | **378.3** | 353.9 | 329.4 | 227.4 | **431.1** |
-| ITL P50 | 2.6ms | 2.8ms | 3.0ms | -- | 2.3ms |
-| µs/layer | 94.3 | 100.5 | 107 | -- | 82.8 |
-| GPU util | 98% | 98% | -- | -- | 91% |
-| Delta vs v11 | +14.8% | +7.4% | base | base | +2.2% |
+| Metric | v14.9 (#212, sf) | v14.9 (#212, st) | v14 (c=16) | v11 graph | Candle | llama.cpp |
+|--------|------------------|------------------|------------|-----------|--------|-----------|
+| Decode tok/s | **376.5** | **380.0** | 353.9 | 329.4 | 227.4 | **431.1** |
+| ITL P50 | 2.7ms | 2.5ms | 2.8ms | 3.0ms | -- | 2.3ms |
+| µs/layer | -- | -- | 100.5 | 107 | -- | 82.8 |
+| GPU util | 98% | 98% | 98% | -- | -- | 91% |
+| vs v11 | +14.3% | +15.4% | +7.4% | base | base | +2.2% |
 
 v14: chunk_size=16 (trueno#246). Eager benefits MORE
 (+16.1%) than graph (+7.4%) because eager has full
@@ -345,7 +351,9 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
-27 F-conditions. 25 tested (11 confirmed, 5 revised,
+| F-STREAM-01 | stream=false within 5% of true | **CONFIRMED** | Pre-fix: 5.3% gap (361 vs 380). Post-fix (#212): 1.0% gap (376 vs 380). |
+
+28 F-conditions. 26 tested (12 confirmed, 5 revised,
 3 falsified, 2 weakened, 2 fixed, 1 measured, 1 wired).
 2 proposed (F-GATE-01, F-DOCS-01).
 
@@ -399,8 +407,9 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | trueno#245 | Multi-warp flash decode A/B | **FALSIFIED** (occupancy problem) |
 | trueno#246 | chunk_size=16 tuning | **SHIPPED** (+7.4%/+45.8%) |
 | realizr#201 | Graph default sm_89+ | **SHIPPED** |
-| realizr#203 | Batched prefill teacher-forcing | **FILED** |
+| realizr#203 | Batched prefill teacher-forcing | **IMPLEMENTED** (FP8 PPL 3.8% better) |
 | realizr#211 | Non-stream batch scheduler | **FIXED** (671 agg at c=4, was 367.7) |
+| realizr#212 | stream=false channel overhead | **FIXED** (376 tok/s, +4.3% from 361) |
 
 ### Phase 15: Profiler + Kernel Sprint (ACTIVE)
 
@@ -742,3 +751,4 @@ validates under realistic traffic patterns.
 | 14.7.0 | 04-05 | **realizr#211 FIXED upstream:** Non-streaming path routed through batch scheduler. c=4 stream=false: 367.7→671.0 (+82%), c=8: 376→1,009.1 (+168%). F-PARITY-02 → FIXED. Contract FALSIFY-BATCH-006 added. c=1 baseline improved 357→380.9 tok/s. |
 | 14.7.1 | 04-05 | **Full RTX 4090 scaling sweep:** c={1,2,4,8,16,32} post-#211. c=32: 3,331.4 agg (8.81x). c=1 bootstrap CI: 378.3 [372.4, 382.4] CV 1.1%. 4090 vs Yoga comparison. c=2 dip (0.89x) from M=1 context switching. realizr#203 five-whys + batched PPL plan filed. |
 | 14.8.0 | 04-06 | **realizr#203 IMPLEMENTED:** FP8 prefill PPL (perplexity_gpu_batched). WikiText-2 251K tokens: FP8 41.31 vs DP4A 42.94 (3.8% improvement). Gap to llama.cpp 12.97 remains architectural (int8/FP8 accumulation vs FP32). Closed 5 upstream issues (#189 falsified, #191/#193 subsumed, #197 workaround, #208 fixed). |
+| 14.9.0 | 04-06 | **CORRECTION + realizr#212 FIXED:** v14.7's 378.3 was stream=true, not false. A/B: stream=true 380.0, stream=false 361.0 (5.3% gap from per-token mpsc overhead). Five-whys → realizr#212 filed + fixed: bulk-send after generation. Post-fix: stream=false 376.5 (+4.3%), stream=true 380.0. c=4 verified 683.6 agg. F-STREAM-01 added. |
