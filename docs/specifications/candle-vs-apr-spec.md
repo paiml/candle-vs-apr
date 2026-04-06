@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.9.0
+**Version:** 14.10.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -137,21 +137,21 @@ Candle has no server — cannot demonstrate c>1.
 
 ### Phase 2c: Scaling on RTX 4090
 
-**realizr c=N sweep (chunk=16, RTX 4090, post-#211 fix):**
+**realizr c=N sweep (chunk=16, RTX 4090, post-#212, stream=false):**
 
-| c | Agg tok/s | Per-req | ITL P50 | Scaling |
-|---|-----------|---------|---------|---------|
-| 1 | 378.3 | 378.3 | 2.6ms | 1.0x |
-| 2 | 337.1 | 170.3 | 5.9ms | 0.89x |
-| 4 | **677.3** | 169.3 | 5.9ms | **1.79x** |
-| 8 | **1,042.5** | 130.3 | 7.7ms | **2.75x** |
-| 16 | **1,993.0** | 124.6 | 8.0ms | **5.27x** |
-| 32 | **3,331.4** | 104.2 | 9.6ms | **8.81x** |
+| c | Agg tok/s | Per-req | Scaling |
+|---|-----------|---------|---------|
+| 1 | 367.0 | 367.0 | 1.0x |
+| 2 | 345.0 | 173.0 | 0.94x |
+| 4 | **634.1** | 159.2 | **1.73x** |
+| 8 | **954.4** | 119.4 | **2.60x** |
+| 16 | **1,771.5** | 110.5 | **4.83x** |
+| 32 | **3,219.9** | 101.0 | **8.77x** |
 
 c=2 dip: batch scheduler window=0ms, 2 requests serialize through
 M=1 decode with GPU context switching overhead. At c≥4, batch
-coalescing kicks in. c=32 at 3,331 tok/s = 8.81x scaling confirms
-continuous batching works on RTX 4090 post-fix.
+coalescing kicks in. c=32 at 3,220 tok/s = 8.77x scaling confirms
+continuous batching. (c=1 uses N=5 bootstrap CI value 367.0.)
 
 **Pre-fix (stream=false serialization bug, realizr#211):**
 
@@ -181,11 +181,11 @@ efficiency at M>1.
 
 **RTX 4090 vs Yoga (RTX 4060) scaling comparison:**
 
-| c | RTX 4090 (#211) | Yoga (v5) | 4090 scaling | Yoga scaling |
+| c | RTX 4090 (#212) | Yoga (v5) | 4090 scaling | Yoga scaling |
 |---|-----------------|-----------|--------------|--------------|
-| 1 | 378.3 | 132.6 | 1.0x | 1.0x |
-| 4 | 677.3 | 302.2 | 1.79x | 2.28x |
-| 32 | 3,331.4 | 1,776.5 | 8.81x | 13.4x |
+| 1 | 367.0 | 132.6 | 1.0x | 1.0x |
+| 4 | 634.1 | 302.2 | 1.73x | 2.28x |
+| 32 | 3,219.9 | 1,776.5 | 8.77x | 13.4x |
 
 Yoga scales better per-c (13.4x vs 8.81x at c=32) because its 24
 SMs saturate later than 128 SMs. Both confirm continuous batching.
@@ -784,3 +784,4 @@ validates under realistic traffic patterns.
 | 14.7.1 | 04-05 | **Full RTX 4090 scaling sweep:** c={1,2,4,8,16,32} post-#211. c=32: 3,331.4 agg (8.81x). c=1 bootstrap CI: 378.3 [372.4, 382.4] CV 1.1%. 4090 vs Yoga comparison. c=2 dip (0.89x) from M=1 context switching. realizr#203 five-whys + batched PPL plan filed. |
 | 14.8.0 | 04-06 | **realizr#203 IMPLEMENTED:** FP8 prefill PPL (perplexity_gpu_batched). WikiText-2 251K tokens: FP8 41.31 vs DP4A 42.94 (3.8% improvement). Gap to llama.cpp 12.97 remains architectural (int8/FP8 accumulation vs FP32). Closed 5 upstream issues (#189 falsified, #191/#193 subsumed, #197 workaround, #208 fixed). |
 | 14.9.0 | 04-06 | **CORRECTION + realizr#212 FIXED:** v14.7's 378.3 was stream=true, not false. A/B: stream=true 380.0, stream=false 361.0 (5.3% gap from per-token mpsc overhead). Five-whys → realizr#212 filed + fixed: bulk-send after generation. Post-fix: stream=false 376.5 (+4.3%), stream=true 380.0. c=4 verified 683.6 agg. F-STREAM-01 added. |
+| 14.10.0 | 04-06 | **Post-#212 scaling sweep:** c=1..32 fresh RTX 4090 measurements. c=32: 3,220 agg (8.77x). c=1 bootstrap 367 [365, 369]. realizr#213 SIGSEGV investigated — non-reproducible, closed. realizr#212 closed with evidence. Phase 2c table updated with verified post-#212 values. |
