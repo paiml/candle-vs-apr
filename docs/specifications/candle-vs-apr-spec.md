@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.11.1
+**Version:** 14.12.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -297,7 +297,7 @@ to close precision gap significantly.
 
 | Brick | % compute | Avg µs | Bottleneck |
 |-------|-----------|--------|------------|
-| **AttentionScore** | **44.3%** | 18.2 | **Occupancy** (L2 82%, 2.15%→3.09%) |
+| **AttentionScore** | **44.3%** | 18.2 | **Occupancy** (L2 82%, 2.15%→3.09%). Multi-warp 2W FALSIFIED (barrier O(n)) |
 | QkvProjection | 14.0% | 5.7 | Memory BW (L2 14%) |
 | RmsNorm | 7.5% | 1.5 | Memory BW |
 | OutputProjection | 7.2% | 2.9 | Memory BW |
@@ -364,9 +364,10 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
 | F-STREAM-01 | stream=false within 5% of true | **CONFIRMED** | Pre-fix: 5.3% gap (361 vs 380). Post-fix (#212): 1.0% gap (376 vs 380). |
+| F-MULTIWARPC-01 | 2-warp chunk >=5% faster | **FALSIFIED** | Short ctx +1.9% (noise), long ctx -1.7% (barrier overhead). 2× bar.sync per position × seq_len = O(n) overhead cancels occupancy gain. Correct but not faster. |
 
-28 F-conditions. 27 tested (12 confirmed, 6 revised,
-3 falsified, 2 weakened, 2 fixed, 1 measured, 1 wired).
+29 F-conditions. 28 tested (12 confirmed, 6 revised,
+4 falsified, 2 weakened, 2 fixed, 1 measured, 1 wired).
 1 proposed (F-DOCS-01).
 
 ---
@@ -799,4 +800,5 @@ validates under realistic traffic patterns.
 | 14.10.0 | 04-06 | **Post-#212 scaling sweep:** c=1..32 fresh RTX 4090 measurements. c=32: 3,220 agg (8.77x). c=1 bootstrap 367 [365, 369]. realizr#213 SIGSEGV investigated — non-reproducible, closed. realizr#212 closed with evidence. Phase 2c table updated with verified post-#212 values. |
 | 14.10.1 | 04-06 | **llama.cpp methodology finding:** `-ngl 28` = 310 tok/s (embedding on CPU), `-ngl 99` = 434.7 tok/s (all GPU). The 29% penalty was from CPU→GPU embedding transfer per token. Spec's 431 confirmed with `-ngl 99`. realizr has all layers on GPU natively. Showdown config updated. |
 | 14.11.0 | 04-06 | **Definitive head-to-head N=3:** llama.cpp 443.6 (1.95x Candle), realizr 369.9 (1.63x Candle). Gap: 0.834x (16.6%). llama.cpp improved from 431→444 (fresh rebuild + warmup). trueno#253 filed: multi-warp chunked flash decode for attention occupancy. realizr#203 closed. |
-| 14.11.1 | 04-06 | **trueno#253 prototype:** 2-warp flash decode kernel (Block 32×2, 8B shared mem) implemented. Compiles but crashes at runtime (CUDA_ERROR_ILLEGAL_ADDRESS). Shared memory addressing bug needs PTX debugging. 1-warp baseline verified: 375.1 tok/s. Kernel committed to trueno (284c0564). |
+| 14.11.1 | 04-06 | **trueno#253 prototype:** 2-warp flash decode kernel implemented. Crashed (CUDA_ERROR_ILLEGAL_ADDRESS) — shared memory used u64 ptrs instead of u32 offsets. |
+| 14.12.0 | 04-06 | **F-MULTIWARPC-01 FALSIFIED:** Fixed shared mem bug (u32 offsets), kernel runs correctly. A/B: short ctx +1.9% (noise), long ctx -1.7% (regression). Root cause: 2× bar.sync per chunk position = O(seq_len) synchronization overhead cancels occupancy gain. Both multi-warp approaches now falsified (P15-01 block-level, P16 warp-level). Remaining path: persistent kernel or FlashInfer TC (avoid cross-warp coordination). 29 F-conditions, 28 tested, 4 falsified. |
