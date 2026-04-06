@@ -351,15 +351,15 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-CONTRACT-01 | Contracts catch >=1 bug | **WIRED** | 6/6 invariants wired (realizr 1a05516). Awaiting 5 profiling sessions. |
 | F-TCATTN-01 | TC attn <=14µs | **FALSIFIED** (multi-warp) | PAR-070: 284 tok/s vs 329 baseline (-13.7%). 12 blocks on 128 SMs. |
 | F-NCU-01 | NCU finds root cause | **CONFIRMED** | Occupancy 2.15%, scheduler starved 96.6%. Attention grid too small for 128 SMs. |
-| F-GATE-01 | Falsification <20% | **PROPOSED** | Pre-opt bottleneck gate. MED risk. |
+| F-GATE-01 | Falsification <20% | **REVISED** | 1/4 falsified (25%). Gate correctly blocks impossible RSS but slightly above 20% threshold. Useful for dispatch/attention/memory checks. |
 | F-DOCS-01 | cgp adoption +2 users | **PROPOSED** | cgp CLAUDE.md. LOW risk. |
 | F-L2-01 | L2 changes priorities | **CONFIRMED** | Attention 82% L2 → occupancy-starved not BW-starved. Reversed priority. |
 
 | F-STREAM-01 | stream=false within 5% of true | **CONFIRMED** | Pre-fix: 5.3% gap (361 vs 380). Post-fix (#212): 1.0% gap (376 vs 380). |
 
-28 F-conditions. 26 tested (12 confirmed, 5 revised,
+28 F-conditions. 27 tested (12 confirmed, 6 revised,
 3 falsified, 2 weakened, 2 fixed, 1 measured, 1 wired).
-2 proposed (F-GATE-01, F-DOCS-01).
+1 proposed (F-DOCS-01).
 
 ---
 
