@@ -11,30 +11,61 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML) vs
 Same model, same hardware, same methodology.
 
 Both are pure Rust. Both load GGUF Q4_K_M.
-**Does the fused-kernel + APR v2 architecture outperform
+**Does the fused-kernel + CUDA graph architecture outperform
 Candle's general-purpose approach?**
+
+**Answer: Yes. Decisively. 1.63x faster.**
 
 ## Key Findings
 
-### Showdown v14.11 (RTX 4090, 2520 MHz, probador N=3)
+### Showdown v15 (RTX 4090, 2520 MHz, probador N=3)
 
-| Metric | Candle | realizr 0.8.6 | llama.cpp b7746 | Winner |
-|--------|--------|---------------|-----------------|--------|
-| Decode tok/s (c=1) | 227.4 | **369.9** | **443.6** | llama.cpp |
-| vs Candle | 1.00x | **1.63x** | **1.95x** | llama.cpp |
-| Decode tok/s (c=4) | N/A | **634.1** | -- | realizr |
-| Decode tok/s (c=32) | N/A | **3,219.9** (8.77x) | -- | realizr |
-| WikiText-2 PPL | -- | 41.3 (FP8) | **12.97** (FP32) | llama.cpp |
-| GPU util | -- | **98%** | 91% | realizr |
-| Continuous batching | No | **Yes** (Orca-style) | Yes | -- |
+| Engine | Decode tok/s | vs Candle | Notes |
+|--------|-------------|-----------|-------|
+| llama.cpp b7746 | **443.6** | **1.95x** | `-ngl 99`, Flash Attention |
+| **realizr 0.8.6** | **369.9** | **1.63x** | CUDA graph, Flash Decoding |
+| Candle | 227.4 | 1.00x | CLI native, per-op dispatch |
 
-> **Rankings at c=1:** llama.cpp (1.20x realizr) > realizr (1.63x Candle) > Candle.
-> Gap analysis (Phase 16): attention occupancy 51%, GEMV efficiency 21%.
-> llama.cpp requires `-ngl 99` (all layers GPU). `-ngl 28` = 310 tok/s (29% penalty).
-> realizr#212 fix: stream=false bulk-send (+4.3%). trueno#253 filed for multi-warp attention.
+### Why realizr Wins
+
+| realizr advantage | Candle limitation | Impact |
+|---|---|---|
+| CUDA graph (647 kernels, 1 launch) | Per-op dispatch (~640 launches) | **+26%** |
+| Flash Decoding (chunked KV) | Standard SDPA (sequential) | **+15%** long ctx |
+| Fused DP4A GEMV (4-bit native) | Separate dequant + matmul | **~10%** fewer mem passes |
+| Continuous batching (Orca-style) | CLI only, no server | **3,220 tok/s** at c=32 |
+| GPU-resident KV + FP8 cache | Per-call allocation | Lower TTFT |
+
+Candle cannot close this gap without: (a) CUDA graph support
+(requires unsafe FFI redesign), (b) fused quantized GEMV kernels
+(requires custom PTX), (c) a server architecture for batching.
+These are fundamental design differences, not tuning parameters.
+
+### Scaling (realizr only -- Candle has no server)
+
+| c | Agg tok/s | Scaling | Note |
+|---|-----------|---------|------|
+| 1 | 367.0 | 1.0x | bootstrap N=5 CI [365, 369] |
+| 4 | 634.1 | 1.73x | continuous batching |
+| 8 | 954.4 | 2.60x | |
+| 16 | 1,771.5 | 4.83x | |
+| 32 | **3,219.9** | **8.77x** | Orca-style iteration scheduling |
+
+### Gap to llama.cpp (16.6%)
+
+Phase 16 five-whys decomposition:
+
+| Component | % of gap | Root cause | Status |
+|-----------|---------|------------|--------|
+| Attention | **51%** | Flash Decoding occupancy (3% vs FA2) | 3 multi-warp approaches **FALSIFIED** |
+| GEMV | **21%** | DP4A Q4K vs cuBLAS | trueno#239 (Marlin), trueno#175 (half-warp) |
+| Other | 28% | RoPE, RmsNorm, residuals | Near parity |
+
+**Next steps:** FlashInfer TC attention (P1), Marlin GEMV pre-packing (P2).
+See [chain of thought in spec](docs/specifications/candle-vs-apr-spec.md).
 
 Full analysis: [performance.md](performance.md).
-Falsification spec (28 F-conditions, 27 tested):
+Falsification spec (29 F-conditions, 28 tested):
 [candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md).
 
 [qcd]: https://github.com/paiml/qwen-coder-deploy
@@ -43,8 +74,8 @@ Falsification spec (28 F-conditions, 27 tested):
 
 | Runtime | Architecture | Server | Formats |
 |---------|-------------|--------|---------|
-| [Candle][candle] | QMatMul dequant, general-purpose | CLI only | GGUF, SafeTensors |
-| [realizr][realizr] | Fused Q4K/Q5K/Q6K DP4A, CUDA graph dispatch | OpenAI API | GGUF, SafeT, APR v2 |
+| [Candle][candle] | QMatMul dequant, per-op dispatch | CLI only | GGUF, SafeTensors |
+| [realizr][realizr] | Fused DP4A GEMV, CUDA graph (647 nodes) | OpenAI API + SSE | GGUF, SafeT, APR v2 |
 
 [candle]: https://github.com/huggingface/candle
 [realizr]: https://github.com/paiml/realizar
@@ -57,57 +88,25 @@ APR v2 prepared via `apr import`
 ([aprender](https://github.com/paiml/aprender)).
 Default produces Q4K (raw passthrough, `--preserve-q4k` deprecated).
 
-## Benchmark Results
+## Perplexity
 
-### Phase 1: Single-Request Decode (c=1, 30s, warmup=5s)
+| Path | PPL | Method |
+|------|-----|--------|
+| realizr CPU FP32 | **12.72** | Q4K dequant + FP32 matmul |
+| llama.cpp GPU | **12.97** | cuBLAS FP32 dequant |
+| realizr GPU FP8 | 41.31 | Batched prefill cuBLASLt |
+| realizr GPU DP4A | 42.94 | Sequential int8 accumulation |
 
-> v1 numbers (22.7 tok/s) are **superseded** — CUDA graph capture
-> poisoned the context. v14.6 uses CUDA graph dispatch (647 kernels →
-> 1 launch) + chunk_size=16 attention tuning.
-
-| Metric | Candle (decode) | realizr (v14.7 #211 fix) | Status |
-|--------|-----------------|--------------------------|--------|
-| Decode tok/s | 227.4 | **378.3** [372.4, 382.4] | realizr **1.66x** |
-| ITL P50 | -- | **2.6ms** | probador |
-| µs/layer | -- | 94.3 | 28 layers |
-| GPU util | -- | 98% | `--gpu-telemetry` |
-| Peak RSS (MB) | **449** | 3,082 | Candle wins |
-
-Candle 227.4 is self-reported decode-only (no HTTP).
-realizr 378.3 is full wall-clock via `probador llm load`,
-bootstrap N=5 runs × 30s, CV=1.1%. Post realizr#211 batch scheduler fix.
-
-### Phase 2: realizr Scaling (Candle N/A -- no server)
-
-| c | v1 (4090, flat) | v5 (Yoga, batch) | Scaling |
-|---|-----------------|------------------|---------|
-| 1 | 117.0 | **132.6** | baseline |
-| 4 | 116.7 | **302.2** | 2.3x |
-| 8 | 126.3 | **519.7** | 3.9x |
-| 16 | 112.5 | **980.2** | 7.4x |
-| 32 | 145.7 | **1,776.5** | 13.4x |
-
-v1 was flat (SINGLE-REQUEST mode, no batching).
-v5 Yoga confirms batch scheduling: **1,776.5 tok/s at c=32**.
-
-### Phase 3: Format Comparison
-
-| Format | Runtime | v14 (4090) | v5 (Yoga) | Notes |
-|--------|---------|------------|-----------|-------|
-| GGUF Q4_K_M | Candle | 227.4 | -- | CLI decode-only |
-| GGUF Q4_K_M | realizr | **378.3** | **132.5** | graph + chunk=16 + #211 |
-| FP16 APR | realizr | -- | **151.6** | #180 FIXED (7.15x) |
-| APR v2 Q4K | realizr | -- | **132.3** | parity with GGUF |
-
-v5 Yoga: all 3 formats GPU, within 14.6%. Old v3 SafeT/APR
-gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16 dtype).
+CPU FP32 matches llama.cpp (2% delta). GPU DP4A is 3.2x worse --
+the gap is entirely from int8 accumulation precision, not
+dequantization. FP8 prefill narrows it 3.8%.
 
 ## Hardware
 
 | Platform | GPU | Role |
 |----------|-----|------|
-| Lambda Vector | RTX 4090, 2520 MHz locked | Primary (phases 1-7) |
-| Yoga | RTX 4060 Laptop, 1900 MHz | Validated (scaling, format, tool parity) |
+| Lambda Vector | RTX 4090, 2520 MHz locked | Primary |
+| Yoga | RTX 4060 Laptop, 1900 MHz | Scaling validation |
 
 ## Methodology
 
@@ -116,84 +115,81 @@ gaps were bugs (#169 F32 SGEMM, #170 dequant, #180 F16 dtype).
 `--concurrency 1 --duration 30s --warmup 5s --max-tokens 256`
 `--stream false --num-layers 28 --gpu-telemetry`.
 
-**v1 (superseded):** Ad-hoc curl scripts, 10 iterations.
-Inflated numbers (142.8 tok/s) from different realizr build
-via forjar. Results in `results/` are v1; probador is authoritative.
+**CRITICAL:** llama.cpp requires `-ngl 99` (all layers GPU).
+`-ngl 28` = 310 tok/s (29% penalty from CPU embedding transfer).
+realizr loads all weights to GPU natively.
 
 **Common controls:**
 - GPU clocks locked at 2520 MHz (eliminates thermal variance)
 - Temperature 0 (greedy, deterministic)
-- `apr check` pre-flight, `apr profile`/`apr trace` per fix
+- `nvidia-smi` pre-flight (GPU isolation, realizr#190 lesson)
+- Binary fingerprinting (PATH ordering, 0.4.11 vs 0.4.12 lesson)
 - Upstream bugs filed via `gh` +
   [provable-contracts](https://github.com/paiml/provable-contracts)
 
 ## How to Replicate
 
-### Prerequisites
-
-- Linux + NVIDIA GPU (CUDA 12.6+)
-- [probador](https://github.com/paiml/probar) `llm` subcommand
-- [apr](https://github.com/paiml/aprender) CLI
-- [forjar](https://github.com/paiml/forjar) for isolated builds
-- Candle at `../candle`, realizr at `../realizar`
-- Model: `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf`
-
-### Quick Run
-
 ```bash
 # Start realizr
-apr serve run /path/to/model.gguf --gpu --port 8080
+realizr serve --model /path/to/model.gguf --gpu --port 8081 \
+  --openai-api --context-length 4096
 
-# Benchmark (v2 methodology)
-probador llm load --url http://127.0.0.1:8080 \
-  --model qwen2.5-coder-1.5b-instruct \
+# Benchmark
+probador llm load --url http://127.0.0.1:8081 \
   --concurrency 1 --duration 30s --warmup 5s \
   --max-tokens 256 --stream false --num-layers 28 \
   --gpu-telemetry --expected-clock-mhz 2520 \
-  --runtime-name realizr-gguf \
-  -o results/probador-realizr-c1.json
+  --runtime-name realizr -o results/benchmark.json
 
 # Candle (CLI only)
 quantized-qwen2-instruct --model model.gguf \
   --prompt "Write fibonacci" \
   --sample-len 256 --temperature 0
+
+# llama.cpp
+llama-server --model model.gguf --port 8082 \
+  -ngl 99 --parallel 1 --flash-attn on --ctx-size 4096
 ```
 
 ## Repository Structure
 
 | Path | Purpose |
 |------|---------|
-| `forjar-candle.yaml` | Candle build (CUDA 12.6, lazy-curand) |
-| `forjar-realizr.yaml` | realizr build + serve deployment |
-| `forjar-teardown.yaml` | Clean shutdown |
-| `scripts/bench-candle.sh` | Candle CLI benchmark harness |
-| `scripts/bench-realizr.sh` | realizr API benchmark harness |
-| `scripts/bench-scaling.sh` | Concurrent scaling benchmark |
-| `scripts/bench-compare.sh` | Generate comparison tables |
-| `scripts/bootstrap-ci.sh` | Bootstrap CIs + Mann-Whitney U (Phase 13) |
-| `scripts/measure-vram.sh` | VRAM polling during probador runs |
-| `scripts/run-showdown.sh` | 4-way framework showdown runner |
-| `configs/showdown.yaml` | Showdown framework definitions |
+| `scripts/bootstrap-ci.sh` | Bootstrap CIs + Mann-Whitney U |
+| `scripts/bottleneck-gate.sh` | Pre-experiment roofline validation |
+| `scripts/run-showdown.sh` | Multi-framework showdown runner |
+| `configs/showdown.yaml` | Framework definitions (realizr, llama.cpp, vLLM, ollama) |
 | `results/` | JSON results (git-tracked) |
-| `performance.md` | Full analysis and findings |
 | `docs/specifications/` | Popperian falsification spec |
 
 ## Falsification Register
 
 Source of truth:
-[candle-vs-apr-spec.md §7](docs/specifications/candle-vs-apr-spec.md).
+[candle-vs-apr-spec.md &sect;7](docs/specifications/candle-vs-apr-spec.md).
 
-**Current score (v14.7.0, 27 F-conditions):**
-25 tested (11 confirmed, 5 revised, 3 falsified, 2 weakened, 2 fixed,
-1 measured, 1 wired). 2 proposed.
+**Score (v15.0.0, 29 F-conditions):**
+28 tested (12 confirmed, 6 revised, 4 falsified, 2 weakened, 2 fixed,
+1 measured, 1 wired). 1 proposed.
 
 **Headline results:**
-- F-1.5X-01 **CONFIRMED**: realizr 378.3 tok/s = 1.66x Candle (#211 fix)
-- F-SCALE-01 **CONFIRMED**: c=32 @ 1,776 tok/s on Yoga (13.4x scaling)
-- F-PARITY-02 **FIXED**: c=4 non-streaming 1.03x → 1.76x (realizr#211)
-- F-PARITY-04 **REVISED**: realizr 0.88x llama.cpp at c=1 (was 0.82x)
-- F-QUALITY-01 **FALSIFIED**: DP4A PPL 24.2 vs FP32 12.97 (int8 precision)
-- F-RSS-02 **FALSIFIED**: min 2,930 MB RSS (server + weights irreducible)
-- F-NCU-01 **CONFIRMED**: 2.15% occupancy → chunk=16 fix (trueno#246)
+- F-1.5X-01 **CONFIRMED**: realizr 369.9 tok/s = 1.63x Candle
+- F-SCALE-01 **CONFIRMED**: c=32 at 3,220 tok/s on RTX 4090 (8.77x)
+- F-PARITY-02 **FIXED**: c=4 scaling 1.03x &rarr; 1.73x (realizr#211)
+- F-STREAM-01 **CONFIRMED**: stream=false within 1% of true (realizr#212)
+- F-MULTIWARPC-01 **FALSIFIED**: 2-warp chunk kernel -1.7%/+1.9% (barrier O(n))
+- F-TCATTN-01 **FALSIFIED**: multi-warp block-level -13.7% (12 blocks on 128 SMs)
+- F-QUALITY-01 **FALSIFIED**: DP4A PPL 42.94 vs FP32 12.97 (int8 precision)
+- F-NCU-01 **CONFIRMED**: 2.15% occupancy root cause identified via NCU
+
+### Upstream Fixes from This Project
+
+| Repo | Issue | Fix | Impact |
+|------|-------|-----|--------|
+| realizr | #198 | Graph capture missing SwiGLU recording | +26% (262&rarr;329 tok/s) |
+| realizr | #211 | Non-streaming batch scheduler routing | +82% c=4 |
+| realizr | #212 | stream=false bulk-send after generation | +4.3% c=1 |
+| realizr | #203 | FP8 batched prefill PPL | 3.8% PPL improvement |
+| trueno | #246 | chunk_size 32&rarr;16 | +7.4% short / +45% long ctx |
+| trueno | #253 | 2-warp flash decode (falsified) | Correct but not faster |
 
 See spec for full register and evidence.
