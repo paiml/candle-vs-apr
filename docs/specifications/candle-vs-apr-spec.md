@@ -726,16 +726,27 @@ kernels may be reading a different copy.
    All M>1 graphs need their own flash decode seq_lens buffer
    sized for M.
 
-**Status (v16.5):** Manual graph builds (916f21dd), captures
-647+ kernels, replays at 11,917 agg tok/s. Buffer fix applied
-(seq_lens, k_ptrs, v_ptrs sized for max_batch=32). Slots 1-3
-still produce garbage. Root cause refined: `batched_kv_lengths`
-(CPU-side Vec) tracks KV cache positions per slot, but during
-graph replay, the batched attention kernel reads these positions
-from a GPU buffer that was populated during CAPTURE, not during
-REPLAY. Fix: move `batched_kv_lengths` to a GPU buffer that gets
-updated via `copy_from_host` before each graph launch (same
-pattern as input/position/seq_len buffers).
+**Status (v16.6):** Three upstream commits (916f21dd, a7cc7299).
+Sequential requests CORRECT under BATCHED_MANUAL_GRAPH=1.
+Concurrent M=4 still fails — the batched attention kernel at
+`head_dim.rs:219-228` uploads k_ptrs/v_ptrs/seq_lens via
+`copy_from_host_async` every step during eager. The manual
+graph records only kernel launches (cuLaunchKernel), NOT
+H2D copies. So during replay, the attention kernel reads
+stale capture-time values from `batched_k_ptrs`, `batched_v_ptrs`,
+and `batched_seq_lens_gpu`. Added pre-replay upload of
+`batched_seq_lens_gpu` and `workspace.positions_buf`, but
+the k_ptrs/v_ptrs per-layer and the batched attention's own
+internal buffers also need updating.
+
+**Remaining fix (estimated ~30 LOC):** Before graph replay,
+upload per-layer `batched_k_ptrs[layer]` and `batched_v_ptrs[layer]`
+for all 28 layers. These point to the batched KV cache base
+per sequence slot, offset by stride × slot_idx. The pointers
+are STABLE (allocated once), but the seq_lens determine how
+far to read — so the real fix is ensuring `batched_seq_lens_gpu`
+(now padded and uploaded) is the SAME buffer pointer that was
+recorded in the graph. Need to verify pointer identity.
 
 ### Phase 18: 1.5x vLLM Target (ACTIVE)
 
