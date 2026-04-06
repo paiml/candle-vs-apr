@@ -411,6 +411,38 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | realizr#211 | Non-stream batch scheduler | **FIXED** (671 agg at c=4, was 367.7) |
 | realizr#212 | stream=false channel overhead | **FIXED** (376 tok/s, +4.3% from 361) |
 
+### Phase 16: Five-Whys Gap Analysis (v14.9)
+
+**Why is realizr 13% slower than llama.cpp (376 vs 431 tok/s)?**
+
+1. **Why 13% gap?** Two kernel families: AttentionScore (44% of
+   compute, 18.2µs/layer occupancy-bound) and GEMV (35%, BW-bound).
+   Per-layer: realizr 95µs vs llama.cpp 82.9µs = 12.1µs/layer gap.
+2. **Why attention slow?** Flash Decoding grid: 216 blocks (chunk=16)
+   on 128 SMs = 3.09% occupancy. FA2 (llama.cpp) uses different
+   block decomposition with higher occupancy.
+3. **Why not increase blocks?** Flash Decoding caps at heads×chunks.
+   Smaller chunks give diminishing returns (chunk=8 only +6.6% vs
+   +7.4% for chunk=16, non-monotonic at chunk=12).
+4. **Why not use FA2?** Multi-warp FALSIFIED (P15-01, -13.7%).
+   FlashInfer TC is TODO (HIGH effort, 4-6 wk).
+5. **Why not fix GEMV?** Custom DP4A Q4K hand-tuned. Half-warp
+   (trueno#175) and Marlin pre-packing (trueno#239) are filed but
+   HIGH effort.
+
+**Decomposition (per-decode, c=1):**
+
+| Component | realizr µs | est. llama.cpp µs | Gap µs | Fix |
+|-----------|-----------|-------------------|--------|-----|
+| Attention (28L) | 510 | ~336 | 174 | FlashInfer TC |
+| GEMV (28L) | 420 | ~350 | 70 | Marlin/half-warp |
+| Other (RoPE etc) | 420 | ~420 | 0 | — |
+| Serving overhead | 10 | 10 | 0 | #212 fixed |
+| **Total** | **2660** | **2320** | **340** | |
+
+Attention accounts for **51%** of the gap, GEMV for **21%**.
+The remaining 28% is distributed across small ops.
+
 ### Phase 15: Profiler + Kernel Sprint (ACTIVE)
 
 Five proposals from cross-repo analysis (qwen-coder-deploy
