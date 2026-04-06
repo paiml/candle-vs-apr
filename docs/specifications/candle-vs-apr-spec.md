@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.10.1
+**Version:** 14.11.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -20,16 +20,17 @@ Head-to-head benchmark: **Candle** (HuggingFace Rust ML)
 vs **realizr** (Sovereign AI Stack) on same model, same
 GPU, same methodology. Pure Rust-vs-Rust comparison.
 
-**v14.9 Showdown (RTX 4090, 2520 MHz, realizr 0.8.6, probador N=5):**
+**v14.11 Showdown (RTX 4090, 2520 MHz, realizr 0.8.6+#212, probador N=3):**
 
-| Engine | Mode | Decode tok/s | 95% CI | vs Candle | ITL P50 |
-|--------|------|-------------|--------|-----------|---------|
-| llama.cpp b7746 | stream=false | **431.1** | [429.5, 432.2] | 1.90x | 2.3ms |
-| realizr (#212 fix) | stream=true | **380.0** | [375.4, 384.6] | **1.67x** | 2.5ms |
-| realizr (#212 fix) | stream=false | **376.5** | [365.4, 369.4] | **1.66x** | 2.7ms |
-| realizr (pre-#212) | stream=false | 361.0 | [357.2, 364.4] | 1.59x | 2.8ms |
-| realizr (chunk=32) | stream=false | 329.4 | -- | 1.45x | 3.0ms |
-| Candle | CLI native | 227.4 | -- | 1.00x | -- |
+| Engine | Mode | Decode tok/s | vs Candle | Notes |
+|--------|------|-------------|-----------|-------|
+| llama.cpp b7746 | -ngl 99, FA on | **443.6** | **1.95x** | [442, 444, 446] |
+| realizr 0.8.6 | stream=true | **369.9** | **1.63x** | [361, 370, 379] |
+| realizr 0.8.6 | stream=false | **367.0** | **1.61x** | N=5 CI [365, 369] |
+| Candle | CLI native | 227.4 | 1.00x | — |
+
+Gap to llama.cpp: **0.834x** (16.6%). Attention kernel occupancy
+(51% of gap) + GEMV efficiency (21%) per Phase 16 decomposition.
 
 **CORRECTION (v14.9):** v14.7's 378.3 tok/s was measured with
 stream=true, not stream=false as recorded. A/B testing (realizr#212)
@@ -789,3 +790,4 @@ validates under realistic traffic patterns.
 | 14.9.0 | 04-06 | **CORRECTION + realizr#212 FIXED:** v14.7's 378.3 was stream=true, not false. A/B: stream=true 380.0, stream=false 361.0 (5.3% gap from per-token mpsc overhead). Five-whys → realizr#212 filed + fixed: bulk-send after generation. Post-fix: stream=false 376.5 (+4.3%), stream=true 380.0. c=4 verified 683.6 agg. F-STREAM-01 added. |
 | 14.10.0 | 04-06 | **Post-#212 scaling sweep:** c=1..32 fresh RTX 4090 measurements. c=32: 3,220 agg (8.77x). c=1 bootstrap 367 [365, 369]. realizr#213 SIGSEGV investigated — non-reproducible, closed. realizr#212 closed with evidence. Phase 2c table updated with verified post-#212 values. |
 | 14.10.1 | 04-06 | **llama.cpp methodology finding:** `-ngl 28` = 310 tok/s (embedding on CPU), `-ngl 99` = 434.7 tok/s (all GPU). The 29% penalty was from CPU→GPU embedding transfer per token. Spec's 431 confirmed with `-ngl 99`. realizr has all layers on GPU natively. Showdown config updated. |
+| 14.11.0 | 04-06 | **Definitive head-to-head N=3:** llama.cpp 443.6 (1.95x Candle), realizr 369.9 (1.63x Candle). Gap: 0.834x (16.6%). llama.cpp improved from 431→444 (fresh rebuild + warmup). trueno#253 filed: multi-warp chunked flash decode for attention occupancy. realizr#203 closed. |
