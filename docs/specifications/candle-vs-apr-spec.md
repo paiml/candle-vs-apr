@@ -739,14 +739,23 @@ and `batched_seq_lens_gpu`. Added pre-replay upload of
 the k_ptrs/v_ptrs per-layer and the batched attention's own
 internal buffers also need updating.
 
-**Remaining fix (estimated ~30 LOC):** Before graph replay,
-upload per-layer `batched_k_ptrs[layer]` and `batched_v_ptrs[layer]`
-for all 28 layers. These point to the batched KV cache base
-per sequence slot, offset by stride × slot_idx. The pointers
-are STABLE (allocated once), but the seq_lens determine how
-far to read — so the real fix is ensuring `batched_seq_lens_gpu`
-(now padded and uploaded) is the SAME buffer pointer that was
-recorded in the graph. Need to verify pointer identity.
+**Progress:** Buffer uploads (seq_lens, positions) added before
+replay. Pointer identity verified: `workspace.positions_buf` and
+`batched_seq_lens_gpu` are the SAME pointers the graph reads.
+k_ptrs/v_ptrs are STABLE (cache base per slot, don't change).
+But graph replay **hangs** on concurrent M=4 requests. Root
+cause: the graph was captured on `self.stream` during an eager
+pass. Graph replay via `cuGraphLaunch(stream)` replays all
+kernels on the same stream. But the batch scheduler thread
+holds the model write lock during replay, and the graph's
+internal kernel ordering may require resources that the
+scheduler's lock prevents from releasing.
+
+**Next investigation:** Run graph replay from a dedicated
+stream (not self.stream). Or: skip graph for first few batched
+steps until the stream is quiescent. The M=1 graph doesn't
+hang because it runs in the non-batched single-request path
+which has simpler stream semantics.
 
 ### Phase 18: 1.5x vLLM Target (ACTIVE)
 
