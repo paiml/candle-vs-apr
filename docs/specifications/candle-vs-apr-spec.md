@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 15.0.0
+**Version:** 15.1.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -733,6 +733,101 @@ Consistent with v11 baseline (329.4). No regression.
 
 ---
 
+## 8b. Cross-Project Assimilation (qwen-coder-deploy v6.34.0)
+
+qwen-coder-deploy (qcd) is the deployment harness for realizr
+across 4 hardware targets. 414 PMAT work items, same methodology.
+Its findings validate and extend candle-vs-apr results.
+
+### Hardware Matrix (realizr 1.5B Q4K, all decode tok/s)
+
+| Hardware | c=1 | c=4 | c=32 | Graph | Notes |
+|----------|-----|-----|------|-------|-------|
+| **RTX 4090** (candle-vs-apr) | **369.9** | **634** | **3,220** | Yes (647 nodes) | PRIMARY. chunk=16. |
+| **RTX 4060L** (qcd PMAT-413) | 136 | 351 | **1,895** | No (driver 590 poison) | Yoga. +17% from PMAT-370. |
+| **GB10 Blackwell** (qcd PMAT-411) | 101 | 342 | **1,677** | No | sm_121. FP8+B32 iter sched. |
+| **Jetson Orin** (qcd) | 40.8 | -- | -- | No | sm_87. **13% faster** than llama.cpp. |
+
+**Key insight:** CUDA graph provides **+26%** on RTX 4090 (262→329)
+but is **disabled by default** on Yoga/GB10 (driver poison PMAT-374).
+The 4090's 369.9 tok/s advantage is partly from graph dispatch
+that other targets cannot use.
+
+### vLLM Gap (qcd PMAT-370, Yoga)
+
+| c | realizr | vLLM | Ratio | Root cause |
+|---|---------|------|-------|------------|
+| 1 | 136 | 154 | 0.88x | Per-op dispatch overhead |
+| 4 | 351 | 598 | 0.59x | ~400 kernel launches × 12µs CPU |
+| 16 | 1,072 | 2,037 | 0.53x | CPU dispatch scales with batch |
+| 32 | 1,895 | 2,998 | 0.63x | Iteration scheduler helps |
+
+vLLM advantage: PagedAttention + torch.compile kernel fusion.
+realizr advantage: no Python GIL, lower TTFT at c=1, Rust safety.
+Gap narrows at c=32 (0.63x) as iteration scheduler amortizes
+dispatch overhead.
+
+### Falsified Approaches (qcd confirms candle-vs-apr findings)
+
+| Approach | qcd Result | candle-vs-apr Result | Consensus |
+|----------|-----------|---------------------|-----------|
+| Kernel fusion (M=1) | 16 approaches falsified | 16 falsified (Phase 12) | **Confirmed: 2-kernel Q8+DP4A is optimal** |
+| Multi-warp attention | Not tested | 2 approaches falsified (P15-01, P16) | **3 total falsifications** |
+| CUDA graph at c≥4 | -32% batched graph | Graph OK at c=1 only | **Graph is c=1 optimization only** |
+| FP32 Q4K GEMV | -66.5% at c=4 | Not tested | **DP4A dominates at M≥1** |
+| WMMA W4A16 | 1.78x slower than DP4A | Not tested | **Tensor cores lose at M<5** |
+| Inline Q8 DP4A | -69% (register pressure) | Not tested | **Separate Q8→DP4A wins** |
+
+### Confirmed Findings (cross-validated)
+
+1. **DP4A at 92% theoretical ceiling** (qcd PMAT-110: 357 vs 386 tok/s).
+   candle-vs-apr confirms: GEMV is only 21% of the llama.cpp gap.
+   The kernels themselves are near-optimal; the bottleneck is
+   attention occupancy.
+
+2. **BrickProfiler fidelity** (qcd PMAT-3031): Deferred sync
+   measures CPU launch time (26µs), not GPU execution (89µs).
+   3.4x error on QkvProjection. candle-vs-apr P15-06 wired 6
+   contract invariants to catch this class of bug.
+
+3. **CPU dispatch is the c>1 bottleneck** (qcd PMAT-286): 82.4%
+   of step time blocked in cuStreamSync. ~400 cuLaunchKernel
+   calls × 12µs = 5ms overhead per batch step. candle-vs-apr
+   confirms: CUDA graph eliminates this at c=1 (647→1 launch),
+   but graph doesn't help at c>1 (different prompts need
+   different graphs).
+
+4. **Scaling validates Orca** (both projects): Yoga 13.4x at c=32
+   (candle-vs-apr v5), RTX 4090 8.77x at c=32 (candle-vs-apr
+   post-#212), Yoga 14.3x at c=32 (qcd PMAT-413). Smaller GPUs
+   scale better per-c because SMs saturate later.
+
+5. **FP8 cuBLASLt routing** (qcd): Q6K layers routed to FP8
+   cuBLASLt at M≥5 gives -13% ITL improvement. candle-vs-apr
+   confirms FP8 at M=1 doesn't help (cuBLASLt overhead > DP4A
+   at M=1). The threshold is architectural.
+
+### Blackwell Implications
+
+GB10 (sm_121) runs realizr at 1,677 tok/s c=32 for 1.5B and
+472 tok/s c=32 for 7B. HumanEval 90.85% (32B), 84.76% (7B).
+HGEMM prefill FALSIFIED on sm_121 (qcd PMAT-409). Key lesson:
+Blackwell's different memory hierarchy means RTX 4090 kernel
+tuning (chunk_size, graph strategy) doesn't transfer directly.
+Each target needs its own profiling pass.
+
+### Assimilation Summary
+
+candle-vs-apr answers: **realizr vs Candle** (1.63x, decisive).
+qcd answers: **realizr vs vLLM/llama.cpp/ollama across hardware**.
+Combined: realizr is faster than Candle on all targets, competitive
+with llama.cpp (0.88-1.13x depending on hardware), and 0.53-0.88x
+vLLM at batched serving. The gap to vLLM is CPU dispatch overhead
+(fixable with per-batch graphs or persistent kernels), not kernel
+quality (DP4A at 92% ceiling).
+
+---
+
 ## 9. Research Basis (arXiv-grounded)
 
 ### Memory-bound M=1 Decode
@@ -890,3 +985,4 @@ validates under realistic traffic patterns.
 | 14.11.1 | 04-06 | **trueno#253 prototype:** 2-warp flash decode kernel implemented. Crashed (CUDA_ERROR_ILLEGAL_ADDRESS) — shared memory used u64 ptrs instead of u32 offsets. |
 | 14.12.0 | 04-06 | **F-MULTIWARPC-01 FALSIFIED:** Fixed shared mem bug (u32 offsets), kernel runs correctly. A/B: short ctx +1.9% (noise), long ctx -1.7% (regression). Root cause: 2× bar.sync per chunk position = O(seq_len) synchronization overhead cancels occupancy gain. Both multi-warp approaches now falsified (P15-01 block-level, P16 warp-level). Remaining path: persistent kernel or FlashInfer TC (avoid cross-warp coordination). 29 F-conditions, 28 tested, 4 falsified. |
 | 15.0.0 | 04-06 | **Chain of thought: Candle parity ACHIEVED (1.63x).** realizr's advantage is architectural and irreversible (CUDA graph, Flash Decoding, fused DP4A, continuous batching). Candle cannot close the gap without fundamental redesign. Remaining work is llama.cpp gap (16.6%): FlashInfer TC (P1, +8%), Marlin GEMV (P2, +3%). Priority matrix and decision tree added. Phase 16 complete. 3 multi-warp approaches falsified. |
+| 15.1.0 | 04-06 | **Cross-project assimilation (qcd v6.34.0).** Hardware matrix: 4090 (369.9), Yoga (136), GB10 (101), Jetson (40.8). vLLM gap: 0.53-0.88x (CPU dispatch bottleneck). 6 falsified approaches cross-validated. 5 confirmed findings: DP4A 92% ceiling, BrickProfiler 3.4x fidelity, CPU dispatch 5ms/step, Orca scaling, FP8 M≥5 threshold. Blackwell implications. Combined verdict: realizr > Candle everywhere, competitive with llama.cpp, 0.53-0.88x vLLM (dispatch-bound, not kernel-bound). |

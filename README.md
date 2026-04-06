@@ -64,6 +64,26 @@ Phase 16 five-whys decomposition:
 **Next steps:** FlashInfer TC attention (P1), Marlin GEMV pre-packing (P2).
 See [chain of thought in spec](docs/specifications/candle-vs-apr-spec.md).
 
+### Cross-Project: realizr Across Hardware ([qcd v6.34.0][qcd])
+
+| Hardware | c=1 | c=32 | vs llama.cpp | Graph |
+|----------|-----|------|-------------|-------|
+| **RTX 4090** (this repo) | **369.9** | **3,220** | 0.83x | Yes (647 nodes) |
+| RTX 4060L Yoga ([qcd][qcd]) | 136 | 1,895 | 0.92x | No (driver poison) |
+| Blackwell GB10 ([qcd][qcd]) | 101 | 1,677 | — | No |
+| Jetson Orin ([qcd][qcd]) | 40.8 | — | **1.13x** | No |
+
+realizr beats Candle on **every target**. Competitive with
+llama.cpp (0.83-1.13x). Gap to vLLM (0.53-0.88x) is CPU dispatch
+overhead, not kernel quality — DP4A runs at 92% of theoretical
+ceiling ([qcd PMAT-110][qcd]).
+
+**Key cross-validated findings:**
+- 16 kernel fusion approaches falsified in both projects
+- BrickProfiler 3.4x fidelity bug caught by contract enforcement
+- CPU dispatch ~5ms/step is the c>1 bottleneck (graph doesn't help)
+- Orca scaling confirmed: 8.77x (4090), 13.4x (Yoga), 14.3x (qcd)
+
 Full analysis: [performance.md](performance.md).
 Falsification spec (29 F-conditions, 28 tested):
 [candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md).
