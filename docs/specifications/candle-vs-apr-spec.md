@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.7.1
+**Version:** 14.8.0
 **Last Updated:** 2026-04-05
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -243,8 +243,15 @@ Long ctx verified stable (N=3): 342.4 mean, range
 ### Perplexity (F-QUALITY-01)
 
 realizr DP4A PPL: **24.2** (weighted, WikiText-2).
+realizr FP8 prefill PPL: **~3.8% better** (41.31 vs 42.94, chunked eval).
 llama.cpp FP32: **12.97**. Gap = DP4A int8→int32
 accumulation vs FP32 dequant (Micikevicius et al. 2018).
+
+**realizr#203 implemented:** `perplexity_gpu_batched` uses FP8
+cuBLASLt GEMM for all 28 transformer layers via prefill path,
+then per-position output norm + LM head. Chunked WikiText-2 eval
+(251K tokens) shows 3.8% PPL improvement over pure DP4A sequential.
+Gap to llama.cpp remains large (3.2x) — precision-architectural.
 
 **PMAT-456 analysis (realizr#203):** FP8 E4M3 cuBLASLt
 infrastructure already exists for prefill (M>=5) but
@@ -326,7 +333,7 @@ Mistral. Wired: T5 (enc/dec), Whisper. Gap: Qwen3-MoE
 | F-1.5X-01 | >=341 (1.5x Candle) | **CONFIRMED** | #211 fix: 378.3 [372.4, 382.4]. 1.66x Candle. |
 | F-RSS-02 | RSS <=673 MB | **FALSIFIED** | Min 2,930 (weights + server irreducible). |
 | F-PARITY-03 | Output div <=1% | **WEAKENED** | 72% — chat template, not dequant. |
-| F-QUALITY-01 | PPL within 0.1 | **FALSIFIED** | DP4A 24.2 vs FP32 12.97. Int8 precision. |
+| F-QUALITY-01 | PPL within 0.1 | **FALSIFIED** | DP4A 24.2 vs FP32 12.97. FP8 prefill: 3.8% better but gap architectural. |
 | F-REGRESSION-01 | No >5% regression | **CONFIRMED** | 277.3 [276.1, 278.5] vs 273.8 baseline. |
 | F-COLD-01 | Cold slower | **REVISED** | preload_modules pre-compiles ~60 kernels. |
 | F-CACHE-01 | Prefix cache TTFT | **MEASURED** | Cold 136ms → Warm 56ms (2.4x). |
@@ -387,7 +394,7 @@ bug on driver 570.207 (code 901). `cuGraphAddKernelNode`
 | ID | Task | Status |
 |----|------|--------|
 | PMAT-453 | Graph dispatch + chunk=16 | **FIXED** (353.9 tok/s) |
-| PMAT-456 | Batched prefill PPL | **ANALYZED** (realizr#203) |
+| PMAT-456 | Batched prefill PPL | **IMPLEMENTED** (3.8% improvement, #203) |
 | trueno#244 | TC attention (multi-warp path) | **FALSIFIED** (-13.7% regression) |
 | trueno#245 | Multi-warp flash decode A/B | **FALSIFIED** (occupancy problem) |
 | trueno#246 | chunk_size=16 tuning | **SHIPPED** (+7.4%/+45.8%) |
@@ -687,7 +694,7 @@ validates under realistic traffic patterns.
 | Gap | Severity | Reference |
 |-----|----------|-----------|
 | **Contract enforcement** | **CLOSED** | 6/6 invariants wired to profiler+tracer (P15-06). |
-| **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. PMAT-456 filed (realizr#203). |
+| **Perplexity delta** | High | DP4A 24.2 vs FP32 12.97. FP8 prefill: 3.8% gain. Gap architectural (int vs float accumulation). |
 | **NCU profiling** | **CLOSED** | P15-02: ncu on flash_decoding_chunk + hw_dp4a_q4k_gemv. Root causes identified. |
 | **L2 cache analysis** | **CLOSED** | P15-05: L2 82% (attn) / 14% (GEMV). Reversed priority ordering. |
 | **Chrome Trace export** | Medium | Custom JSON, not Perfetto/Chrome. |
@@ -734,3 +741,4 @@ validates under realistic traffic patterns.
 | 14.6.5 | 04-05 | **F-PARITY-02 FALSIFIED:** RTX 4090 c=4 comparison shows realizr scales only 1.03x (367.7 agg) while llama.cpp b7746 scales 2.09x (902.3 agg). realizr#211 filed upstream with five-whys + continuous-batching-v1.yaml proposed contract. New Phase 2c section. |
 | 14.7.0 | 04-05 | **realizr#211 FIXED upstream:** Non-streaming path routed through batch scheduler. c=4 stream=false: 367.7→671.0 (+82%), c=8: 376→1,009.1 (+168%). F-PARITY-02 → FIXED. Contract FALSIFY-BATCH-006 added. c=1 baseline improved 357→380.9 tok/s. |
 | 14.7.1 | 04-05 | **Full RTX 4090 scaling sweep:** c={1,2,4,8,16,32} post-#211. c=32: 3,331.4 agg (8.81x). c=1 bootstrap CI: 378.3 [372.4, 382.4] CV 1.1%. 4090 vs Yoga comparison. c=2 dip (0.89x) from M=1 context switching. realizr#203 five-whys + batched PPL plan filed. |
+| 14.8.0 | 04-06 | **realizr#203 IMPLEMENTED:** FP8 prefill PPL (perplexity_gpu_batched). WikiText-2 251K tokens: FP8 41.31 vs DP4A 42.94 (3.8% improvement). Gap to llama.cpp 12.97 remains architectural (int8/FP8 accumulation vs FP32). Closed 5 upstream issues (#189 falsified, #191/#193 subsumed, #197 workaround, #208 fixed). |
