@@ -252,9 +252,17 @@ Long ctx verified stable (N=3): 342.4 mean, range
 
 ### Perplexity (F-QUALITY-01)
 
-realizr DP4A PPL: **24.2** (weighted, WikiText-2).
-realizr FP8 prefill PPL: **~3.8% better** (41.31 vs 42.94, chunked eval).
-llama.cpp FP32: **12.97**. Gap = DP4A int8→int32
+| Path | PPL | Method |
+|------|-----|--------|
+| realizr CPU FP32 | **12.72** | Q4K dequant→FP32 matmul |
+| llama.cpp GPU FP32 | **12.97** | cuBLAS FP32 dequant |
+| realizr GPU FP8 | 41.31 | Batched prefill cuBLASLt |
+| realizr GPU DP4A | 42.94 | Sequential int8→int32 |
+
+CPU FP32 dequant matches llama.cpp (12.72 vs 12.97 = 2%).
+GPU DP4A: 3.2x worse (int8 accumulation precision loss).
+GPU FP8: 3.8% better than DP4A but still 3.2x worse than FP32.
+Gap = DP4A int8→int32
 accumulation vs FP32 dequant (Micikevicius et al. 2018).
 
 **realizr#203 implemented:** `perplexity_gpu_batched` uses FP8
