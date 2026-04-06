@@ -16,27 +16,25 @@ Candle's general-purpose approach?**
 
 ## Key Findings
 
-### Showdown v14.7 (RTX 4090, 2520 MHz, probador bootstrap N=5)
+### Showdown v14.11 (RTX 4090, 2520 MHz, probador N=3)
 
-| Metric | Candle | realizr (#211 fix) | llama.cpp b7746 | Winner |
-|--------|--------|---------------------|-----------------|--------|
-| Decode tok/s (c=1) | 227.4 | **378.3** [372.4, 382.4] | **431.1** [429.5, 432.2] | llama.cpp |
-| ITL P50 (c=1) | -- | 2.6ms | **2.3ms** | llama.cpp |
-| µs/layer | -- | 94.3 | **82.8** | llama.cpp |
+| Metric | Candle | realizr 0.8.6 | llama.cpp b7746 | Winner |
+|--------|--------|---------------|-----------------|--------|
+| Decode tok/s (c=1) | 227.4 | **369.9** | **443.6** | llama.cpp |
+| vs Candle | 1.00x | **1.63x** | **1.95x** | llama.cpp |
+| Decode tok/s (c=4) | N/A | **634.1** | -- | realizr |
+| Decode tok/s (c=32) | N/A | **3,219.9** (8.77x) | -- | realizr |
+| WikiText-2 PPL | -- | 41.3 (FP8) | **12.97** (FP32) | llama.cpp |
 | GPU util | -- | **98%** | 91% | realizr |
-| Decode tok/s (c=4) | N/A | **671.0** | 902.3 | llama.cpp |
-| Decode tok/s (c=8) | N/A | **1,009.1** | -- | realizr |
-| WikiText-2 PPL (DP4A) | -- | 24.2 | **12.97** (FP32) | llama.cpp |
-| Peak RSS (MB) | **449** | 3,082 | ~906 | Candle |
+| Continuous batching | No | **Yes** (Orca-style) | Yes | -- |
 
-> **Rankings at c=1:** llama.cpp (1.14x realizr) > realizr (1.66x Candle) > Candle.
-> realizr#211 fix: non-streaming now routes through batch scheduler.
-> c=4 scaling: 1.03x → 1.76x. c=8: 1.05x → 2.65x.
-> chunk_size=16 (trueno#246) + batch scheduler fix = 378.3 tok/s at c=1.
-> PPL gap from DP4A int8 accumulation vs FP32 dequant (realizr#203 filed).
+> **Rankings at c=1:** llama.cpp (1.20x realizr) > realizr (1.63x Candle) > Candle.
+> Gap analysis (Phase 16): attention occupancy 51%, GEMV efficiency 21%.
+> llama.cpp requires `-ngl 99` (all layers GPU). `-ngl 28` = 310 tok/s (29% penalty).
+> realizr#212 fix: stream=false bulk-send (+4.3%). trueno#253 filed for multi-warp attention.
 
 Full analysis: [performance.md](performance.md).
-Falsification spec (27 F-conditions):
+Falsification spec (28 F-conditions, 27 tested):
 [candle-vs-apr-spec.md](docs/specifications/candle-vs-apr-spec.md).
 
 [qcd]: https://github.com/paiml/qwen-coder-deploy
@@ -46,7 +44,7 @@ Falsification spec (27 F-conditions):
 | Runtime | Architecture | Server | Formats |
 |---------|-------------|--------|---------|
 | [Candle][candle] | QMatMul dequant, general-purpose | CLI only | GGUF, SafeTensors |
-| [realizr][realizr] | Fused Q4K/Q5K/Q6K DP4A, eager dispatch | OpenAI API | GGUF, SafeT, APR v2 |
+| [realizr][realizr] | Fused Q4K/Q5K/Q6K DP4A, CUDA graph dispatch | OpenAI API | GGUF, SafeT, APR v2 |
 
 [candle]: https://github.com/huggingface/candle
 [realizr]: https://github.com/paiml/realizar
