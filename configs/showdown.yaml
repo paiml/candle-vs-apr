@@ -53,11 +53,11 @@ frameworks:
     start: |
       /home/noah/src/llama.cpp/build/bin/llama-server \
         --model {{model.path}} \
-        --port 8082 --n-gpu-layers 28 \
+        --port 8082 -ngl 99 --parallel 1 --flash-attn on \
         --ctx-size 4096 --threads 4
     health: "http://127.0.0.1:8082/health"
     stop: "pkill -f 'llama-server.*8082' || true"
-    notes: "Reference. cuBLAS + Flash Attention. Most popular C++ runtime."
+    notes: "Reference. cuBLAS + Flash Attention. -ngl 99 = all layers on GPU (critical: -ngl 28 = 29% penalty from CPU embedding)."
 
   vllm:
     port: 8083

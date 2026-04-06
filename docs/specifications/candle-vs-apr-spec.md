@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.10.0
+**Version:** 14.10.1
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -41,8 +41,11 @@ GPU util: realizr 98%, llama.cpp 91%.
 **c=4 verified: 683.6 agg tok/s post-#212 (no regression).**
 
 Methodology: probador `llm load` wall-clock for both runtimes (fair
-apples-to-apples). llama.cpp native eval_time reports 433.8 tok/s — agrees
-with probador 431.1 to 0.6% (server overhead minimal at 1.7 req/s).
+apples-to-apples). **CRITICAL: llama.cpp requires `-ngl 99` (all
+layers on GPU)** — `-ngl 28` leaves embedding on CPU, adding
+CPU→GPU transfer per token: 310 tok/s vs 434 tok/s (29% penalty).
+realizr loads all weights to GPU natively. llama.cpp eval_time
+agrees with probador to <1%.
 Candle 227.4 is CLI-native decode (no HTTP server available).
 
 **Key findings:**
@@ -785,3 +788,4 @@ validates under realistic traffic patterns.
 | 14.8.0 | 04-06 | **realizr#203 IMPLEMENTED:** FP8 prefill PPL (perplexity_gpu_batched). WikiText-2 251K tokens: FP8 41.31 vs DP4A 42.94 (3.8% improvement). Gap to llama.cpp 12.97 remains architectural (int8/FP8 accumulation vs FP32). Closed 5 upstream issues (#189 falsified, #191/#193 subsumed, #197 workaround, #208 fixed). |
 | 14.9.0 | 04-06 | **CORRECTION + realizr#212 FIXED:** v14.7's 378.3 was stream=true, not false. A/B: stream=true 380.0, stream=false 361.0 (5.3% gap from per-token mpsc overhead). Five-whys → realizr#212 filed + fixed: bulk-send after generation. Post-fix: stream=false 376.5 (+4.3%), stream=true 380.0. c=4 verified 683.6 agg. F-STREAM-01 added. |
 | 14.10.0 | 04-06 | **Post-#212 scaling sweep:** c=1..32 fresh RTX 4090 measurements. c=32: 3,220 agg (8.77x). c=1 bootstrap 367 [365, 369]. realizr#213 SIGSEGV investigated — non-reproducible, closed. realizr#212 closed with evidence. Phase 2c table updated with verified post-#212 values. |
+| 14.10.1 | 04-06 | **llama.cpp methodology finding:** `-ngl 28` = 310 tok/s (embedding on CPU), `-ngl 99` = 434.7 tok/s (all GPU). The 29% penalty was from CPU→GPU embedding transfer per token. Spec's 431 confirmed with `-ngl 99`. realizr has all layers on GPU natively. Showdown config updated. |
