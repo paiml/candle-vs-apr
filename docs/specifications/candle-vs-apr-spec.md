@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 14.11.0
+**Version:** 14.11.1
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -799,3 +799,4 @@ validates under realistic traffic patterns.
 | 14.10.0 | 04-06 | **Post-#212 scaling sweep:** c=1..32 fresh RTX 4090 measurements. c=32: 3,220 agg (8.77x). c=1 bootstrap 367 [365, 369]. realizr#213 SIGSEGV investigated — non-reproducible, closed. realizr#212 closed with evidence. Phase 2c table updated with verified post-#212 values. |
 | 14.10.1 | 04-06 | **llama.cpp methodology finding:** `-ngl 28` = 310 tok/s (embedding on CPU), `-ngl 99` = 434.7 tok/s (all GPU). The 29% penalty was from CPU→GPU embedding transfer per token. Spec's 431 confirmed with `-ngl 99`. realizr has all layers on GPU natively. Showdown config updated. |
 | 14.11.0 | 04-06 | **Definitive head-to-head N=3:** llama.cpp 443.6 (1.95x Candle), realizr 369.9 (1.63x Candle). Gap: 0.834x (16.6%). llama.cpp improved from 431→444 (fresh rebuild + warmup). trueno#253 filed: multi-warp chunked flash decode for attention occupancy. realizr#203 closed. |
+| 14.11.1 | 04-06 | **trueno#253 prototype:** 2-warp flash decode kernel (Block 32×2, 8B shared mem) implemented. Compiles but crashes at runtime (CUDA_ERROR_ILLEGAL_ADDRESS). Shared memory addressing bug needs PTX debugging. 1-warp baseline verified: 375.1 tok/s. Kernel committed to trueno (284c0564). |
