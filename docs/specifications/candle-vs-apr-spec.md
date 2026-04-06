@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 16.3.0
+**Version:** 16.4.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -690,6 +690,16 @@ per token-count bucket. Each piece has fixed topology for any M.
 If this fails, CPU dispatch is not the bottleneck at c>1
 (contradicting qcd PMAT-286) and the five-whys was wrong.
 
+**BATCHED_GRAPH=1 test result (existing stream-capture path):**
+Stream capture for M=4 captures successfully but has correctness
+issues (slots 0,1 produce token_id=0) and -21% regression
+(499.9 vs 636.3 agg tok/s). Root cause: stream capture has
+same driver bug class as PMAT-374 (realizr#201 lesson: manual
+cuGraphAddKernelNode bypasses stream capture bugs). **Approach B
+MUST use manual graph construction**, not stream capture, for
+M>1 graphs. This is consistent with the M=1 graph which already
+uses manual construction (trueno#243, 647 nodes).
+
 ### Phase 18: 1.5x vLLM Target (ACTIVE)
 
 **Goal:** Beat vLLM by 1.5x on a well-defined metric.
@@ -1256,6 +1266,7 @@ validates under realistic traffic patterns.
 | 14.12.0 | 04-06 | **F-MULTIWARPC-01 FALSIFIED:** Fixed shared mem bug (u32 offsets), kernel runs correctly. A/B: short ctx +1.9% (noise), long ctx -1.7% (regression). Root cause: 2× bar.sync per chunk position = O(seq_len) synchronization overhead cancels occupancy gain. Both multi-warp approaches now falsified (P15-01 block-level, P16 warp-level). Remaining path: persistent kernel or FlashInfer TC (avoid cross-warp coordination). 29 F-conditions, 28 tested, 4 falsified. |
 | 15.0.0 | 04-06 | **Chain of thought: Candle parity ACHIEVED (1.63x).** realizr's advantage is architectural and irreversible (CUDA graph, Flash Decoding, fused DP4A, continuous batching). Candle cannot close the gap without fundamental redesign. Remaining work is llama.cpp gap (16.6%): FlashInfer TC (P1, +8%), Marlin GEMV (P2, +3%). Priority matrix and decision tree added. Phase 16 complete. 3 multi-warp approaches falsified. |
 | 15.1.0 | 04-06 | **Cross-project assimilation (qcd v6.34.0).** Hardware matrix: 4090 (369.9), Yoga (136), GB10 (101), Jetson (40.8). vLLM gap: 0.53-0.88x (CPU dispatch bottleneck). 6 falsified approaches cross-validated. 5 confirmed findings: DP4A 92% ceiling, BrickProfiler 3.4x fidelity, CPU dispatch 5ms/step, Orca scaling, FP8 M≥5 threshold. Blackwell implications. Combined verdict: realizr > Candle everywhere, competitive with llama.cpp, 0.53-0.88x vLLM (dispatch-bound, not kernel-bound). |
+| 16.4.0 | 04-06 | **BATCHED_GRAPH=1 tested:** Existing stream-capture path captures OK but has correctness issues (slots 0,1 → token_id=0) and -21% regression (499.9 vs 636.3). Confirms realizr#201 lesson: stream capture has driver bugs. Phase 17 Approach B MUST use manual cuGraphAddKernelNode (like M=1 graph). |
 | 16.3.0 | 04-06 | **Revised recommendation post-vLLM measurement.** Executive summary updated to 4-way showdown. realizr beats Candle (1.63x), vLLM eager (1.19-3.74x), loses only to llama.cpp c=1 (0.83x). Priority: P1=per-batch graph (c>1 win, 2 wk), P2=FlashInfer TC (c=1 gap, 4-6 wk). Pragmatic path: ship P1 then evaluate if llama.cpp gap matters for product. |
 | 16.2.0 | 04-06 | **Phase 18b: vLLM 0.19.0 MEASURED on RTX 4090.** Eager mode (graphs crashed). realizr beats vLLM on ALL concurrency: 3.74x c=1, 1.48x c=4, 1.19x c=32. Resource efficiency: 3.46-10.92x (5.2 vs 15.2 GB VRAM). F-EFFICIENCY-01 CONFIRMED at 4.34x (target was 1.5x). qcd Yoga gap (0.53-0.88x) was against vLLM WITH torch.compile — eager-to-eager realizr wins decisively. 30 F-conditions, 29 tested, 13 confirmed. |
 | 16.1.0 | 04-06 | **Provable-contract driven design:** `cuda-graph-batched-inference-v1.yaml` committed to provable-contracts. 6 equations, 6 falsification tests (FALSIFY-BGRAPH-001..006), 3 Kani harnesses. Contract-first: implementation blocked until invariants wired to CI. Prevents realizr#198/#211/qcd-PMAT-3031 class of bugs. |
