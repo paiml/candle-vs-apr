@@ -726,10 +726,16 @@ kernels may be reading a different copy.
    All M>1 graphs need their own flash decode seq_lens buffer
    sized for M.
 
-**Status:** Implementation blocked on batched flash decode
-buffer sizing. The manual graph approach is architecturally
-correct (kernels record, graph builds, replay launches) but
-needs per-M flash decode buffers allocated before capture.
+**Status (v16.5):** Manual graph builds (916f21dd), captures
+647+ kernels, replays at 11,917 agg tok/s. Buffer fix applied
+(seq_lens, k_ptrs, v_ptrs sized for max_batch=32). Slots 1-3
+still produce garbage. Root cause refined: `batched_kv_lengths`
+(CPU-side Vec) tracks KV cache positions per slot, but during
+graph replay, the batched attention kernel reads these positions
+from a GPU buffer that was populated during CAPTURE, not during
+REPLAY. Fix: move `batched_kv_lengths` to a GPU buffer that gets
+updated via `copy_from_host` before each graph launch (same
+pattern as input/position/seq_len buffers).
 
 ### Phase 18: 1.5x vLLM Target (ACTIVE)
 
