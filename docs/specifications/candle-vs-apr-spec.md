@@ -751,11 +751,14 @@ holds the model write lock during replay, and the graph's
 internal kernel ordering may require resources that the
 scheduler's lock prevents from releasing.
 
-**Next investigation:** Run graph replay from a dedicated
-stream (not self.stream). Or: skip graph for first few batched
-steps until the stream is quiescent. The M=1 graph doesn't
-hang because it runs in the non-batched single-request path
-which has simpler stream semantics.
+**realizr#219 FIXED:** positions_buf + normed_hidden_buf were
+missing from M=1 workspace init. Single requests through
+/v1/completions failed with PAR-114. Fixed (5a31f119).
+
+**Next for graph:** Run graph replay from a dedicated stream
+(not self.stream), or skip for first few steps until stream is
+quiescent. The M=1 graph works because it runs in the simpler
+single-request path.
 
 ### Phase 18: 1.5x vLLM Target (ACTIVE)
 
