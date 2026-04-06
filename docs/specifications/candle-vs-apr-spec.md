@@ -1,7 +1,7 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 15.1.0
+**Version:** 15.2.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
@@ -543,6 +543,149 @@ architecturally irreversible). The remaining work is closing the
 llama.cpp gap — which requires kernel-level engineering (FlashInfer
 TC) that is orthogonal to the Candle parity question.
 
+### Phase 17: Per-Batch CUDA Graph Dispatch (RESEARCH)
+
+**Five-whys: Why is realizr 0.53-0.63x vLLM at c≥4?**
+
+1. **Why 0.53x at c=16?** Because each decode step dispatches
+   ~400 `cuLaunchKernel` calls sequentially from the CPU.
+2. **Why 400 launches?** Because the CUDA graph (647 nodes) is
+   captured for M=1 only. At M>1, the batch scheduler falls back
+   to eager per-kernel launch.
+3. **Why M=1 only?** Because the graph records fixed grid
+   dimensions: `(num_heads, 1, max_chunks)` for attention,
+   `(blocks, 1, 1)` for GEMV. M>1 needs different grids.
+4. **Why not re-capture?** Graph capture takes 100-500ms (one
+   full forward pass + `cuGraphInstantiate`). Re-capturing every
+   time M changes at serving time would destroy TTFT.
+5. **Root cause:** No pre-captured graph variants for M>1. The
+   framework has the infra (manual `cuGraphAddKernelNode`) but
+   only captures one graph at M=1.
+
+#### Competing Implementations (Research)
+
+**vLLM (v1, CUDAGraphRunner):**
+- Pre-captures **51 graphs** for discrete batch size buckets:
+  fine-grained {1,2,4}, stride-8 {8,16,...,248}, stride-16
+  {256,...,512}. Lazy capture on first encounter.
+- Pads inputs to next bucket size. Worst-case waste: 44% at
+  bs=9→16. Typical waste <7% at bs>32.
+- Shared global memory pool across all graphs.
+- Piecewise mode: N+1 graphs per attention split (allows
+  different request counts at same token count).
+
+**llama.cpp (ggml-cuda):**
+- CUDA graph for **decode only, M=1 only**. Explicitly disabled
+  when `batch_dim > 1`.
+- Topology change detection: snapshot per-node properties (data
+  pointers, dims, strides, op_params), compare before replay.
+- Three-tier response: (1) no change → replay, (2) minor change
+  → `cudaGraphExecUpdate` in-place patch, (3) structural change
+  → full recapture.
+- Auto-disable after 4 consecutive update failures.
+
+**TensorRT-LLM:**
+- Bucket-and-pad. Pre-capture per `cuda_graph_config.batch_sizes`.
+- Decode only. ~200MB per captured graph. Reports +22% e2e.
+
+**SGLang (Piecewise):**
+- Splits model at attention boundaries. One graph per piece per
+  token-count bucket. Binary search for smallest bucket ≥ actual.
+- Supports both decode and chunked prefill.
+
+**PyGraph (Ghosh 2025, arXiv:2503.19779):**
+- Eliminates redundant parameter copies during graph replay.
+  1.5-2.4x speedup. Complementary to bucketing.
+
+#### Five Approaches with Falsification Conditions
+
+**Approach A: Pad-to-Max (simplest)**
+Capture one graph at M=max_batch (32). Pad all requests to 32.
+- **Pro:** One graph, zero complexity.
+- **Con:** M=1 wastes 31/32 compute. Attention grid 32x larger.
+  GEMV does 32x work. Destroys c=1 performance.
+- **F-PADMAX-01:** c=1 decode must not regress >5% vs current
+  M=1 graph (369 tok/s). **PREDICTED: FAIL** — 32x wasted
+  attention compute at M=1 is ~14ms/step overhead.
+
+**Approach B: Power-of-2 Bucket Capture (vLLM-proven)**
+Pre-capture 6 graphs at M={1,2,4,8,16,32}. Pad to next bucket.
+- **Pro:** Industry standard. Worst-case 50% waste (M=3→4).
+  Captures at startup (no serving-time cost). M=1 graph
+  unchanged (no regression).
+- **Con:** 6× graph memory (~200MB each = ~1.2GB on 24GB GPU).
+  Need to modify batch scheduler to select graph by M.
+- **F-BUCKET-01:** c=4 agg tok/s must improve >=20% vs eager
+  (634→760+). If not, dispatch overhead is not the bottleneck.
+- **F-BUCKET-02:** Memory overhead must be <=2GB (graph storage).
+
+**Approach C: Lazy Capture + Cache (vLLM v1 style)**
+Capture graphs lazily on first encounter per bucket. Cache in
+`HashMap<M_bucket, CUgraphExec>`. No upfront cost.
+- **Pro:** Amortized capture cost. Only captures what's needed.
+- **Con:** First request at each M incurs 100-500ms capture
+  latency (TTFT spike). Cache miss = eager fallback.
+- **F-LAZY-01:** TTFT P99 at c=4 must not exceed 2x eager TTFT.
+
+**Approach D: Graph Exec Update (topology-preserving)**
+Capture one graph at M=max. For smaller M, update kernel
+parameters (pointers, batch_size scalar) in-place via
+`cudaGraphExecKernelNodeSetParams` without re-capture.
+- **Pro:** One graph capture, near-zero memory overhead.
+- **Con:** **DOES NOT WORK** if grid dimensions change with M.
+  Our GEMV uses `(ceil(N/block_n), M, 1)` grid — M in grid.y
+  changes per batch size. Flash decoding uses `(heads, M, chunks)`.
+  Both have M-dependent grids → topology changes → update fails.
+- **F-UPDATE-01:** `cudaGraphExecUpdate` must succeed for M=1→4
+  without falling back to recapture. **PREDICTED: FAIL** —
+  grid.y changes.
+
+**Approach E: Piecewise Graph (SGLang style)**
+Split model at attention boundaries. Capture N+1 graph pieces
+per token-count bucket. Each piece has fixed topology for any M.
+- **Pro:** Handles mixed prefill+decode. Flexible.
+- **Con:** HIGH complexity. Requires refactoring forward pass
+  into graph-compatible pieces. N+1 captures × B buckets =
+  many graphs. Our manual `cuGraphAddKernelNode` approach builds
+  the whole graph as a linear chain — splitting requires
+  architectural redesign.
+- **F-PIECE-01:** Implementation must be <=500 lines of new code.
+  **PREDICTED: FAIL** — piecewise capture needs new graph
+  builder abstraction.
+
+#### Recommendation
+
+**Approach B (Power-of-2 Bucket Capture)** is the clear winner.
+
+**Chain of reasoning:**
+1. Approach A wastes too much compute at c=1 (PREDICTED FAIL).
+2. Approach D cannot work because our kernels have M-dependent
+   grids (PREDICTED FAIL).
+3. Approach E is too complex for the expected gain (~500+ LOC
+   refactor, PREDICTED FAIL on effort).
+4. Approach C (lazy) works but has TTFT spikes on first requests.
+5. Approach B has no TTFT spikes (upfront capture), bounded
+   memory (~1.2GB), proven by vLLM at production scale, and
+   preserves M=1 performance (identical graph).
+
+**Implementation plan:**
+1. At server startup, after M=1 graph capture, capture additional
+   graphs at M={2,4,8,16,32} by running dummy forward passes.
+2. Store in `HashMap<u32, CUgraphExec>` keyed by padded batch size.
+3. In batch scheduler, look up `graph_for_m[pad_to_power_of_2(m)]`.
+4. If M exceeds max captured, fall back to eager (existing path).
+5. Estimated: ~150 LOC in `graphed_capture.rs` + `batch.rs`.
+
+**Expected impact:**
+- qcd measured: eager dispatch = 5ms CPU overhead per step.
+  Graph dispatch = 0.003ms (cuGraphLaunch). Delta = ~5ms/step.
+- At c=4: step time ~13ms → ~8ms. Agg tok/s: 634 → ~1,030 (+62%).
+- At c=32: amortized over more tokens, ~20% improvement.
+
+**Falsification gate:** F-BUCKET-01 (>=20% c=4 improvement).
+If this fails, CPU dispatch is not the bottleneck at c>1
+(contradicting qcd PMAT-286) and the five-whys was wrong.
+
 ### Phase 15: Profiler + Kernel Sprint (ACTIVE)
 
 Five proposals from cross-repo analysis (qwen-coder-deploy
@@ -986,3 +1129,4 @@ validates under realistic traffic patterns.
 | 14.12.0 | 04-06 | **F-MULTIWARPC-01 FALSIFIED:** Fixed shared mem bug (u32 offsets), kernel runs correctly. A/B: short ctx +1.9% (noise), long ctx -1.7% (regression). Root cause: 2× bar.sync per chunk position = O(seq_len) synchronization overhead cancels occupancy gain. Both multi-warp approaches now falsified (P15-01 block-level, P16 warp-level). Remaining path: persistent kernel or FlashInfer TC (avoid cross-warp coordination). 29 F-conditions, 28 tested, 4 falsified. |
 | 15.0.0 | 04-06 | **Chain of thought: Candle parity ACHIEVED (1.63x).** realizr's advantage is architectural and irreversible (CUDA graph, Flash Decoding, fused DP4A, continuous batching). Candle cannot close the gap without fundamental redesign. Remaining work is llama.cpp gap (16.6%): FlashInfer TC (P1, +8%), Marlin GEMV (P2, +3%). Priority matrix and decision tree added. Phase 16 complete. 3 multi-warp approaches falsified. |
 | 15.1.0 | 04-06 | **Cross-project assimilation (qcd v6.34.0).** Hardware matrix: 4090 (369.9), Yoga (136), GB10 (101), Jetson (40.8). vLLM gap: 0.53-0.88x (CPU dispatch bottleneck). 6 falsified approaches cross-validated. 5 confirmed findings: DP4A 92% ceiling, BrickProfiler 3.4x fidelity, CPU dispatch 5ms/step, Orca scaling, FP8 M≥5 threshold. Blackwell implications. Combined verdict: realizr > Candle everywhere, competitive with llama.cpp, 0.53-0.88x vLLM (dispatch-bound, not kernel-bound). |
+| 15.2.0 | 04-06 | **Phase 17: Per-batch CUDA graph research.** Five-whys: 400 cuLaunchKernel × 12µs = 5ms/step at c>1. Researched: vLLM (51 bucket graphs, lazy capture, shared pool), llama.cpp (M=1 only, topology detection), TensorRT-LLM (bucket-and-pad, +22%), SGLang (piecewise), PyGraph (parameter copy elimination). 5 approaches with falsification conditions. Approaches A (pad-to-max) and D (graph exec update) predicted to fail. **Recommendation: Approach B (power-of-2 bucket capture)** — 6 graphs at M={1,2,4,8,16,32}, ~1.2GB memory, +62% estimated c=4 improvement. F-BUCKET-01 falsification gate defined. |
