@@ -1,10 +1,11 @@
 # Candle vs APR Inference Parity Specification
 
 **Document ID:** PAIML-CANDLE-APR-001
-**Version:** 16.5.0
+**Version:** 16.8.0
 **Last Updated:** 2026-04-06
 **Status:** ACTIVE
 **Methodology:** Popperian Falsification + Deterministic Benchmarks
+**Change Policy:** Level A `../provable-contracts` ONLY — contract → then code
 **Primary Target:** Lambda Vector (RTX 4090, 24 GB VRAM, sm_89)
 **Model:** Qwen2.5-Coder-1.5B-Instruct Q4_K_M GGUF
 (1.78B params, 28 layers, hidden=1536)
@@ -59,6 +60,56 @@ Candle 227.4 is CLI-native decode (no HTTP server available).
 5. AttentionScore: 44% of compute, occupancy-bound (not BW-bound)
 6. DP4A PPL: 24.2 vs llama.cpp 12.97 (precision gap). FP8 prefill: 3.8% better.
 7. Scaling: **3,331 tok/s at c=32** (RTX 4090, 8.81x) / 1,776 at c=32 (Yoga, 13.4x)
+
+---
+
+## 1a. Change Policy: Level A Provable-Contracts ONLY
+
+**ALL upstream changes follow contract-first workflow. No exceptions.**
+
+```
+YAML contract → falsification tests → Kani harness → THEN code
+```
+
+**Five-whys: Why contract-first is mandatory:**
+
+1. **Why did realizr#219 regress c=4?** Because buffer sizing
+   changes were implemented without a falsification test for
+   M>1 correctness.
+2. **Why was there no test?** Because the code was written first,
+   contract added after (or never).
+3. **Why code-first?** Because urgency overrode process — "just
+   fix the buffer sizes."
+4. **Why did urgency override?** No gate enforcing contract
+   existence before PR merge.
+5. **Root cause:** Code-first workflow allows changes to ship
+   without proving invariant preservation. Contract-first
+   makes broken invariants a compile/CI failure.
+
+**Mandatory workflow for any realizr/trueno change:**
+
+| Step | Action | Gate |
+|------|--------|------|
+| 1 | `gh issue create` with five-whys | Ticket exists |
+| 2 | Write/update YAML contract in `../provable-contracts/contracts/` | `pv validate` passes |
+| 3 | `pv generate` → implement falsification tests | `pv proof-status` shows L2+ |
+| 4 | `pv kani` → bounded model checking | `pv proof-status` shows L3 (Level A) |
+| 5 | Implement code change | All L3 tests pass |
+| 6 | Wire `#[contract(...)]` bindings | `pv audit` shows 0 unbound |
+| 7 | Measure + record in this spec | Spec updated |
+
+**Level A = L3 minimum** (Kani bounded-model-checked). L1 (YAML only)
+and L2 (tests only) are insufficient — they don't prove absence of
+bugs, only presence of specific behaviors.
+
+**Evidence this works:** realizr#198 (SwiGLU), #211 (batch routing),
+#219 (positions_buf) — all would have been caught by FALSIFY-BGRAPH-001
+(graph output = eager output at c=4) if the contract existed first.
+
+**Evidence code-first fails:** 7 speculative streaming fixes failed
+(v14.9). 3 multi-warp approaches falsified (P15-01, P16, P16 warp).
+M=4 buffer sizing shipped with regression. Contract-first prevents
+this entire class of error.
 
 ---
 
@@ -871,12 +922,20 @@ tests, 3 Kani harnesses. Key contract invariants:
 | FALSIFY-BGRAPH-005 | tok/s/GB >=1.5x vLLM | Direct measurement |
 | FALSIFY-BGRAPH-006 | Padding slots isolated | seq_lens=0, no KV contamination |
 
-Implementation proceeds ONLY after contract is wired into
+Implementation proceeds ONLY after contract reaches **Level A
+(L3, Kani bounded-model-checked)** and bindings are wired into
 realizr CI (`#[contract(...)]` macros on graph capture and
 batch dispatch functions). Contract-first prevents the class
 of bugs seen in realizr#198 (missing SwiGLU recording),
-realizr#211 (missing batch routing), and qcd PMAT-3031
-(profiler fidelity).
+realizr#211 (missing batch routing), realizr#219 (positions_buf
+regression at c=4), and qcd PMAT-3031 (profiler fidelity).
+
+**v16.8 FINDING:** realizr 0.8.6 (5a31f119) has c=4 correctness
+regression in BOTH eager and graph modes. Slot 0 correct, slots
+1-3 produce garbage ("!!!!" or empty). This regression was
+introduced by the #214/#219 commit series (buffer sizing changes
+shipped without L3 contract gate). Proves contract-first is
+mandatory — see §1a.
 
 **Quality crossover (qcd finding):** At c≥128, vLLM quality
 degrades (98 A+ at c=1 → 64 C+ at c=128). realizr maintains
@@ -1326,6 +1385,7 @@ validates under realistic traffic patterns.
 | 14.12.0 | 04-06 | **F-MULTIWARPC-01 FALSIFIED:** Fixed shared mem bug (u32 offsets), kernel runs correctly. A/B: short ctx +1.9% (noise), long ctx -1.7% (regression). Root cause: 2× bar.sync per chunk position = O(seq_len) synchronization overhead cancels occupancy gain. Both multi-warp approaches now falsified (P15-01 block-level, P16 warp-level). Remaining path: persistent kernel or FlashInfer TC (avoid cross-warp coordination). 29 F-conditions, 28 tested, 4 falsified. |
 | 15.0.0 | 04-06 | **Chain of thought: Candle parity ACHIEVED (1.63x).** realizr's advantage is architectural and irreversible (CUDA graph, Flash Decoding, fused DP4A, continuous batching). Candle cannot close the gap without fundamental redesign. Remaining work is llama.cpp gap (16.6%): FlashInfer TC (P1, +8%), Marlin GEMV (P2, +3%). Priority matrix and decision tree added. Phase 16 complete. 3 multi-warp approaches falsified. |
 | 15.1.0 | 04-06 | **Cross-project assimilation (qcd v6.34.0).** Hardware matrix: 4090 (369.9), Yoga (136), GB10 (101), Jetson (40.8). vLLM gap: 0.53-0.88x (CPU dispatch bottleneck). 6 falsified approaches cross-validated. 5 confirmed findings: DP4A 92% ceiling, BrickProfiler 3.4x fidelity, CPU dispatch 5ms/step, Orca scaling, FP8 M≥5 threshold. Blackwell implications. Combined verdict: realizr > Candle everywhere, competitive with llama.cpp, 0.53-0.88x vLLM (dispatch-bound, not kernel-bound). |
+| 16.8.0 | 04-06 | **Level A contract-first mandate (§1a).** ALL upstream changes require L3 (Kani) provable-contract BEFORE code. YAML → falsification → Kani → code → bindings → measure. Motivated by c=4 regression: realizr 0.8.6 (5a31f119) slots 1-3 produce garbage in BOTH eager and graph modes. #214/#219 buffer sizing shipped without L3 gate. Five-whys analysis proves contract-first prevents this class. realizr#220 filed. FALSIFY-CB-006 test written and **FAILS** (c=1 returns "5", c=4 slots 2-4 return "!!!!" or empty). Proved: bug is in batched DECODE (not prefill) — sequential prefill (MULTI_PROMPT_PREFILL=0) still fails. `continuous-batching-v1.yaml` at L3 with 0/7 bindings wired — the contract exists but enforcement is missing. `pv generate` artifacts committed to `realizar/tests/contracts/`. |
 | 16.5.0 | 04-06 | **BATCHED_MANUAL_GRAPH=1 implemented + tested.** Manual graph construction works (reuses graph_recording infra). Captures M=4 graph. c=1 correct (351 tok/s). c=4 fast (11,917 agg) but slots 1-3 produce garbage. Root cause: flash_decode_seq_lens_buf sized for M=1. Need per-M flash decode buffers. Blocked on buffer sizing fix. |
 | 16.4.0 | 04-06 | **BATCHED_GRAPH=1 tested:** Existing stream-capture path captures OK but has correctness issues (slots 0,1 → token_id=0) and -21% regression (499.9 vs 636.3). Confirms realizr#201 lesson: stream capture has driver bugs. Phase 17 Approach B MUST use manual cuGraphAddKernelNode (like M=1 graph). |
 | 16.3.0 | 04-06 | **Revised recommendation post-vLLM measurement.** Executive summary updated to 4-way showdown. realizr beats Candle (1.63x), vLLM eager (1.19-3.74x), loses only to llama.cpp c=1 (0.83x). Priority: P1=per-batch graph (c>1 win, 2 wk), P2=FlashInfer TC (c=1 gap, 4-6 wk). Pragmatic path: ship P1 then evaluate if llama.cpp gap matters for product. |
